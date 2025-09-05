@@ -12,3 +12,6 @@
 # node 模块
 **/node_modules/
 **/yarn.lock
+
+# 构建文件
+/dist
