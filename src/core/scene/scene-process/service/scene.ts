@@ -1,40 +1,36 @@
-import cc, { SceneAsset } from 'cc';
-import { join } from 'path';
-import assetOperation from '../../../assets/manager/operation';
-import assetQueryManager from '../../../assets/manager/query';
-import { assetManager } from '../../../assets/manager/asset';
+import cc from 'cc';
+import { register, expose } from './decorator';
 import {
-    ISceneManager,
+    ISceneService,
     ISceneInfo,
     TSceneTemplateType,
     ICreateSceneOptions,
     IOpenSceneOptions,
     ISaveSceneOptions,
-} from '../../interfaces';
+} from '../../common';
+import { Rpc } from '../rpc';
 
 /**
- * 子进程场景处理器
- * 在子进程中处理所有场景相关操作
+ * 场景进程处理器
+ * 处理所有场景相关操作
  */
-export class SceneManager implements ISceneManager {
+@register('Scene')
+export class SceneService implements ISceneService {
     private currentScene: ISceneInfo | null = null;
 
-    /**
-     * 打开场景
-     */
+    @expose()
     async openScene(params: IOpenSceneOptions): Promise<ISceneInfo> {
         const { uuid } = params;
         return new Promise<ISceneInfo>(async (resolve, reject) => {
             // 查询场景资源信息
-            const asset = assetQueryManager.queryAsset(uuid);
-            if (!asset) {
+            const assetInfo = await Rpc.request('assetManager', 'queryAssetInfo', [uuid]);
+            if (!assetInfo) {
                 reject(`场景资源不存在: ${uuid}`);
                 return;
             }
 
-            const assetType = assetQueryManager.queryAssetProperty(asset, 'type');
-            if (!assetType || !assetType.includes('SceneAsset')) {
-                reject(`指定路径不是有效的场景资源: ${asset.url}`);
+            if (!assetInfo.type.includes('SceneAsset')) {
+                reject(`指定路径不是有效的场景资源: ${assetInfo.url}`);
                 return;
             }
 
@@ -55,30 +51,26 @@ export class SceneManager implements ISceneManager {
 
                 // 创建场景信息
                 const sceneInfo: ISceneInfo = {
-                    path: asset.source,
-                    uuid: asset.uuid,
-                    url: asset.url,
-                    name: asset._name || ''
+                    path: assetInfo.source,
+                    uuid: assetInfo.uuid,
+                    url: assetInfo.url,
+                    name: assetInfo.name || ''
                 };
 
                 // 设置为当前场景
                 this.currentScene = sceneInfo;
                 resolve(sceneInfo);
-                console.log(`子进程成功打开场景: ${sceneInfo.path}`);
+                console.log(`[Scene] 场景进程成功打开场景: ${sceneInfo.path}`);
             });
         });
     }
 
-    /**
-     * 关闭当前场景
-     */
+    @expose()
     async closeScene(): Promise<ISceneInfo | null> {
         const closedScene = this.currentScene;
         
         if (closedScene) {
-            console.log(`子进程关闭场景: ${closedScene.path}`);
-        } else {
-            console.log('子进程当前没有打开的场景');
+            console.log(`[Scene] 关闭场景: ${closedScene.path}`);
         }
 
         // 清理当前场景
@@ -87,33 +79,30 @@ export class SceneManager implements ISceneManager {
         return closedScene;
     }
 
-    /**
-     * 保存场景
-     */
+    @expose()
     async saveScene(params: ISaveSceneOptions): Promise<ISceneInfo> {
         const uuid = params.uuid ?? this.currentScene?.uuid;
         if (!uuid) {
-            throw new Error('保存失败，当前没有打开的场景');
+            throw new Error('[Scene] 保存失败，当前没有打开的场景');
         }
 
-        const asset = assetQueryManager.queryAsset(uuid);
-        if (!asset) {
-            throw new Error(`场景资源不存在: ${uuid}`);
+        let assetInfo = await Rpc.request('assetManager', 'queryAssetInfo', [uuid]);
+        if (!assetInfo) {
+            throw new Error(`[Scene] 场景资源不存在: ${uuid}`);
         }
 
         const scene = cc.director.getScene();
         if (!scene) {
-            throw new Error(`获取不到当前场景实例`);
+            throw new Error(`[Scene] 获取不到当前场景实例`);
         }
 
-        const sceneAsset = new SceneAsset();
+        const sceneAsset = new cc.SceneAsset();
         sceneAsset.scene = scene;
 
-        const json = EditorExtends.serialize(asset);
+        const json = EditorExtends.serialize(assetInfo);
 
-        let assetInfo;
         try {
-            assetInfo = await assetManager.saveAsset(uuid, json);
+            assetInfo = await Rpc.request('assetManager', 'saveAsset', [uuid, json]);
         } catch (e) {
             throw e;
         }
@@ -125,50 +114,40 @@ export class SceneManager implements ISceneManager {
             name: assetInfo.name
         };
 
-        console.log(`子进程成功保存场景: ${sceneInfo.path}`);
+        console.log(`[Scene] 成功保存场景: ${sceneInfo.path}`);
         return sceneInfo;
     }
 
-    /**
-     * 创建新场景
-     */
+    @expose()
     async createScene(params: ICreateSceneOptions): Promise<ISceneInfo> {
         // 获取场景模板 url
         const template = this.getSceneTemplateURL(params.templateType || 'default');
 
-        // 确保文件名以 .scene 结尾
-        const fileName = params.name.endsWith('.scene')
-            ? params.name
-            : `${params.name}.scene`;
-        const fullPath = join(params.targetPath, fileName);
-
         // 创建场景资源
-        const result = await assetOperation.createAsset({
+        const result = await Rpc.request('assetManager', 'createAsset', [{
             template: template,
-            target: fullPath,
+            target: params.targetPathOrURL,
             overwrite: true
-        });
-
-        if (!result) {
-            throw new Error('创建场景资源失败');
-        }
+        }]);
 
         const assetResult = Array.isArray(result) ? result[0] : result;
-        
+        if (!assetResult) {
+            throw new Error(`创建场景资源失败\n${params}`);
+        }
+
+
         const sceneInfo: ISceneInfo = {
             path: assetResult!.source,
             uuid: assetResult!.uuid,
             url: assetResult!.url,
-            name: params.name
+            name: assetResult!.name
         };
 
-        console.log(`子进程成功创建场景: ${sceneInfo.path}`);
+        console.log(`成功创建场景: ${sceneInfo.path}`);
         return sceneInfo;
     }
 
-    /**
-     * 获取当前打开的场景
-     */
+    @expose()
     async getCurrentScene(): Promise<ISceneInfo | null> {
         return this.currentScene;
     }
@@ -197,5 +176,3 @@ export class SceneManager implements ISceneManager {
         return templatePath;
     }
 }
-
-export const sceneManager = new SceneManager();

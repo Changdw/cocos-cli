@@ -1,17 +1,17 @@
-import type { INodeManager, INodeInfo, ICreateNodeOptions, IDeleteNodeOptions, IUpdateNodeOptions } from '../../interfaces';
-import { ipc } from '../ipc';
+import type { INodeService, INodeInfo, ICreateNodeOptions, IDeleteNodeOptions, IUpdateNodeOptions } from '../../common';
+import { Rpc } from '../rpc';
 
-export const NodeProxy: INodeManager = {
+export const NodeProxy: INodeService = {
     createNode(params: ICreateNodeOptions): Promise<INodeInfo | null> {
-        return ipc.request('node', 'createNode', [params]);
+        return Rpc.request('Node', 'createNode', [params]);
     },
     deleteNode(params: IDeleteNodeOptions): Promise<INodeInfo | null> {
-        return ipc.request('node', 'deleteNode', [params]);
+        return Rpc.request('Node', 'deleteNode', [params]);
     },
     updateNode(params: IUpdateNodeOptions): Promise<INodeInfo | null> {
-        return ipc.request('node', 'updateNode', [params]);
+        return Rpc.request('Node', 'updateNode', [params]);
     },
     queryNode(): Promise<INodeInfo | null> {
-        return ipc.request<INodeInfo | null>('node', 'queryNode');
+        return Rpc.request('Node', 'queryNode');
     }
 }

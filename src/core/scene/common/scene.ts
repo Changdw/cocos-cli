@@ -17,8 +17,7 @@ export type TSceneTemplateType = 'default' | '2d' | '3d' | 'quality';
  * 创建场景选项
  */
 export interface ICreateSceneOptions {
-    name: string;
-    targetPath: string;
+    targetPathOrURL: string;
     templateType?: TSceneTemplateType;
 }
 
@@ -39,7 +38,7 @@ export interface IOpenSceneOptions {
 /**
  * 场景相关处理接口
  */
-export interface ISceneManager {
+export interface ISceneService {
     /**
      * 打开场景
      * @param params

@@ -1,20 +1,20 @@
-import type { ICreateSceneOptions, ISaveSceneOptions, IOpenSceneOptions, ISceneManager, ISceneInfo } from '../../interfaces';
-import { ipc } from '../ipc';
+import type { ICreateSceneOptions, ISaveSceneOptions, IOpenSceneOptions, ISceneService, ISceneInfo } from '../../common';
+import { Rpc } from '../rpc';
 
-export const SceneProxy: ISceneManager = {
+export const SceneProxy: ISceneService = {
     closeScene(): Promise<ISceneInfo | null> {
-        return ipc.request('scene', 'closeScene');
+        return Rpc.request('Scene', 'closeScene');
     },
     createScene(params: ICreateSceneOptions): Promise<ISceneInfo | null> {
-        return ipc.request<ISceneInfo | null>('scene', 'createScene', [params]);
+        return Rpc.request('Scene', 'createScene', [params]);
     },
     getCurrentScene(): Promise<ISceneInfo | null> {
-        return ipc.request<ISceneInfo | null>('scene', 'getCurrentScene');
+        return Rpc.request('Scene', 'getCurrentScene');
     },
     openScene(params: IOpenSceneOptions): Promise<ISceneInfo | null> {
-        return ipc.request('scene', 'openScene', [params]);
+        return Rpc.request('Scene', 'openScene', [params]);
     },
     saveScene(params: ISaveSceneOptions): Promise<ISceneInfo | null> {
-        return ipc.request('scene', 'saveScene', [params]);
+        return Rpc.request('Scene', 'saveScene', [params]);
     }
 }
