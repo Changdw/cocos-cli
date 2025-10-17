@@ -17,6 +17,9 @@ afterAll(() => {
 
 import './scene-worker.testcase';
 import './scene-proxy.testcase';
+import './node-proxy.testcase';
 
 import './scene-exit.testcase';
+
+
 
