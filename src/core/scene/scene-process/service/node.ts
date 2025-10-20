@@ -1,5 +1,5 @@
 import { register, expose } from './decorator';
-import type { ICreateNodeParams, IDeleteNodeParams, INodeService, IUpdateNodeParams, IUpdateNodeResult, IQueryNodeParams, INode, IDeleteNodeResult, INodeProperties } from '../../common';
+import type { ICreateByNodeTypeParams, ICreateByAssetParams, IDeleteNodeParams, INodeService, IUpdateNodeParams, IUpdateNodeResult, IQueryNodeParams, INode, IDeleteNodeResult } from '../../common';
 import { Rpc } from '../rpc';
 import { readFile } from 'fs-extra';
 import EventEmitter from 'events';
@@ -30,11 +30,7 @@ export class NodeService extends EventEmitter implements INodeService {
     _nodeConfigJson: Record<string, Array<{ assetUuid: string, name: string, canvasRequired: boolean }>> | null = null;
 
     @expose()
-    async createNode(params: ICreateNodeParams): Promise<INode | null> {
-        const currentScene = cc.director.getScene();
-        if (!currentScene) {
-            throw new Error('Failed to create node: the scene is not opened.');
-        }
+    async createNodeByType(params: ICreateByNodeTypeParams): Promise<INode | null> {
         if (!this._nodeConfigJson) {
             const serializeJSON = await readFile("src/core/scene/common/node-config.json", 'utf8');
             this._nodeConfigJson = JSON.parse(serializeJSON);
@@ -44,25 +40,40 @@ export class NodeService extends EventEmitter implements INodeService {
         }
 
         let canvasNeeded = params.canvasRequired || false;
-        let assetUuid;
-        const dbURLOrType = params.dbURLOrType;
-        if (dbURLOrType.startsWith("db://")) { //create from prefab resource
-            assetUuid = await Rpc.request('assetManager', 'queryUUID', [dbURLOrType]);
-        } else {
-            const nodeType = dbURLOrType as string;
-            const paramsArray = this._nodeConfigJson[nodeType];
-            if (!paramsArray || paramsArray.length < 0) {
-                throw new Error(`Node type '${nodeType}' is not implemented`);
-            }
-            assetUuid = paramsArray[0].assetUuid;
-            canvasNeeded = paramsArray[0].canvasRequired ? true : false;
-            if (paramsArray.length > 1) {
-                if (params.workMode === '3d') {
-                    assetUuid = paramsArray[1]['assetUuid'];
-                    canvasNeeded = paramsArray[1].canvasRequired ? true : false;
-                }
+        const nodeType = params.nodeType as string;
+        const paramsArray = this._nodeConfigJson![nodeType];
+        if (!paramsArray || paramsArray.length < 0) {
+            throw new Error(`Node type '${nodeType}' is not implemented`);
+        }
+        let assetUuid = paramsArray[0].assetUuid;
+        canvasNeeded = paramsArray[0].canvasRequired ? true : false;
+        if (paramsArray.length > 1) {
+            if (params.workMode === '3d') {
+                assetUuid = paramsArray[1]['assetUuid'];
+                canvasNeeded = paramsArray[1].canvasRequired ? true : false;
             }
         }
+
+        return this._createNode(assetUuid, canvasNeeded, params);
+    }
+
+    @expose()
+    async createNodeByAsset(params: ICreateByAssetParams): Promise<INode | null> {
+        let assetUuid = await Rpc.request('assetManager', 'queryUUID', [params.dbURL]);
+        if (!assetUuid) {
+            throw new Error(`Asset not found for dbURL: ${params.dbURL}`);
+        }
+        let canvasNeeded = params.canvasRequired || false;
+        return this._createNode(assetUuid, canvasNeeded, params);
+    }
+
+    async _createNode(assetUuid: string | null, canvasNeeded: boolean, params: ICreateByNodeTypeParams | ICreateByAssetParams): Promise<INode | null> {
+        const currentScene = cc.director.getScene();
+        if (!currentScene) {
+            throw new Error('Failed to create node: the scene is not opened.');
+        }
+
+        let workMode = params.workMode || '2d';
         if (params.path && params.path.startsWith("Canvas/")) {
             canvasNeeded = true;
         }
@@ -77,7 +88,6 @@ export class NodeService extends EventEmitter implements INodeService {
                 canvasRequired: canvasNeeded
             });
             resultNode = node;
-            let workMode = params.workMode || '2d';
             parent = await this.checkCanvasRequired(workMode, Boolean(canvasRequired), parent, params.position as Vec3) as Node;
         }
         if (!resultNode) {
@@ -94,7 +104,6 @@ export class NodeService extends EventEmitter implements INodeService {
         if (params.position) {
             resultNode.setPosition(params.position as Vec3);
         }
-        NodeMgr.add(resultNode.uuid, resultNode);
 
         /**
          * 新节点的 layer 跟随父级节点，但父级节点为场景根节点除外
@@ -108,6 +117,7 @@ export class NodeService extends EventEmitter implements INodeService {
         this.emit('before-change', parent);
 
         resultNode.setParent(parent, params.keepWorldTransform);
+        NodeMgr.add(resultNode.uuid, resultNode);
         this.ensureUITransformComponent(resultNode);
 
         // 发送添加节点事件，添加节点中的根节点
@@ -130,6 +140,7 @@ export class NodeService extends EventEmitter implements INodeService {
         }
 
         // 发送节点修改消息
+        const parent = node.parent;
         this.emit('before-remove', node);
         if (parent) {
             this.emit('before-change', parent);

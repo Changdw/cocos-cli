@@ -1,10 +1,9 @@
 import {
-    type ICreateNodeParams,
+    type ICreateByAssetParams,
+    type ICreateByNodeTypeParams,
     type IDeleteNodeParams,
-    type IDeleteNodeResult,
     type IQueryNodeParams,
     type IUpdateNodeParams,
-    type IUpdateNodeResult,
     type INode,
     NodeType,
 } from '../common';
@@ -21,13 +20,13 @@ describe('Node Proxy 测试', () => {
 
     describe('1. 基础节点操作', () => {
         it('createNode - 创建带预制体的节点', async () => {
-            const params: ICreateNodeParams = {
-                dbURLOrType: 'db://internal/default_prefab/ui/Sprite.prefab',
+            const params: ICreateByAssetParams = {
+                dbURL: 'db://internal/default_prefab/ui/Label.prefab',
                 path: testNodePath,
                 name: 'PrefabNode',
             };
 
-            const prefabNode = await NodeProxy.createNode(params);
+            const prefabNode = await NodeProxy.createNodeByAsset(params);
             expect(prefabNode).toBeDefined();
             expect(prefabNode?.name).toBe('PrefabNode');
             console.log("Created prefab node path=", prefabNode?.path);
@@ -37,13 +36,13 @@ describe('Node Proxy 测试', () => {
             const nodeTypes = Object.values(NodeType);
             nodeTypes.forEach(nodeType => {
                 async () => {
-                    const params: ICreateNodeParams = {
+                    const params: ICreateByNodeTypeParams = {
                         path: testNodePath,
-                        dbURLOrType: nodeType,
+                        nodeType: nodeType,
                         position: testPosition,
                     };
 
-                    createdNode = await NodeProxy.createNode(params);
+                    createdNode = await NodeProxy.createNodeByType(params);
                     expect(createdNode).toBeDefined();
                     expect(createdNode?.name).toBe('TestNode');
                     expect(createdNode?.path).toBe(testNodePath);
@@ -190,14 +189,14 @@ describe('Node Proxy 测试', () => {
 
         it('deleteNode - 删除节点（保持世界变换）', async () => {
             // 先创建一个新节点用于删除测试
-            const createParams: ICreateNodeParams = {
+            const createParams: ICreateByNodeTypeParams = {
                 path: '/NodeToDelete',
                 name: 'NodeToDelete',
-                dbURLOrType: 'Sphere',
+                nodeType: NodeType.SPHERE,
                 workMode: '3d'
             };
 
-            const tempNode = await NodeProxy.createNode(createParams);
+            const tempNode = await NodeProxy.createNodeByType(createParams);
             expect(tempNode).toBeDefined();
 
             // 删除该节点
@@ -208,7 +207,7 @@ describe('Node Proxy 测试', () => {
 
             const result = await NodeProxy.deleteNode(deleteParams);
             expect(result).toBeDefined();
-            expect(result?.path).toBe('/NodeToDelete');
+            expect(result?.path).toBe('NodeToDelete');
         });
     });
 

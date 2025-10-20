@@ -1,23 +1,26 @@
 import { ApiBase } from '../base/api-base';
 import {
-    NodeCreateSchema,
+    NodeCreateByAssetSchema,
+    NodeCreateByTypeSchema,
     NodeUpdateSchema,
     NodeDeleteSchema,
     NodeQuerySchema,
     TNodeDetail,
     TNodeUpdateResult,
     TNodeDeleteResult,
-    TCreateNodeOptions,
+    TCreateNodeByAssetOptions,
+    TCreateNodeByTypeOptions,
     TUpdateNodeOptions,
     TQueryNodeOptions,
     TDeleteNodeOptions,
     NodeQueryResultSchema,
     NodeDeleteResultSchema,
-    NodeUpdateResultSchema
+    NodeUpdateResultSchema,
 } from './node-schema';
 import { description, param, result, title, tool } from '../decorator/decorator.js';
 import { COMMON_STATUS, CommonResultType } from '../base/schema-base';
-import { Scene } from '../../core/scene';
+import { ICreateByNodeTypeParams, Scene } from '../../core/scene';
+
 
 
 export class NodeApi extends ApiBase {
@@ -34,19 +37,46 @@ export class NodeApi extends ApiBase {
     /**
      * 创建节点
      */
-    @tool('scene-create-node')
+    @tool('create-node-by-type')
     @title('创建节点')
     @description('在当前打开的场景中，创建一个新的节点，节点的路径必须是唯一的。')
-    @result(NodeDeleteResultSchema)
-    async createNode(@param(NodeCreateSchema) options: TCreateNodeOptions): Promise<CommonResultType<TNodeDetail>> {
+    @result(NodeQueryResultSchema)
+    async createNodeByType(@param(NodeCreateByTypeSchema) options: TCreateNodeByTypeOptions): Promise<CommonResultType<TNodeDetail>> {
         const ret: CommonResultType<TNodeDetail> = {
             code: COMMON_STATUS.SUCCESS,
             data: undefined,
         };
         try {
-            const nodeInfo = await Scene.createNode(options);
-            if (nodeInfo) {
-                ret.data = nodeInfo;
+            let resultNode = await Scene.createNodeByType(options as ICreateByNodeTypeParams);
+            if (resultNode) {
+                ret.data = resultNode;
+            }
+        } catch (e) {
+            ret.code = COMMON_STATUS.FAIL;
+            console.error('创建节点失败:', e);
+            ret.reason = e instanceof Error ? e.message : String(e);
+        }
+
+        return ret;
+    }
+
+
+    /**
+     * 创建节点
+     */
+    @tool('create-node-by-asset')
+    @title('创建节点')
+    @description('在当前打开的场景中，创建一个新的节点，节点的路径必须是唯一的。')
+    @result(NodeQueryResultSchema)
+    async createNodeByAsset(@param(NodeCreateByAssetSchema) options: TCreateNodeByAssetOptions): Promise<CommonResultType<TNodeDetail>> {
+        const ret: CommonResultType<TNodeDetail> = {
+            code: COMMON_STATUS.SUCCESS,
+            data: undefined,
+        };
+        try {
+            let resultNode = await Scene.createNodeByAsset(options);
+            if (resultNode) {
+                ret.data = resultNode;
             }
         } catch (e) {
             ret.code = COMMON_STATUS.FAIL;
