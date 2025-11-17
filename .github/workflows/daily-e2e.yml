@@ -38,6 +38,7 @@ jobs:
           clean: false
           persist-credentials: true
           fetch-depth: 0
+          ref: v0.0.1
       
       - name: Setup configuration
         id: setup-config
@@ -66,7 +67,7 @@ jobs:
         if: success() && steps.e2e-tests.outcome == 'success'
         uses: ./.github/actions/release
         with:
-          publish-dir: e2e/reports/.publish
+          publish-dir: e2e/server/.publish
           nodejs: 'true'
           electron: 'false'
           create-zip: 'true'
