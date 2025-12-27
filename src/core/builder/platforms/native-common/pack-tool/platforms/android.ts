@@ -61,6 +61,20 @@ export default class AndroidPackTool extends NativePackTool {
             await fs.copy(platformTemplateDir, nativePrjDir, { overwrite: true });
         }
 
+        // 3.1. 替换 settings.gradle 中的项目名
+        // 因为复制文件可能会覆盖之前在 create() 阶段替换的内容，需要再次替换
+        const settingsGradlePath = ps.join(nativePrjDir, 'settings.gradle');
+        if (fs.existsSync(settingsGradlePath)) {
+            const projectName = this.params.projectName;
+            if (projectName !== 'CocosGame') {
+                // 使用全局正则表达式替换所有出现的 CocosGame
+                const content = await fs.readFile(settingsGradlePath, 'utf8');
+                const newContent = content.replace(/CocosGame/g, projectName);
+                await fs.writeFile(settingsGradlePath, newContent, 'utf8');
+                console.log(`[Android] Replaced project name in settings.gradle: CocosGame -> ${projectName}`);
+            }
+        }
+
         // 4. 生成 local.properties
         const sdkPath = this.params.platformParams.sdkPath;
         const ndkPath = this.params.platformParams.ndkPath;
@@ -398,10 +412,11 @@ export default class AndroidPackTool extends NativePackTool {
 
         // 构建模式：Debug 或 Release
         const outputMode = this.params.debug ? 'Debug' : 'Release';
-        const projectNameASCII = this.projectNameASCII();
+        // 使用项目名而不是 ASCII 版本，因为 settings.gradle 中已经替换为实际项目名
+        const projectName = this.params.projectName;
         
         // 编译 Android APK
-        const buildMode = `${projectNameASCII}:assemble${outputMode}`;
+        const buildMode = `${projectName}:assemble${outputMode}`;
         
         // 保存当前工作目录
         const originDir = process.cwd();
@@ -436,7 +451,7 @@ export default class AndroidPackTool extends NativePackTool {
             if (androidInstant) {
                 bundleBuildMode = `bundle${outputMode}`;
             } else {
-                bundleBuildMode = `${projectNameASCII}:bundle${outputMode}`;
+                bundleBuildMode = `${projectName}:bundle${outputMode}`;
             }
             try {
                 process.chdir(nativePrjDir);
@@ -466,7 +481,8 @@ export default class AndroidPackTool extends NativePackTool {
         if (!fs.existsSync(apkPath)) {
             throw new Error(`[Android] APK not found at ${apkPath}`);
         }
-        const apkName = `${this.projectNameASCII()}-${suffix}.apk`;
+        // 使用项目名而不是 ASCII 版本，与 settings.gradle 中的项目名保持一致
+        const apkName = `${this.params.projectName}-${suffix}.apk`;
         fs.copyFileSync(apkPath, ps.join(destDir, apkName));
         console.log(`[Android] Copied APK to ${destDir}`);
 
@@ -515,7 +531,8 @@ export default class AndroidPackTool extends NativePackTool {
      */
     getApkPath(): string {
         const suffix = this.params.debug ? 'debug' : 'release';
-        const apkName = `${this.projectNameASCII()}-${suffix}.apk`;
+        // 使用项目名而不是 ASCII 版本，与 settings.gradle 中的项目名保持一致
+        const apkName = `${this.params.projectName}-${suffix}.apk`;
         return ps.join(this.outputsDir(), `apk/${suffix}/${apkName}`);
     }
 
@@ -524,7 +541,8 @@ export default class AndroidPackTool extends NativePackTool {
      * 参考 packages/engine 的实现
      */
     protected outputsDir(): string {
-        const folderName = this.projectNameASCII();
+        // 使用项目名而不是 ASCII 版本，与 settings.gradle 中的项目名保持一致
+        const folderName = this.params.projectName;
         const targetDir = ps.join(this.paths.nativePrjDir, 'build', folderName);
         const fallbackDir = ps.join(this.paths.nativePrjDir, 'build', this.params.projectName);
         return ps.join(fs.existsSync(targetDir) ? targetDir : fallbackDir, 'outputs');
