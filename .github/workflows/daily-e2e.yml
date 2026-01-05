@@ -29,7 +29,7 @@ permissions:
 
 jobs:
   daily-check:
-    runs-on: [ self-hosted, macOS ]
+    runs-on: [ macOS ]
 
     steps:
       - name: Checkout code

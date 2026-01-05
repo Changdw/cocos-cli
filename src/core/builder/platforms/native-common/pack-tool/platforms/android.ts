@@ -76,8 +76,13 @@ export default class AndroidPackTool extends NativePackTool {
         }
 
         // 4. 生成 local.properties
-        const sdkPath = this.params.platformParams.sdkPath;
-        const ndkPath = this.params.platformParams.ndkPath;
+        // 如果 sdkPath 或 ndkPath 是空字符串，则视为未配置（等同于 undefined）
+        const sdkPath = this.params.platformParams.sdkPath && this.params.platformParams.sdkPath.trim() !== '' 
+            ? this.params.platformParams.sdkPath 
+            : undefined;
+        const ndkPath = this.params.platformParams.ndkPath && this.params.platformParams.ndkPath.trim() !== '' 
+            ? this.params.platformParams.ndkPath 
+            : undefined;
         let localProps = '';
         console.log(`[Android] Generating local.properties with SDK: ${sdkPath}, NDK: ${ndkPath}`);
         if (sdkPath) {
@@ -104,8 +109,10 @@ export default class AndroidPackTool extends NativePackTool {
                 //     await fs.appendFile(propsPath, `\nndk.dir=${cchelper.fixPath(ndkPath)}`);
                 // }
             } else {
-                 // 仅写入 sdk.dir
-                 await fs.writeFile(propsPath, `sdk.dir=${cchelper.fixPath(sdkPath)}\n`);
+                 // 仅写入 sdk.dir（如果存在）
+                 if (sdkPath) {
+                     await fs.writeFile(propsPath, `sdk.dir=${cchelper.fixPath(sdkPath)}\n`);
+                 }
             }
             console.log(`[Android] local.properties updated/generated at: ${propsPath}`);
         } else {
@@ -239,10 +246,10 @@ export default class AndroidPackTool extends NativePackTool {
             }
 
             // 11. 设置 SDK 版本
-            // 强制设置编译 SDK 版本为 34，以避免 android-36 (Preview) 的资源链接问题
-            // 如果用户指定的 apiLevel 大于 34，则使用用户的
-            const apiLevel = this.params.platformParams.apiLevel || 34;
-            const compileSdkVersion = Math.max(apiLevel, 34);
+            // 强制设置编译 SDK 版本为 36，以避免 android-36 (Preview) 的资源链接问题
+            // 如果用户指定的 apiLevel 大于 36，则使用用户的
+            const apiLevel = this.params.platformParams.apiLevel || 36;
+            const compileSdkVersion = Math.max(apiLevel, 36);
             
             if (gradleProps.match(/^#?\s*PROP_COMPILE_SDK_VERSION=/m)) {
                 gradleProps = gradleProps.replace(/^#?\s*PROP_COMPILE_SDK_VERSION=.*$/m, `PROP_COMPILE_SDK_VERSION=${compileSdkVersion}`);
@@ -461,6 +468,18 @@ export default class AndroidPackTool extends NativePackTool {
             } finally {
                 process.chdir(originDir);
             }
+        }
+
+        // 停止 Gradle 守护进程，释放文件锁定，以便可以删除构建目录
+        try {
+            process.chdir(nativePrjDir);
+            await cchelper.runCmd(gradlew, ['--stop'], true, nativePrjDir);
+            console.log(`[Android] Stopped Gradle daemon`);
+        } catch (e) {
+            // 忽略停止守护进程的错误，不影响构建结果
+            console.warn(`[Android] Failed to stop Gradle daemon (non-critical):`, e);
+        } finally {
+            process.chdir(originDir);
         }
 
         return await this.copyToDist();
