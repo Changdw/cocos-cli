@@ -128,7 +128,7 @@ export async function runStaticCompileCheck(projectPath: string, showOutput: boo
         if (filteredOutput) {
             // 有 assets 相关的错误
             if (showOutput) {
-                console.log(filteredOutput);
+                console.error(filteredOutput);
             }
             return { passed: false, errorMessage: filteredOutput };
         } else {
@@ -161,7 +161,7 @@ export async function runStaticCompileCheck(projectPath: string, showOutput: boo
         if (filteredOutput) {
             // 有 assets 相关的错误
             if (showOutput) {
-                console.log(filteredOutput);
+                console.error(filteredOutput);
             }
             return { passed: false, errorMessage: filteredOutput };
         } else {
