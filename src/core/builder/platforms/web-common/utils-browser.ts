@@ -1,9 +1,12 @@
-import { spawn, exec, execSync } from "child_process";
-import os, { platform, tmpdir } from "os";
-import fs from "fs";
+import { exec } from "child_process";
+import { platform, tmpdir } from "os";
 import path from "path";
 import { get as httpGet } from "http";
 import WebSocket from "ws";
+import { BrowserType, launchRemoteDebuggingBrowser } from "./remote-debugging-browser";
+
+// 导出 BrowserType 供外部使用
+export { BrowserType };
 
 /**
  * openUrl 函数的选项类型
@@ -11,58 +14,55 @@ import WebSocket from "ws";
 export interface OpenUrlOptions {
     /** 是否启用远程调试模式，默认 false */
     remoteDebuggingMode?: boolean;
-    /** 浏览器可执行文件路径，如果不提供则自动查找 */
-    browserPath?: string;
     /** 远程调试端口，仅在 remoteDebuggingMode 为 true 时有效，默认 9222 */
     port?: number;
 }
 
 /**
- * 启动带调试端口的浏览器
+ * openDebuggingBrowser的流程图如下
+ * %% 主流程：启动带调试模式的浏览器
+flowchart TD
+    A([开始]) --> B["定义支持浏览器数组<br>['chrome','edge']"]
+    B --> C{"用户是否指定<br>browserType ?"}
+    C -->|是| G
+    C -->|否| D["调用 获取已安装浏览器<br>得到 browserType"]
+    D --> E{" browserType<br>存在 ?"}
+    E -->|否| F["提示用户下载并安装<br>支持数组第一项，流程结束"]
+    E -->|是| G["以 --remote-debugging-port=9222<br>启动 browserType，流程结束"]
+
+%% 子流程：获取已安装浏览器
+flowchart TD
+    A([开始]) --> B["定义支持浏览器数组<br>['chrome','edge']"]
+    B --> C["获取系统默认浏览器<br>defaultBrowser"]
+    C --> D{" defaultBrowser<br>存在且在数组中 ?"}
+    D -->|是| E["返回 defaultBrowser<br>流程结束"]
+    D -->|否| F["按数组顺序依次检查<br>是否已安装"]
+    F --> G{" 找到第一个<br>已安装 ?"}
+    G -->|是| H["返回该 browserType<br>流程结束"]
+    G -->|否| I["返回空<br>流程结束"]
+ */
+
+/**
+ * 启动带调试端口的浏览器（按照流程图逻辑）
  * @param url 要打开的 URL
- * @param browserPath 浏览器可执行文件路径
  * @param port 远程调试端口，默认 9222
+ * @param browserType 可选的浏览器类型，如果不提供则自动检测
  * @param completedCallback 浏览器启动完成后的回调函数
  */
-function openDebuggingBrowser(url: string, browserPath: string, port: number, completedCallback?: () => void): void {
-    console.log(`🚀 Launching browser with debugging at ${browserPath}...`);
-
-    const args = [
-        `--remote-debugging-port=${port}`,
-        "--no-first-run",
-        "--no-default-browser-check",
-        url
-    ];
+function openDebuggingBrowser(url: string, port: number, browserType?: BrowserType, completedCallback?: () => void): void {
+    console.log(`🚀 Launching browser with debugging port ${port}...`);
 
     // 设置 user-data-dir 以避免与正常浏览器实例冲突
     const userDataDir = platform() === 'win32'
         ? path.join(process.env.TEMP || process.env.TMP || tmpdir(), "chrome-debug")
         : path.join(tmpdir(), "chrome-debug");
-    args.push(`--user-data-dir=${userDataDir}`);
 
-    try {
-        const browserProcess = spawn(browserPath, args, {
-            detached: true,
-            stdio: 'ignore'
-        });
-
-        browserProcess.unref();
-        console.log(`✅ Browser launched with debugging port ${port}`);
+    launchRemoteDebuggingBrowser(url, port, browserType, userDataDir, () => {
         console.log(`📡 Debugging URL: http://127.0.0.1:${port}`);
-
-        // 浏览器启动后调用回调
         if (completedCallback) {
             completedCallback();
         }
-    } catch (error: any) {
-        console.error(`❌ Failed to launch browser: ${error.message}`);
-        console.log("Falling back to default browser...");
-
-        // 即使失败也调用回调
-        if (completedCallback) {
-            completedCallback();
-        }
-    }
+    });
 }
 
 /**
@@ -370,20 +370,13 @@ export async function connectToChromeDevTools(
 export function openUrl(url: string, options: OpenUrlOptions = {}, completedCallback?: () => void): void {
     const {
         remoteDebuggingMode = false,
-        browserPath,
         port = 9222
     } = options;
 
     if (remoteDebuggingMode) {
-        // 如果未提供浏览器路径，自动查找
-        const resolvedBrowserPath = browserPath ?? getDefaultBrowserPath();
-
-        if (resolvedBrowserPath) {
-            openDebuggingBrowser(url, resolvedBrowserPath, port, completedCallback);
-            return;
-        } else {
-            console.warn(`⚠️ 未找到指定的浏览器，回退到默认浏览器`);
-        }
+        // 自动检测并使用已安装的浏览器
+        openDebuggingBrowser(url, port, undefined, completedCallback);
+        return;
     }
 
     // 回退到默认浏览器打开方式
@@ -402,99 +395,4 @@ export function openUrlAsync(url: string, options: OpenUrlOptions = {}): Promise
             resolve();
         });
     });
-}
-
-/**
- * 获取系统默认浏览器的可执行文件路径
- * 
- * 该函数会根据当前操作系统平台，使用不同的方法检测系统默认浏览器：
- * - Windows: 通过查询注册表获取默认 HTTP 协议处理程序
- * - macOS: 通过系统设置获取默认浏览器的 Bundle ID，然后查找对应的应用程序路径
- * - Linux: 通过 xdg-settings 或 xdg-mime 获取默认浏览器，然后从 desktop 文件中解析可执行路径
- * 
- * @returns 返回默认浏览器的可执行文件路径，如果无法检测到则返回 undefined
- */
-function getDefaultBrowserPath(): string | undefined {
-    try {
-        const platform = os.platform();
-
-        if (platform === "win32") {
-            // Windows: 通过查询注册表获取默认 HTTP 协议处理程序
-            // 注册表路径: HKEY_CLASSES_ROOT\HTTP\shell\open\command
-            // 该路径存储了系统默认用于打开 HTTP 链接的命令
-            const regQuery = execSync(
-                'reg query "HKEY_CLASSES_ROOT\\HTTP\\shell\\open\\command" /ve',
-                { encoding: "utf8" }
-            );
-            // 从注册表查询结果中提取浏览器可执行文件路径（通常在引号中）
-            const match = regQuery.match(/"([^"]+)"/);
-            if (match && fs.existsSync(match[1])) {
-                return match[1];
-            }
-        } else if (platform === "darwin") {
-            // macOS: 通过系统设置获取默认浏览器的 Bundle ID，然后查找应用程序路径
-            // 1. 读取 LaunchServices 的 LSHandlers 配置，查找 HTTP 协议的处理程序
-            // 2. 提取 Bundle ID（例如: com.google.Chrome）
-            // 3. 使用 mdfind 根据 Bundle ID 查找应用程序的安装路径
-            // 4. 构建可执行文件路径: <AppPath>/Contents/MacOS/<AppName>
-            const bundleId = execSync(
-                'defaults read com.apple.LaunchServices/com.apple.launchservices.secure LSHandlers | grep -A 1 "http" | grep LSHandlerRoleAll | awk \'{print $3}\'',
-                { encoding: "utf8" }
-            ).trim();
-
-            if (bundleId) {
-                // 使用 mdfind 根据 Bundle ID 查找应用程序路径
-                const appPath = execSync(`mdfind "kMDItemCFBundleIdentifier == '${bundleId}'"`, {
-                    encoding: "utf8",
-                }).split("\n")[0];
-                if (appPath && fs.existsSync(appPath)) {
-                    // macOS 应用程序的可执行文件位于: <AppPath>/Contents/MacOS/<AppName>
-                    return path.join(appPath, "Contents", "MacOS", path.basename(appPath, ".app"));
-                }
-            }
-        } else if (platform === "linux") {
-            // Linux: 通过 xdg-settings 或 xdg-mime 获取默认浏览器
-            // 1. 首先尝试使用 xdg-settings 获取默认浏览器
-            // 2. 如果失败，则使用 xdg-mime 查询 HTTP 协议的处理程序
-            // 3. 从 desktop 文件中读取 Exec 字段，获取可执行文件路径
-            let browserDesktop = "";
-            try {
-                // 方法1: 使用 xdg-settings 获取默认浏览器
-                browserDesktop = execSync("xdg-settings get default-web-browser", {
-                    encoding: "utf8",
-                }).trim();
-            } catch {
-                // 方法2: 如果 xdg-settings 失败，使用 xdg-mime 查询 HTTP 协议处理程序
-                browserDesktop = execSync(
-                    "xdg-mime query default x-scheme-handler/http",
-                    { encoding: "utf8" }
-                ).trim();
-            }
-
-            if (browserDesktop) {
-                // desktop 文件通常位于 /usr/share/applications/ 目录
-                const desktopFilePath = `/usr/share/applications/${browserDesktop}`;
-                if (fs.existsSync(desktopFilePath)) {
-                    // 读取 desktop 文件内容
-                    const desktopFileContent = fs.readFileSync(desktopFilePath, "utf8");
-                    // 查找 Exec= 行，该行包含可执行文件路径
-                    const execLine = desktopFileContent
-                        .split("\n")
-                        .find((line) => line.startsWith("Exec="));
-                    if (execLine) {
-                        // 提取可执行文件路径（移除 Exec= 前缀和可能的参数）
-                        const execPath = execLine.replace("Exec=", "").split(" ")[0];
-                        if (fs.existsSync(execPath)) {
-                            return execPath;
-                        }
-                    }
-                }
-            }
-        }
-    } catch (err) {
-        // 检测失败时记录错误，但不抛出异常，返回 undefined
-        console.error("Error detecting default browser path");
-    }
-
-    return undefined;
 }
