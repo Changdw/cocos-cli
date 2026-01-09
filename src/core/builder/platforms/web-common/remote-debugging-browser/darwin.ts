@@ -68,6 +68,17 @@ export class RemoteDebuggingBrowserDarwin implements IRemoteDebuggingBrowser {
         userDataDir: string,
         completedCallback?: () => void
     ): void {
+        // 防止重复启动的标志
+        let hasLaunched = false;
+        const markAsLaunched = () => {
+            if (!hasLaunched) {
+                hasLaunched = true;
+                if (completedCallback) {
+                    completedCallback();
+                }
+            }
+        };
+
         try {
             let executablePath: string;
             let appName: string;
@@ -80,16 +91,14 @@ export class RemoteDebuggingBrowserDarwin implements IRemoteDebuggingBrowser {
                 appName = 'Microsoft Edge';
             } else {
                 console.error(`❌ Unsupported browser type: ${browserType}`);
-                if (completedCallback) {
-                    completedCallback();
-                }
+                markAsLaunched();
                 return;
             }
 
             // 检查可执行文件是否存在
             if (!fs.existsSync(executablePath)) {
                 // 回退到使用 open -a 方式
-                this.launchBrowserWithOpen(browserType, url, port, userDataDir, completedCallback);
+                this.launchBrowserWithOpen(browserType, url, port, userDataDir, markAsLaunched);
                 return;
             }
 
@@ -111,46 +120,52 @@ export class RemoteDebuggingBrowserDarwin implements IRemoteDebuggingBrowser {
             });
 
             // 监听 spawn 错误（如果可执行文件不存在或无法启动）
+            // 这是唯一可靠的错误检测方式
             childProcess.on('error', (error: Error) => {
-                console.error(`❌ Failed to spawn ${appName}: ${error.message}`);
-                // 回退到使用 open -a 方式
-                this.launchBrowserWithOpen(browserType, url, port, userDataDir, completedCallback);
+                if (!hasLaunched) {
+                    console.error(`❌ Failed to spawn ${appName}: ${error.message}`);
+                    // 回退到使用 open -a 方式
+                    this.launchBrowserWithOpen(browserType, url, port, userDataDir, markAsLaunched);
+                }
             });
 
             // 监听进程退出（如果立即退出，说明启动失败）
+            // 注意：使用 detached: true 和 unref() 后，exit 事件可能不会立即触发
+            // 但如果触发了且退出码不为 0，说明启动失败
+            let exitTimer: NodeJS.Timeout | null = null;
             childProcess.on('exit', (code: number | null, signal: string | null) => {
-                if (code !== null && code !== 0) {
+                // 清除成功启动的定时器
+                if (exitTimer) {
+                    clearTimeout(exitTimer);
+                    exitTimer = null;
+                }
+
+                // 只有在进程立即退出且退出码不为 0 时才认为启动失败
+                if (!hasLaunched && code !== null && code !== 0) {
                     console.error(`❌ ${appName} process exited with code ${code}, signal: ${signal}`);
-                    // 如果进程立即退出，回退到 open -a 方式
-                    if (!completedCallback || code !== 0) {
-                        this.launchBrowserWithOpen(browserType, url, port, userDataDir, completedCallback);
-                    }
+                    this.launchBrowserWithOpen(browserType, url, port, userDataDir, markAsLaunched);
                 }
             });
 
             // 立即解除父子关系，让浏览器独立运行
             childProcess.unref();
 
-            // 给一点时间让进程启动，然后检查进程是否还在运行
-            setTimeout(() => {
-                // 检查进程是否还在运行（通过发送信号 0，不会实际发送信号，只是检查）
-                try {
-                    process.kill(childProcess.pid || 0, 0);
+            // 如果 spawn 没有立即触发 error，认为启动成功
+            // 给一点时间确认没有 error 事件
+            exitTimer = setTimeout(() => {
+                if (!hasLaunched) {
+                    // spawn 没有触发 error，认为启动成功
                     console.log(`✅ ${appName} launched with debugging port ${port}`);
-                    if (completedCallback) {
-                        completedCallback();
-                    }
-                } catch (error: any) {
-                    // 进程不存在，说明启动失败
-                    console.error(`❌ ${appName} process is not running`);
-                    this.launchBrowserWithOpen(browserType, url, port, userDataDir, completedCallback);
+                    markAsLaunched();
                 }
-            }, 500);
+            }, 100);
 
         } catch (error: any) {
-            console.error(`❌ Exception caught: ${error.message}`);
-            // 回退到使用 open -a 方式
-            this.launchBrowserWithOpen(browserType, url, port, userDataDir, completedCallback);
+            if (!hasLaunched) {
+                console.error(`❌ Exception caught: ${error.message}`);
+                // 回退到使用 open -a 方式
+                this.launchBrowserWithOpen(browserType, url, port, userDataDir, markAsLaunched);
+            }
         }
     }
 
