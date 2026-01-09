@@ -93,7 +93,7 @@ export async function runStaticCompileCheck(projectPath: string, showOutput: boo
 
     // 切换到项目目录并执行命令
     // 使用 2>&1 将 stderr 合并到 stdout，避免流写入冲突导致的乱序
-    const command = `npx tsc --noEmit 2>&1 | findstr /i "assets"`;
+    const command = `npx tsc --noEmit 2>&1"`;
     const shell = getShell();
     
     try {
