@@ -8,6 +8,7 @@ import * as pkgJson from '../../package.json';
 import { join } from 'path';
 import { ResourceManager } from './resources';
 import { HTTP_STATUS } from '../api/base/schema-base';
+import { BuilderHook } from './hooks/builder.hook';
 import type { HttpStatusCode } from '../api/base/schema-base';
 import stripAnsi from 'strip-ansi';
 import { zodToJsonSchema } from 'zod-to-json-schema';
@@ -15,8 +16,10 @@ import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 export class McpMiddleware {
     private server: McpServer;
     private resourceManager: ResourceManager;
+    private builderHook: BuilderHook;
 
     constructor() {
+        this.builderHook = new BuilderHook();
         // 创建 MCP server
         this.server = new McpServer({
             name: 'cocos-cli-mcp-server',
@@ -82,12 +85,8 @@ export class McpMiddleware {
                     .sort((a, b) => a.index - b.index)
                     .forEach(param => {
                         if (param.name) {
-                            // 特殊处理 builder-build 的 options 参数
-                            // 使用 z.any() 绕过 SDK 的初步验证，以便我们在 callback 中注入 platform
-                            // 实际的严格验证会在 prepareMethodArguments 中使用 meta.paramSchemas 进行
-                            if (toolName === 'builder-build' && param.name === 'options') {
-                                inputSchemaFields[param.name] = z.any();
-                            } else {
+                            this.builderHook.onRegisterParam(toolName, param, inputSchemaFields);
+                            if (!inputSchemaFields[param.name]) {
                                 inputSchemaFields[param.name] = param.schema;
                             }
                         }
@@ -101,15 +100,7 @@ export class McpMiddleware {
                     inputSchemaFields,
                     async (args) => {
                         // args 已经是验证过的参数对象 (对于 builder-build.options 是 any)
-                        if (toolName === 'builder-build') {
-                            if (!args.options) {
-                                args.options = {};
-                            }
-                            if (typeof args.options === 'object' && !args.options.platform) {
-                                // 注入 platform
-                                args.options.platform = args.platform;
-                            }
-                        }
+                        this.builderHook.onBeforeExecute(toolName, args);
                         try {
                             // 这里的 prepareMethodArguments 主要是为了按顺序排列参数给 apply 使用
                             // 注意：args 是对象，prepareMethodArguments 需要处理对象
@@ -236,10 +227,7 @@ export class McpMiddleware {
                 
                 console.error(`Parameter validation failed for ${paramName}:`, error);
                 
-                // 如果是 builder-build 接口，参数校验失败直接报错
-                if (toolName === 'builder-build') {
-                    throw new Error(`Parameter validation failed for ${paramName}: ${error instanceof Error ? error.message : String(error)}`);
-                }
+                this.builderHook.onValidationFailed(toolName, paramName, error);
 
                 // 使用原始值
                 methodArgs[param.index] = value;

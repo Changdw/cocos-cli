@@ -54,6 +54,36 @@ export const SchemaWebMobilePackages = z.object({
     embedWebDebugger: z.boolean().default(false).describe('Whether to embed Web debugger'), // 是否嵌入 Web 端调试工具
 }).describe('Web Mobile Platform Configuration'); // Web Mobile 平台配置
 
+// iOS Configuration // iOS 配置
+const SchemaIOSPackageBase = z.object({
+    packageName: z.string()
+        .min(1, 'iOS package name cannot be empty') // iOS包名不能为空
+        .describe('iOS application package name (required)'), // iOS应用包名（必填）
+
+    osTarget: z.object({
+        iphoneos: z.boolean().optional(),
+        simulator: z.boolean().optional(),
+    }).optional(),
+    targetVersion: z.string().optional(),
+    developerTeam: z.string().optional(),
+}).describe('iOS platform specific configuration'); // iOS平台特定配置
+
+// Mac Packages Configuration // Mac Packages 配置
+export const SchemaMacPackage = z.object({
+    packageName: z.string()
+        .min(1, 'Mac package name cannot be empty') // Mac包名不能为空
+        .describe('Mac application package name (required)') // Mac应用包名（必填）
+}).describe('Mac platform specific configuration'); // Mac平台特定配置
+
+// Android Packages Configuration // Android Packages 配置
+export const SchemaAndroidPackage = z.object({
+    packageName: z.string()
+        .min(1, 'Android package name cannot be empty') // Android包名不能为空
+        .describe('Android application package name (required)'), // Android应用包名（必填）
+    keystorePath: z.string().optional().describe('Keystore file path'), // 签名文件路径
+    keystorePassword: z.string().optional().describe('Keystore password'), // 签名文件密码
+}).describe('Android platform specific configuration'); // Android平台特定配置
+
 // ==================== Basic Build Configuration ==================== // 基础构建配置
 
 // Core Build Field Definitions (excluding platform and packages, defined in platform-specific configurations) // 核心构建字段定义（不包含 platform 和 packages，这些在平台特定配置中定义）
@@ -124,11 +154,14 @@ export const SchemaBuildRuntimeOptions = z.object({
 
 // ==================== Platform Specific Complete Build Options ==================== // 平台特定的完整构建选项
 
+// Base Build Options (including runtime options) // 基础构建选项（包含运行时选项）
+export const SchemaBuildBaseOption = SchemaBuildRuntimeOptions
+    .merge(SchemaBuildBaseConfig);
+
 // Web Desktop Complete Build Options (Input, all fields optional) // Web Desktop 完整构建选项（入参，所有字段可选）
-export const SchemaWebDesktopBuildOption = SchemaBuildRuntimeOptions
-    .merge(SchemaBuildBaseConfig)
+export const SchemaWebDesktopBuildOption = SchemaBuildBaseOption
     .extend({
-        platform: z.literal('web-desktop').describe('Build Platform').optional(), // 构建平台
+        platform: z.literal('web-desktop').describe('Build Platform'), // 构建平台
         packages: z.object({
             'web-desktop': SchemaWebDesktopPackages.partial()
         }).optional().describe('Web Desktop Platform Specific Configuration') // Web Desktop 平台特定配置
@@ -136,28 +169,98 @@ export const SchemaWebDesktopBuildOption = SchemaBuildRuntimeOptions
     .describe('Web Desktop Complete Build Options (all fields optional)'); // Web Desktop 完整构建选项（所有字段可选）
 
 // Web Mobile Complete Build Options (Input, all fields optional) // Web Mobile 完整构建选项（入参，所有字段可选）
-export const SchemaWebMobileBuildOption = SchemaBuildRuntimeOptions
-    .merge(SchemaBuildBaseConfig)
+export const SchemaWebMobileBuildOption = SchemaBuildBaseOption
     .extend({
-        platform: z.literal('web-mobile').describe('Build Platform').optional(), // 构建平台
+        platform: z.literal('web-mobile').describe('Build Platform'), // 构建平台
         packages: z.object({
             'web-mobile': SchemaWebMobilePackages.partial()
         }).optional().describe('Web Mobile Platform Specific Configuration') // Web Mobile 平台特定配置
     })
     .describe('Web Mobile Complete Build Options (all fields optional)'); // Web Mobile 完整构建选项（所有字段可选）
 
-// General Build Options (for API input) // 通用构建选项（用于 API 入参）
-export const SchemaBuildOption = z.union([
-    SchemaWebDesktopBuildOption,
-    SchemaWebMobileBuildOption,
-    SchemaBuildRuntimeOptions
-    .merge(SchemaBuildBaseConfig)
+// Windows Build Options // Windows 构建选项
+export const SchemaWindowsBuildOption = SchemaBuildBaseOption
+    .extend({
+        platform: z.literal('windows').describe('Build Platform') // 构建平台
+    })
+    .describe('Windows Platform Build Options'); // Windows平台构建选项
+
+// iOS Build Options // iOS 构建选项
+const SchemaIOSPackageWithCatchall = SchemaIOSPackageBase.catchall(z.any());
+export const SchemaIOSPackage = SchemaIOSPackageWithCatchall
+    .refine((data) => {
+        // 当 osTarget.iphoneos 为 true 时，developerTeam 必须有值
+        if (data.osTarget && data.osTarget.iphoneos === true) {
+            return data.developerTeam && data.developerTeam.trim().length > 0;
+        }
+        return true;
+    }, {
+        message: 'developerTeam is required when osTarget.iphoneos is true',
+        path: ['developerTeam']
+    })
+    .describe('iOS Platform Specific Configuration');
+
+export const SchemaIOSBuildOption = SchemaBuildBaseOption
+    .extend({
+        platform: z.literal('ios').describe('Build Platform'), // 构建平台
+        packages: z.object({
+            ios: SchemaIOSPackage
+                .optional()
+        }).describe('iOS Platform Configuration') // iOS平台配置
+    })
+    .describe('iOS Platform Build Options'); // iOS平台构建选项
+
+// Android Build Options // Android 构建选项
+export const SchemaAndroidBuildOption = SchemaBuildBaseOption
+    .extend({
+        platform: z.literal('android').describe('Build Platform'), // 构建平台
+        packages: z.object({
+            android: SchemaAndroidPackage
+                .catchall(z.any())  // 允许其他任意字段
+                .optional()
+        }).describe('Android Platform Configuration') // Android平台配置
+    })
+    .describe('Android Platform Build Options'); // Android平台构建选项
+
+
+// Mac Build Options // Mac 构建选项
+export const SchemaMacBuildOption = SchemaBuildBaseOption
+    .extend({
+        platform: z.literal('mac').describe('Build Platform'), // 构建平台
+        packages: z.object({
+            mac: SchemaMacPackage
+                .catchall(z.any())  // 允许其他任意字段
+                .optional()
+        }).describe('Mac Platform Configuration') // Mac平台配置
+    })
+    .describe('Mac Platform Build Options'); // Mac平台构建选项
+
+
+// Other Platform Build Options (Generic) // 其他平台构建选项（通用）
+export const SchemaOtherPlatformBuildOption = SchemaBuildBaseOption
     .extend({
         platform: SchemaPlatform.optional().describe('Build Platform'), // 构建平台
         packages: z.any().optional().describe('Platform Specific Configuration'), // 平台特定配置
     })
-]).optional().describe('Build Options (for API input)'); // 构建选项（用于 API 入参）
+    .describe('Other Platform Build Options (Generic)'); // 其他平台构建选项（通用）
+
+export const SchemaKnownBuildOptions = [
+    SchemaWebDesktopBuildOption,
+    SchemaWebMobileBuildOption,
+    SchemaWindowsBuildOption,
+    SchemaIOSBuildOption,
+    SchemaMacBuildOption,
+    SchemaAndroidBuildOption,
+];
+// ==================== Create discriminatedUnion ==================== //
+export const SchemaBuildOption = z.discriminatedUnion('platform', [
+    ...SchemaKnownBuildOptions,
+    SchemaOtherPlatformBuildOption
+] as any).default({}).describe('Build options (with platform preprocessing)'); // 构建选项（带平台预处理）
+
 export type TBuildOption = z.infer<typeof SchemaBuildOption>;
+
+// ==================== Result Type Definitions ==================== // 结果类型定义
 
 export const SchemaResultBase = z.object({
     code: z.number().int().describe('Build exit code, 0 means success, others mean failure, 32 means parameter error, 34 means build failure, 37 means build busy, 38 means static compile error, 50 means unknown error'), // 构建的退出码, 0 表示成功, 其他表示失败, 32 表示参数错误, 34 表示构建失败, 37 表示构建繁忙, 38 表示静态编译错误, 50 表示未知错误
@@ -215,36 +318,17 @@ export type TPreviewSettingsResult = z.infer<typeof SchemaPreviewSettingsResult>
 
 // ==================== Build Configuration Query Result ==================== // 构建配置查询结果
 
-// Web Desktop Build Configuration Query Result (All fields required, including packages, excluding runtime options) // Web Desktop 构建配置查询结果（所有字段必填，包含 packages，不包含运行时选项）
-const SchemaWebDesktopBuildConfigResult = BuildConfigCoreFields.partial()
-    .extend({
-        platform: z.literal('web-desktop').describe('Build Platform'), // 构建平台
-        packages: z.object({
-            'web-desktop': SchemaWebDesktopPackages
-        }).describe('Web Desktop Platform Specific Configuration') // Web Desktop 平台特定配置
-    })
-    .describe('Web Desktop Build Configuration Query Result'); // Web Desktop 构建配置查询结果
-
-// Web Mobile Build Configuration Query Result (All fields required, including packages, excluding runtime options) // Web Mobile 构建配置查询结果（所有字段必填，包含 packages，不包含运行时选项）
-const SchemaWebMobileBuildConfigResult = BuildConfigCoreFields.partial()
-    .extend({
-        platform: z.literal('web-mobile').describe('Build Platform'), // 构建平台
-        packages: z.object({
-            'web-mobile': SchemaWebMobilePackages
-        }).describe('Web Mobile Platform Specific Configuration') // Web Mobile 平台特定配置
-    })
-    .describe('Web Mobile Build Configuration Query Result'); // Web Mobile 构建配置查询结果
-
+// Build configuration query result: union type, all fields required, including packages, excluding runtime options
 // Build Configuration Query Result: Union type, all fields required, including packages, excluding runtime options // 构建配置查询结果：union 类型，所有字段必填，包含 packages，不包含运行时选项
 export const SchemaBuildConfigResult = z.union([
-    SchemaWebDesktopBuildConfigResult,
-    SchemaWebMobileBuildConfigResult,
-    BuildConfigCoreFields.partial()
-    .extend({
-        platform: SchemaPlatform,
-        packages: z.any().optional().describe('Platform Specific Configuration'), // 平台特定配置
-    })
-]).nullable().describe('Build Configuration Query Result (all fields required, including packages)'); // 构建配置查询结果（所有字段必填，包含 packages）
+    SchemaWebDesktopBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true }),
+    SchemaWebMobileBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true }),
+    SchemaWindowsBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true }),
+    SchemaIOSBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true }),
+    SchemaAndroidBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true }),
+    SchemaMacBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true }),
+    SchemaOtherPlatformBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true }),
+]).nullable().describe('Build configuration query result (all fields required, including packages)'); // 构建配置查询结果（所有字段必填，包含 packages）
 
 export type TBuildConfigResult = z.infer<typeof SchemaBuildConfigResult>;
 
