@@ -6,6 +6,7 @@ import { createServer as createHTTPSServer, Server as HTTPSServer } from 'https'
 import { getAvailablePort } from './utils';
 
 import { socketService } from './socket';
+import { consoleLogService } from './console-log';
 import { middlewareService } from './middleware';
 import { cors } from './utils/cors';
 import path from 'path';
@@ -54,6 +55,7 @@ export class ServerService {
             caFile: this.httpsConfig.ca,
         }, this.app);
         socketService.startup(this.server);
+        consoleLogService.startup(this.server);
         // 打印服务器地址
         this.printServerUrls();
     }
@@ -137,6 +139,7 @@ export class ServerService {
     init() {
         this.app.use(compression());
         this.app.use(cors);
+        this.app.use(consoleLogService.injectMiddleware);
         this.app.use(middlewareService.router);
         this.app.use(middlewareService.staticRouter);
 
