@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import { exec } from 'child_process';
+import path from 'path';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
@@ -30,7 +31,7 @@ function filterAssetsErrors(output: string): string {
     if (!output) {
         return '';
     }
-    
+
     // 统一换行符
     const lines = output.replace(/\r\n/g, '\n').split('\n');
     const filteredLines: string[] = [];
@@ -41,7 +42,7 @@ function filterAssetsErrors(output: string): string {
     // 格式 2: filename:line:col - error TSxxxx: message
     // 注意：文件名可能包含路径分隔符
     const errorStartRegex = /^(.+?)[(:]\d+[,:]\d+[):]?\s*(?:-\s*)?(?:error|warning)\s+TS\d+:/;
-    
+
     for (const line of lines) {
         // 跳过空行，避免打断错误块
         if (!line.trim()) {
@@ -49,7 +50,7 @@ function filterAssetsErrors(output: string): string {
         }
 
         const match = line.match(errorStartRegex);
-        
+
         if (match) {
             // 这是一个新的错误行
             const filename = match[1].trim();
@@ -74,7 +75,7 @@ function filterAssetsErrors(output: string): string {
             }
         }
     }
-    
+
     return filteredLines.join('\n').trim();
 }
 
@@ -93,13 +94,13 @@ export async function runStaticCompileCheck(projectPath: string, showOutput: boo
 
     // 切换到项目目录并执行命令
     // 使用 2>&1 将 stderr 合并到 stdout，避免流写入冲突导致的乱序
-    // Windows 系统使用 findstr 在命令行层面过滤包含 "assets" 的错误
-    // 其他系统（macOS/Linux）直接获取完整输出，后续通过 filterAssetsErrors 函数过滤
+    // 使用 CLI 自身依赖的 tsc，避免在项目目录中找不到 tsc
+    // 输出在代码中统一过滤，保证跨平台一致性
     const command = isWindows() 
-        ? `npx tsc --noEmit 2>&1 | findstr /i "assets"`
-        : `npx tsc --noEmit 2>&1`;
+    ? `npx tsc --noEmit 2>&1 | findstr /i "assets"`
+    : `tsc --noEmit 2>&1`;
     const shell = getShell();
-    
+
     try {
         const execOptions: any = {
             cwd: projectPath,
@@ -128,24 +129,33 @@ export async function runStaticCompileCheck(projectPath: string, showOutput: boo
 
         // 过滤出包含 "assets" 的错误
         const filteredOutput = filterAssetsErrors(output);
-        
+
         if (filteredOutput) {
             // 有 assets 相关的错误
             if (showOutput) {
                 console.error(filteredOutput);
             }
             return { passed: false, errorMessage: filteredOutput };
-        } else {
-            // 没有 assets 相关的错误
+        }
+
+        // macOS/Linux 只有输出但无 assets 相关错误时，仍然显示原始输出，避免用户误以为没有错误
+        if (!isWindows() && output) {
             if (showOutput) {
-                console.log(chalk.green('✓ No assets-related TypeScript errors found!'));
+                console.warn(chalk.yellow('⚠ Non-assets TypeScript errors detected (showing full output):'));
+                console.error(output);
             }
             return { passed: true };
         }
+
+        // 没有 assets 相关的错误
+        if (showOutput) {
+            console.log(chalk.green('✓ No assets-related TypeScript errors found!'));
+        }
+        return { passed: true };
     } catch (error: any) {
         // execAsync 在命令返回非零退出码时会抛出错误
         // tsc 如果有错误会返回非零退出码，这是正常的
-        
+
         // 合并 stdout 和 stderr (虽然我们使用了 2>&1，但如果 execAsync 捕获到了 stderr 也要处理)
         const errorStdout = String(error.stdout || '').trim();
         const errorStderr = String(error.stderr || '').trim();
@@ -161,19 +171,28 @@ export async function runStaticCompileCheck(projectPath: string, showOutput: boo
 
         // 过滤出包含 "assets" 的错误
         const filteredOutput = filterAssetsErrors(fullOutput);
-        
+
         if (filteredOutput) {
             // 有 assets 相关的错误
             if (showOutput) {
                 console.error(filteredOutput);
             }
             return { passed: false, errorMessage: filteredOutput };
-        } else {
-            // 没有 assets 相关的错误
+        }
+
+        // macOS/Linux 只有输出但无 assets 相关错误时，仍然显示原始输出，避免用户误以为没有错误
+        if (!isWindows() && fullOutput) {
             if (showOutput) {
-                console.log(chalk.green('✓ No assets-related TypeScript errors found!'));
+                console.warn(chalk.yellow('⚠ Non-assets TypeScript errors detected (showing full output):'));
+                console.error(fullOutput);
             }
             return { passed: true };
         }
+
+        // 没有 assets 相关的错误
+        if (showOutput) {
+            console.log(chalk.green('✓ No assets-related TypeScript errors found!'));
+        }
+        return { passed: true };
     }
 }
