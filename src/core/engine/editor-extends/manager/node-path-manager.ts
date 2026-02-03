@@ -1,6 +1,7 @@
 export class NodePathManager {
     private _uuidToPath: Map<string, string> = new Map();          // UUID -> 路径
     private _pathToUuid: Map<string, string> = new Map();          // 路径 -> UUID
+    private _lowerPathToUuids: Map<string, Set<string>> = new Map(); // 小写路径 -> UUID集合
     private _nodeNames: Map<string, Map<string, number>> = new Map(); // 父节点UUID -> (节点名 -> 计数)
 
     /**
@@ -8,7 +9,7 @@ export class NodePathManager {
         */
     private _sanitizeName(name: string): string {
         // 移除或替换路径中的非法字符
-        return name.replace(/[\/\\:\*\?"<>\|]/g, '_');
+        return name.replace(/[/\\:*?"<>|]/g, '_');
     }
 
     /**
@@ -18,7 +19,7 @@ export class NodePathManager {
         if (!parentUuid) {
             return '';
         }
-        const parentPath = parentUuid ? this._uuidToPath.get(parentUuid) || '' : '';
+        const parentPath = this._uuidToPath.get(parentUuid) || '';
 
         // 清理名称中的非法路径字符
         const cleanName = this._sanitizeName(name);
@@ -35,12 +36,25 @@ export class NodePathManager {
     add(uuid: string, path: string) {
         this._uuidToPath.set(uuid, path);
         this._pathToUuid.set(path, uuid);
+        const lowerPath = path.toLowerCase();
+        if (!this._lowerPathToUuids.has(lowerPath)) {
+            this._lowerPathToUuids.set(lowerPath, new Set());
+        }
+        this._lowerPathToUuids.get(lowerPath)!.add(uuid);
     }
 
     remove(uuid: string) {
         const path = this._uuidToPath.get(uuid);
         if (path) {
             this._pathToUuid.delete(path);
+            const lowerPath = path.toLowerCase();
+            const uuids = this._lowerPathToUuids.get(lowerPath);
+            if (uuids) {
+                uuids.delete(uuid);
+                if (uuids.size === 0) {
+                    this._lowerPathToUuids.delete(lowerPath);
+                }
+            }
         }
         this._uuidToPath.delete(uuid);
         this._nodeNames.delete(uuid);
@@ -63,6 +77,11 @@ export class NodePathManager {
         this._uuidToPath.delete(oldUuid);
         this._uuidToPath.set(newUuid, path);
         this._pathToUuid.set(path, newUuid);
+        const lowerPath = path.toLowerCase();
+        if (!this._lowerPathToUuids.has(lowerPath)) {
+            this._lowerPathToUuids.set(lowerPath, new Set());
+        }
+        this._lowerPathToUuids.get(lowerPath)!.add(newUuid);
 
         if (this._nodeNames.has(oldUuid)) {
             const nameMap = this._nodeNames.get(oldUuid)!;
@@ -74,6 +93,7 @@ export class NodePathManager {
     clear() {
         this._uuidToPath.clear();
         this._pathToUuid.clear();
+        this._lowerPathToUuids.clear();
         this._nodeNames.clear();
     }
 
@@ -85,7 +105,7 @@ export class NodePathManager {
         if (parts.length <= 1) {
             return undefined; // 已经是根节点或没有父节点
         }
-        
+
         // 移除最后一个元素（当前节点），然后重新组合
         const parentPath = parts.slice(0, -1).join('/');
         const parentUuid = parentPath ? this._pathToUuid.get(parentPath) : undefined;
@@ -95,12 +115,13 @@ export class NodePathManager {
     /**
      * 确保节点名称在父节点下唯一
      */
-    ensureUniqueName(parentUuid: string, baseName: string): string {
-        if (!this._nodeNames.has(parentUuid)) {
-            this._nodeNames.set(parentUuid, new Map());
+    ensureUniqueName(parentUuid: string | undefined, baseName: string): string {
+        const uuid = parentUuid || '';
+        if (!this._nodeNames.has(uuid)) {
+            this._nodeNames.set(uuid, new Map());
         }
 
-        const nameMap = this._nodeNames.get(parentUuid)!;
+        const nameMap = this._nodeNames.get(uuid)!;
 
         if (!nameMap.has(baseName)) {
             nameMap.set(baseName, 1);
@@ -124,8 +145,29 @@ export class NodePathManager {
     }
 
     getNodeUuid(path: string): string | undefined {
-        const uuid = this._pathToUuid.get(path);
-        return uuid;
+        const result = this.getNodeResult(path);
+        return result.uuid;
+    }
+
+    getNodeResult(path: string): { uuid?: string; exactMatch?: boolean; error?: 'Not found' | 'Ambiguous' } {
+        const result = this._pathToUuid.get(path);
+        if (result) {
+            return { uuid: result, exactMatch: true };
+        }
+        const lowerPath = path.toLowerCase();
+        const uuids = this._lowerPathToUuids.get(lowerPath);
+
+        if (!uuids || uuids.size === 0) {
+            return { error: 'Not found' };
+        }
+
+        if (uuids.size > 1) {
+            return { error: 'Ambiguous' };
+        }
+
+        const uuid = uuids.values().next().value;
+        const exactMatch = this._pathToUuid.get(path) === uuid;
+        return { uuid, exactMatch };
     }
 
     getNodePath(uuid: string): string {
@@ -141,6 +183,21 @@ export class NodePathManager {
         this._uuidToPath.set(uuid, newPath);
         this._pathToUuid.delete(oldPath!);
         this._pathToUuid.set(newPath, uuid);
+
+        const oldLowerPath = oldPath!.toLowerCase();
+        const oldUuids = this._lowerPathToUuids.get(oldLowerPath);
+        if (oldUuids) {
+            oldUuids.delete(uuid);
+            if (oldUuids.size === 0) {
+                this._lowerPathToUuids.delete(oldLowerPath);
+            }
+        }
+
+        const newLowerPath = newPath.toLowerCase();
+        if (!this._lowerPathToUuids.has(newLowerPath)) {
+            this._lowerPathToUuids.set(newLowerPath, new Set());
+        }
+        this._lowerPathToUuids.get(newLowerPath)!.add(uuid);
     }
 
     getNameMap(uuid: string): Map<string, number> | null {

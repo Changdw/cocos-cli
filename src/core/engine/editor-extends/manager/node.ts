@@ -122,9 +122,15 @@ export default class NodeManager extends EventEmitter {
     }
 
     getNodeByPath(path: string): Node | null {
-        const uuid = pathManager.getNodeUuid(path);
-        if (uuid) {
-            return this.getNode(uuid);
+        const result = pathManager.getNodeResult(path);
+        if (result.error === 'Ambiguous') {
+            throw new Error(`The path "${path}" is ambiguous. Multiple nodes found with case-insensitive match.`);
+        }
+        if (result.error === 'Not found') {
+            return null;
+        }
+        if (result.uuid) {
+            return this.getNode(result.uuid);
         }
         return null;
     }

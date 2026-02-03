@@ -48,7 +48,7 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
                 canvasNeeded = paramsArray[1].canvasRequired ? true : false;
             }
             return await this._createNode(assetUuid, canvasNeeded, params.nodeType == NodeType.EMPTY, params);
-        } catch(error) {
+        } catch (error) {
             console.error(error);
             throw error;
         } finally {
@@ -59,13 +59,13 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
     async createNodeByAsset(params: ICreateByAssetParams): Promise<INode | null> {
         try {
             await Service.Editor.lock();
-             const assetUuid = await Rpc.getInstance().request('assetManager', 'queryUUID', [params.dbURL]);
+            const assetUuid = await Rpc.getInstance().request('assetManager', 'queryUUID', [params.dbURL]);
             if (!assetUuid) {
                 throw new Error(`Asset not found for dbURL: ${params.dbURL}`);
             }
             const canvasNeeded = params.canvasRequired || false;
             return await this._createNode(assetUuid, canvasNeeded, false, params);
-        } catch(error) {
+        } catch (error) {
             console.error(error);
             throw error;
         } finally {
@@ -165,10 +165,15 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
         }
 
         // 先尝试获取现有节点
-        const parent = NodeMgr.getNodeByPath(path);
-        if (parent) {
-            return parent;
+        try {
+            const parent = NodeMgr.getNodeByPath(path);
+            if (parent) {
+                return parent;
+            }
+        } catch (error) {
+            console.error(error);
         }
+
 
         // 如果不存在，则创建路径
         return await this._ensurePathExists(path, currentScene);
@@ -257,7 +262,7 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
             return {
                 path: path,
             };
-        } catch(error) {
+        } catch (error) {
             console.error(error);
             throw error;
         } finally {
@@ -361,7 +366,7 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
         try {
             await Service.Editor.lock();
             return updateOperate();
-        } catch(error) {
+        } catch (error) {
             console.error(error);
             throw error;
         } finally {
@@ -380,7 +385,7 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
                 return null;
             }
             return sceneUtils.generateNodeInfo(node, !!params.queryChildren, !!params.queryComponent);
-        }   catch(error) {
+        } catch (error) {
             console.error(error);
             throw error;
         } finally {
@@ -564,7 +569,7 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
         }
     }
 
-    onNodeTransformChanged (node: Node, transformBit: TransformBit) {
+    onNodeTransformChanged(node: Node, transformBit: TransformBit) {
         const changeOpts: IChangeNodeOptions = { type: NodeEventType.TRANSFORM_CHANGED, source: EventSourceType.ENGINE };
 
         switch (transformBit) {
@@ -582,7 +587,7 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
         this.emit('node:change', node, changeOpts);
     }
 
-    onNodeSizeChanged (node: Node) {
+    onNodeSizeChanged(node: Node) {
         const changeOpts: IChangeNodeOptions = { type: NodeEventType.SIZE_CHANGED, source: EventSourceType.ENGINE };
         const uiTransform = node.getComponent(UITransform);
         if (uiTransform) {
@@ -592,7 +597,7 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
         this.emit('node:change', node, changeOpts);
     }
 
-    onNodeAnchorChanged (node: Node) {
+    onNodeAnchorChanged(node: Node) {
         const changeOpts: IChangeNodeOptions = { type: NodeEventType.ANCHOR_CHANGED, source: EventSourceType.ENGINE };
         const uiTransform = node.getComponent(UITransform);
         if (uiTransform) {
@@ -602,7 +607,7 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
         this.emit('node:change', node, changeOpts);
     }
 
-    onNodeParentChanged (parent: Node, child: Node) {
+    onNodeParentChanged(parent: Node, child: Node) {
         if (isEditorNode(child)) {
             return;
         }
