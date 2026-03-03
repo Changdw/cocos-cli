@@ -6,7 +6,7 @@
  */
 
 import { assetManager } from '../index';
-import { IAssetChangeInfo } from '../@types/private';
+import { IAssetInfo } from '../@types/public';
 
 describe('Asset Change Notifications', () => {
     
@@ -24,13 +24,13 @@ describe('Asset Change Notifications', () => {
     describe('推荐用法：onAssetAdded/onAssetChanged/onAssetRemoved 方法', () => {
         it('应该使用 onAssetAdded 方法监听资源添加', () => {
             // 推荐用法：调用专用方法，获取移除函数
-            const removeListener = assetManager.onAssetAdded((info: IAssetChangeInfo) => {
-                // info 包含完整的资源变更信息
+            const removeListener = assetManager.onAssetAdded((info: IAssetInfo) => {
+                // info 包含完整的资源信息
                 expect(info).toHaveProperty('uuid');
                 expect(info).toHaveProperty('name');
                 expect(info).toHaveProperty('type');
                 expect(info).toHaveProperty('url');      // 逻辑路径，例如 db://assets/image.png
-                expect(info).toHaveProperty('source');   // 物理路径，例如 D:\project\assets\image.png
+                expect(info).toHaveProperty('source');     // 物理路径，例如 D:\project\assets\image.png
             });
 
             // 验证监听器已注册
@@ -44,7 +44,7 @@ describe('Asset Change Notifications', () => {
         });
 
         it('应该使用 onAssetChanged 方法监听资源变更', () => {
-            const removeListener = assetManager.onAssetChanged((info: IAssetChangeInfo) => {
+            const removeListener = assetManager.onAssetChanged((info: IAssetInfo) => {
                 expect(info).toHaveProperty('uuid');
                 expect(info).toHaveProperty('name');
                 expect(info).toHaveProperty('type');
@@ -58,7 +58,7 @@ describe('Asset Change Notifications', () => {
         });
 
         it('应该使用 onAssetRemoved 方法监听资源删除', () => {
-            const removeListener = assetManager.onAssetRemoved((info: IAssetChangeInfo) => {
+            const removeListener = assetManager.onAssetRemoved((info: IAssetInfo) => {
                 expect(info).toHaveProperty('uuid');
                 expect(info).toHaveProperty('name');
                 expect(info).toHaveProperty('type');
@@ -102,7 +102,7 @@ describe('Asset Change Notifications', () => {
                     );
                 }
 
-                private handleAssetChange(info: IAssetChangeInfo, action: string) {
+                private handleAssetChange(info: IAssetInfo, action: string) {
                     // 根据资源类型采取不同操作
                     switch (info.type) {
                         case 'cc.ImageAsset':
@@ -142,7 +142,7 @@ describe('Asset Change Notifications', () => {
             let callCount = 0;
             
             // 使用 once 方法，监听器只会执行一次
-            assetManager.once('onAssetAdded', (info: IAssetChangeInfo) => {
+            assetManager.once('onAssetAdded', (info: IAssetInfo) => {
                 callCount++;
                 expect(callCount).toBe(1);
             });
@@ -162,7 +162,7 @@ describe('Asset Change Notifications', () => {
     
     describe('传统用法：EventEmitter on 方法', () => {
         it('可以使用 on 方法添加监听', (done) => {
-            const handler = (info: IAssetChangeInfo) => {
+            const handler = (info: IAssetInfo) => {
                 expect(info).toHaveProperty('uuid');
                 expect(info).toHaveProperty('name');
                 expect(info).toHaveProperty('type');
@@ -255,20 +255,21 @@ describe('Asset Change Notifications', () => {
 
     /**
      * ============================================
-     * IAssetChangeInfo 字段说明
+     * IAssetInfo 字段说明
      * ============================================
      * 
-     * IAssetChangeInfo 接口包含以下字段：
+     * IAssetInfo 接口包含以下字段：
      * - uuid: string      - 资源的唯一标识符
-     * - name: string      - 资源名称（优先使用 displayName）
+     * - name: string      - 资源名称
      * - type: string      - 资源类型（例如：cc.ImageAsset, cc.SceneAsset）
      * - url: string       - 逻辑路径（例如：db://assets/image.png）
-     * - source: string    - 物理路径（例如：D:\project\assets\image.png）
+     * - source: string    - URL 地址（db:// 格式）
+     * 以及其他完整资源信息字段
      */
     
-    describe('IAssetChangeInfo 字段验证', () => {
+    describe('IAssetInfo 字段验证', () => {
         it('应该包含所有必需字段', () => {
-            const handler = (info: IAssetChangeInfo) => {
+            const handler = (info: IAssetInfo) => {
                 // 验证所有字段存在
                 expect(typeof info.uuid).toBe('string');
                 expect(typeof info.name).toBe('string');

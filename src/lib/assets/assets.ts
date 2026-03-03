@@ -1,10 +1,10 @@
 import type { AssetOperationOption, CreateAssetByTypeOptions, IAssetInfo, IAssetMeta, ISupportCreateType, QueryAssetsOption } from '../../core/assets/@types/public';
-import type { CreateAssetOptions, IAssetConfig, IAssetDBInfo, IAssetChangeInfo, ICreateMenuInfo, IUerDataConfigItem, QueryAssetType } from '../../core/assets/@types/protected';
+import type { CreateAssetOptions, IAssetConfig, IAssetDBInfo, ICreateMenuInfo, IUerDataConfigItem, QueryAssetType } from '../../core/assets/@types/protected';
 import type { FilterPluginOptions, IPluginScriptInfo } from '../../core/scripting/interface';
 import { assetDBManager, assetManager } from '../../core/assets';
 
 export type * from '../../core/assets/@types/public';
-export type { CreateAssetOptions, IAssetConfig, IAssetDBInfo, IAssetChangeInfo, ICreateMenuInfo, IUerDataConfigItem, QueryAssetType } from '../../core/assets/@types/protected';
+export type { CreateAssetOptions, IAssetConfig, IAssetDBInfo, ICreateMenuInfo, IUerDataConfigItem, QueryAssetType } from '../../core/assets/@types/protected';
 
 
 export async function init(): Promise<void> {
@@ -230,25 +230,27 @@ export async function queryAssetConfigMap(): Promise<Record<string, IAssetConfig
 
 /**
  * Listen to Asset Added Event // 监听资源添加事件
- * @param listener Callback function that receives asset change information
+ * @param listener Callback function that receives asset information
  * @returns Function to remove the listener
  * 
  * 推荐用法：
  * ```typescript
  * const removeListener = onAssetAdded((info) => {
  *     console.log(`资源已添加: ${info.name}`);
+ *     console.log(`  逻辑路径: ${info.url}`);
+ *     console.log(`  物理路径: ${info.file}`);
  * });
  * // 稍后移除监听
  * removeListener();
  * ```
  */
-export function onAssetAdded(listener: (info: IAssetChangeInfo) => void): () => void {
+export function onAssetAdded(listener: (info: IAssetInfo) => void): () => void {
     return assetManager.onAssetAdded(listener);
 }
 
 /**
  * Listen to Asset Changed Event // 监听资源变更事件
- * @param listener Callback function that receives asset change information
+ * @param listener Callback function that receives asset information
  * @returns Function to remove the listener
  * 
  * 推荐用法：
@@ -260,13 +262,13 @@ export function onAssetAdded(listener: (info: IAssetChangeInfo) => void): () => 
  * removeListener();
  * ```
  */
-export function onAssetChanged(listener: (info: IAssetChangeInfo) => void): () => void {
+export function onAssetChanged(listener: (info: IAssetInfo) => void): () => void {
     return assetManager.onAssetChanged(listener);
 }
 
 /**
  * Listen to Asset Removed Event // 监听资源删除事件
- * @param listener Callback function that receives asset change information
+ * @param listener Callback function that receives asset information
  * @returns Function to remove the listener
  * 
  * 推荐用法：
@@ -278,7 +280,7 @@ export function onAssetChanged(listener: (info: IAssetChangeInfo) => void): () =
  * removeListener();
  * ```
  */
-export function onAssetRemoved(listener: (info: IAssetChangeInfo) => void): () => void {
+export function onAssetRemoved(listener: (info: IAssetInfo) => void): () => void {
     return assetManager.onAssetRemoved(listener);
 }
 

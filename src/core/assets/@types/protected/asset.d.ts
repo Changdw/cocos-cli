@@ -12,26 +12,15 @@ export interface IExportData {
 }
 
 /**
- * 资源变更信息
- */
-export interface IAssetChangeInfo {
-    uuid: string;
-    name: string;
-    type: string;
-    url: string;    // 逻辑路径，例如 db://assets/image.png
-    source: string;  // 物理路径，例如 D:\project\assets\image.png
-}
-
-/**
  * AssetManager 事件类型定义
  */
 export interface AssetManagerEvents {
     'asset-add': (asset: IAsset) => void;
     'asset-change': (asset: IAsset) => void;
     'asset-delete': (asset: IAsset) => void;
-    'onAssetAdded': (info: IAssetChangeInfo) => void;
-    'onAssetChanged': (info: IAssetChangeInfo) => void;
-    'onAssetRemoved': (info: IAssetChangeInfo) => void;
+    'onAssetAdded': (info: IAssetInfo) => void;
+    'onAssetChanged': (info: IAssetInfo) => void;
+    'onAssetRemoved': (info: IAssetInfo) => void;
 }
 
 export * from '../public';

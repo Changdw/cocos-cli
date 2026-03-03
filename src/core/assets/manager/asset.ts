@@ -2,7 +2,7 @@ import { AssetDB, VirtualAsset } from '@cocos/asset-db';
 import assetDBManager from './asset-db';
 import { url2path, url2uuid } from '../utils';
 import EventEmitter from 'events';
-import { AssetManagerEvents, IAsset, IAssetChangeInfo, IAssetInfo } from '../@types/private';
+import { AssetManagerEvents, IAsset, IAssetInfo } from '../@types/private';
 import assetQuery from './query';
 import assetOperation from './operation';
 import assetHandlerManager from './asset-handler';
@@ -71,7 +71,7 @@ class AssetManager extends EventEmitter {
      * @param listener 回调函数
      * @returns 移除监听的函数
      */
-    onAssetAdded(listener: (info: IAssetChangeInfo) => void): () => void {
+    onAssetAdded(listener: (info: IAssetInfo) => void): () => void {
         this.on('onAssetAdded', listener);
         return () => {
             this.removeListener('onAssetAdded', listener);
@@ -83,7 +83,7 @@ class AssetManager extends EventEmitter {
      * @param listener 回调函数
      * @returns 移除监听的函数
      */
-    onAssetChanged(listener: (info: IAssetChangeInfo) => void): () => void {
+    onAssetChanged(listener: (info: IAssetInfo) => void): () => void {
         this.on('onAssetChanged', listener);
         return () => {
             this.removeListener('onAssetChanged', listener);
@@ -95,7 +95,7 @@ class AssetManager extends EventEmitter {
      * @param listener 回调函数
      * @returns 移除监听的函数
      */
-    onAssetRemoved(listener: (info: IAssetChangeInfo) => void): () => void {
+    onAssetRemoved(listener: (info: IAssetInfo) => void): () => void {
         this.on('onAssetRemoved', listener);
         return () => {
             this.removeListener('onAssetRemoved', listener);
@@ -118,14 +118,8 @@ class AssetManager extends EventEmitter {
      * @param asset 资源对象
      * @returns 资源变更信息
      */
-    private _extractAssetChangeInfo(asset: IAsset): IAssetChangeInfo {
-        return {
-            uuid: asset.uuid || '',
-            name: asset.displayName || assetQuery.queryAssetProperty(asset, 'name') || 'Unknown',
-            type: assetQuery.queryAssetProperty(asset, 'type') || 'unknown',
-            url: assetQuery.queryAssetProperty(asset, 'url') || asset.url || '',
-            source: asset.source || '',
-        };
+    private _extractAssetChangeInfo(asset: IAsset): IAssetInfo | null {
+        return assetManager.queryAssetInfo(asset.uuid);
     }
 
     _onAssetDBCreated(db: AssetDB) {
@@ -145,9 +139,7 @@ class AssetManager extends EventEmitter {
     async _onAssetAdded(asset: IAsset) {
         if (assetDBManager.ready) {
             this.emit('asset-add', asset);
-            // 发送新的回调接口
-            const changeInfo = this._extractAssetChangeInfo(asset);
-            this.emit('onAssetAdded', changeInfo);
+            this.emit('onAssetAdded', this._extractAssetChangeInfo(asset));
             console.log(`asset-add ${asset.url}`);
             return;
         }
@@ -155,9 +147,7 @@ class AssetManager extends EventEmitter {
     async _onAssetChanged(asset: IAsset) {
         if (assetDBManager.ready) {
             this.emit('asset-change', asset);
-            // 发送新的回调接口
-            const changeInfo = this._extractAssetChangeInfo(asset);
-            this.emit('onAssetChanged', changeInfo);
+            this.emit('onAssetChanged', this._extractAssetChangeInfo(asset));
             console.log(`asset-change ${asset.url}`);
             return;
         }
@@ -167,9 +157,7 @@ class AssetManager extends EventEmitter {
             // 暂时这样处理，需要调整整个 asset-db 流程才能合理化这段逻辑
             await assetHandlerManager.destroyAsset(asset);
             this.emit('asset-delete', asset);
-            // 发送新的回调接口
-            const changeInfo = this._extractAssetChangeInfo(asset);
-            this.emit('onAssetRemoved', changeInfo);
+            this.emit('onAssetRemoved', this._extractAssetChangeInfo(asset));
             console.log(`asset-delete ${asset.url}`);
             return;
         }
@@ -190,9 +178,9 @@ export interface TypedAssetManager extends EventEmitter {
     listenerCount<K extends keyof AssetManagerEvents>(event: K): number;
 
     // 专门的监听方法
-    onAssetAdded(listener: (info: IAssetChangeInfo) => void): () => void;
-    onAssetChanged(listener: (info: IAssetChangeInfo) => void): () => void;
-    onAssetRemoved(listener: (info: IAssetChangeInfo) => void): () => void;
+    onAssetAdded(listener: (info: IAssetInfo) => void): () => void;
+    onAssetChanged(listener: (info: IAssetInfo) => void): () => void;
+    onAssetRemoved(listener: (info: IAssetInfo) => void): () => void;
 
     // 原有的方法
     queryAssets: typeof assetQuery.queryAssets;
