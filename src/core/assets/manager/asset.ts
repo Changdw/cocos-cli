@@ -2,7 +2,7 @@ import { AssetDB, VirtualAsset } from '@cocos/asset-db';
 import assetDBManager from './asset-db';
 import { url2path, url2uuid } from '../utils';
 import EventEmitter from 'events';
-import { AssetManagerEvents, IAsset } from '../@types/private';
+import { AssetManagerEvents, IAsset, IAssetChangeInfo, IAssetInfo } from '../@types/private';
 import assetQuery from './query';
 import assetOperation from './operation';
 import assetHandlerManager from './asset-handler';
@@ -65,6 +65,43 @@ class AssetManager extends EventEmitter {
         return assetDBManager.path2url(url, dbName);
     }
 
+    // ------------- 监听方法 ------------
+    /**
+     * 监听资源添加事件
+     * @param listener 回调函数
+     * @returns 移除监听的函数
+     */
+    onAssetAdded(listener: (info: IAssetChangeInfo) => void): () => void {
+        this.on('onAssetAdded', listener);
+        return () => {
+            this.removeListener('onAssetAdded', listener);
+        };
+    }
+
+    /**
+     * 监听资源变更事件
+     * @param listener 回调函数
+     * @returns 移除监听的函数
+     */
+    onAssetChanged(listener: (info: IAssetChangeInfo) => void): () => void {
+        this.on('onAssetChanged', listener);
+        return () => {
+            this.removeListener('onAssetChanged', listener);
+        };
+    }
+
+    /**
+     * 监听资源删除事件
+     * @param listener 回调函数
+     * @returns 移除监听的函数
+     */
+    onAssetRemoved(listener: (info: IAssetChangeInfo) => void): () => void {
+        this.on('onAssetRemoved', listener);
+        return () => {
+            this.removeListener('onAssetRemoved', listener);
+        };
+    }
+
     // ------------- 实例化方法 ------------
     async init() {
         assetDBManager.on('db-created', this._onAssetDBCreated);
@@ -74,6 +111,21 @@ class AssetManager extends EventEmitter {
     destroyed() {
         assetDBManager.removeListener('db-created', this._onAssetDBCreated);
         assetDBManager.removeListener('db-removed', this._onAssetDBRemoved);
+    }
+
+    /**
+     * 从资源对象提取变更信息
+     * @param asset 资源对象
+     * @returns 资源变更信息
+     */
+    private _extractAssetChangeInfo(asset: IAsset): IAssetChangeInfo {
+        return {
+            uuid: asset.uuid || '',
+            name: asset.displayName || assetQuery.queryAssetProperty(asset, 'name') || 'Unknown',
+            type: assetQuery.queryAssetProperty(asset, 'type') || 'unknown',
+            url: assetQuery.queryAssetProperty(asset, 'url') || asset.url || '',
+            source: asset.source || '',
+        };
     }
 
     _onAssetDBCreated(db: AssetDB) {
@@ -93,6 +145,9 @@ class AssetManager extends EventEmitter {
     async _onAssetAdded(asset: IAsset) {
         if (assetDBManager.ready) {
             this.emit('asset-add', asset);
+            // 发送新的回调接口
+            const changeInfo = this._extractAssetChangeInfo(asset);
+            this.emit('onAssetAdded', changeInfo);
             console.log(`asset-add ${asset.url}`);
             return;
         }
@@ -100,6 +155,9 @@ class AssetManager extends EventEmitter {
     async _onAssetChanged(asset: IAsset) {
         if (assetDBManager.ready) {
             this.emit('asset-change', asset);
+            // 发送新的回调接口
+            const changeInfo = this._extractAssetChangeInfo(asset);
+            this.emit('onAssetChanged', changeInfo);
             console.log(`asset-change ${asset.url}`);
             return;
         }
@@ -109,6 +167,9 @@ class AssetManager extends EventEmitter {
             // 暂时这样处理，需要调整整个 asset-db 流程才能合理化这段逻辑
             await assetHandlerManager.destroyAsset(asset);
             this.emit('asset-delete', asset);
+            // 发送新的回调接口
+            const changeInfo = this._extractAssetChangeInfo(asset);
+            this.emit('onAssetRemoved', changeInfo);
             console.log(`asset-delete ${asset.url}`);
             return;
         }
@@ -127,6 +188,11 @@ export interface TypedAssetManager extends EventEmitter {
     removeAllListeners<K extends keyof AssetManagerEvents>(event?: K): this;
     listeners<K extends keyof AssetManagerEvents>(event: K): Function[];
     listenerCount<K extends keyof AssetManagerEvents>(event: K): number;
+
+    // 专门的监听方法
+    onAssetAdded(listener: (info: IAssetChangeInfo) => void): () => void;
+    onAssetChanged(listener: (info: IAssetChangeInfo) => void): () => void;
+    onAssetRemoved(listener: (info: IAssetChangeInfo) => void): () => void;
 
     // 原有的方法
     queryAssets: typeof assetQuery.queryAssets;
