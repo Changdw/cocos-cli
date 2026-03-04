@@ -36,6 +36,29 @@ export interface IConfigurationManager {
      * @param scope 配置作用域，默认为 'project'
      */
     remove(key: string, scope?: ConfigurationScope): Promise<boolean>;
+
+    /**
+     * 从硬盘重新加载项目配置，将会丢弃内存中现有的配置
+     */
+    reload(): Promise<void>;
+
+    /**
+     * 迁移，包含了 3x 迁移，允许外部单独触发
+     */
+    migrate(): Promise<void>;
+
+    /**
+     * 从指定项目路径迁移配置到当前项目
+     * @param projectPath 项目路径
+     * @returns 迁移后的项目配置
+     */
+    migrateFromProject(projectPath: string): Promise<IConfiguration>;
+
+    /**
+     * 保存项目配置
+     * @param force 是否强制保存，默认为 false
+     */
+    save(force?: boolean): Promise<void>;
 }
 
 export class ConfigurationManager extends EventEmitter implements IConfigurationManager {
@@ -283,7 +306,7 @@ export class ConfigurationManager extends EventEmitter implements IConfiguration
     /**
      * 保存项目配置
      */
-    private async save(force: boolean = false): Promise<void> {
+    public async save(force: boolean = false): Promise<void> {
         if (!force && !Object.keys(this.projectConfig).length) {
             return;
         }
