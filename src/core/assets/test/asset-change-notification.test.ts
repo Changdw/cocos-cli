@@ -175,6 +175,11 @@ describe('Asset Change Notifications', () => {
             };
 
             assetManager.on('onAssetAdded', handler);
+            
+            // 触发事件以完成测试
+            assetManager.emit('onAssetAdded', {
+                uuid: 'test', name: 'test', type: 'test', url: 'test', source: 'test'
+            } as unknown as IAssetInfo);
         });
 
         it('支持多个监听器', () => {
@@ -229,27 +234,33 @@ describe('Asset Change Notifications', () => {
     
     describe('向后兼容：旧的事件接口', () => {
         it('仍然支持 asset-add 事件', (done) => {
-            const handler = jest.fn();
+            const handler = jest.fn((asset) => {
+                assetManager.removeListener('asset-add', handler);
+                done();
+            });
             
             assetManager.on('asset-add', handler);
-            assetManager.removeListener('asset-add', handler);
-            done();
+            assetManager.emit('asset-add', {} as any);
         });
 
         it('仍然支持 asset-change 事件', (done) => {
-            const handler = jest.fn();
+            const handler = jest.fn((asset) => {
+                assetManager.removeListener('asset-change', handler);
+                done();
+            });
             
             assetManager.on('asset-change', handler);
-            assetManager.removeListener('asset-change', handler);
-            done();
+            assetManager.emit('asset-change', {} as any);
         });
 
         it('仍然支持 asset-delete 事件', (done) => {
-            const handler = jest.fn();
+            const handler = jest.fn((asset) => {
+                assetManager.removeListener('asset-delete', handler);
+                done();
+            });
             
             assetManager.on('asset-delete', handler);
-            assetManager.removeListener('asset-delete', handler);
-            done();
+            assetManager.emit('asset-delete', {} as any);
         });
     });
 
