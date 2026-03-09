@@ -92,8 +92,19 @@ class AssetManager extends EventEmitter {
 
     private _emitProgress(asset: VirtualAsset) {
         if (!assetDBManager.ready) {
-            const { current, total } = asset._assetDB.assetProgressInfo;
-            this.emit('progress', current, total, asset.url);
+            let globalCurrent = 0;
+            let globalTotal = 0;
+            
+            // 汇总所有数据库的进度
+            for (const name in assetDBManager.assetDBMap) {
+                const db = assetDBManager.assetDBMap[name];
+                if (db && db.assetProgressInfo) {
+                    globalCurrent += db.assetProgressInfo.current || 0;
+                    globalTotal += db.assetProgressInfo.total || 0;
+                }
+            }
+            
+            this.emit('progress', globalCurrent, globalTotal, asset.url);
         }
     }
 
