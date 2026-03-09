@@ -136,7 +136,7 @@ class AssetManager extends EventEmitter {
      * @returns 移除监听的函数
      */
     onReady(listener: () => void) {
-        assetDBManager.once('assets:ready', listener);
+        assetDBManager.on('assets:ready', listener);
         return () => {
             assetDBManager.removeListener('assets:ready', listener);
         };
