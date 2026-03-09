@@ -16,8 +16,9 @@ sequenceDiagram
     participant AssetDB as 资源数据库底层
     participant Manager as AssetManager
 
-    User->>Manager: 注册各类事件监听 (onProgress, onReady...)
-    User->>AssetDB: 调用 start()
+    User->>AssetDB: 调用 init() (初始化配置和管理器)
+    User->>Manager: 注册各类事件监听 (onProgress, onDBReady, onReady...)
+    User->>AssetDB: 调用 start() (开始扫描和导入)
     Note over AssetDB: 启动阶段 (Starting)
 
     loop 资源冷导入与扫描
@@ -45,7 +46,7 @@ sequenceDiagram
 ## 核心监听回调说明
 
 ### 1. 进度监听：`onProgress`
-- **注册方式**：`import { assets } from 'cocos-cli'; assets.onProgress((current, total, message) => { ... });`
+- **注册方式**：`import { Assets } from 'cocos-cli'; Assets.onProgress((current, total, message) => { ... });`
 - **触发时机**：仅在**启动阶段**触发。当底层资源数据库在进行资源扫描和冷导入时，会不断抛出进度信息。
 - **注意事项**：
   - 一旦触发过一次 `ready` 事件（即启动阶段结束），**将不再会有新的进度消息**，除非系统被重新启动。
@@ -53,20 +54,20 @@ sequenceDiagram
   - 由于进度消息可能非常密集，建议在 UI 层面进行适当的节流（throttle）渲染。
 
 ### 2. 单数据库就绪监听：`onDBReady`
-- **注册方式**：`import { assets } from 'cocos-cli'; assets.onDBReady((dbName) => { ... });`
+- **注册方式**：`import { Assets } from 'cocos-cli'; Assets.onDBReady((dbName) => { ... });`
 - **触发时机**：当某个独立的资源数据库（例如 `assets` 或 `internal`）单独启动完成并准备就绪时触发。
 - **注意事项**：
   - 这个事件可能会被触发多次（如果项目存在多个子数据库）。
   - 主要用于需要做更精细化并行控制的上层逻辑，通常情况下普通的业务逻辑不需要关心此事件，直接监听 `onReady` 即可。
 
 ### 3. 全局就绪监听：`onReady`
-- **注册方式**：`import { assets } from 'cocos-cli'; assets.onReady(() => { ... });`
+- **注册方式**：`import { Assets } from 'cocos-cli'; Assets.onReady(() => { ... });`
 - **触发时机**：**启动阶段**结束时触发，代表**所有**注册的资源数据库都已经完全导入并初始化完成。
 - **注意事项**：
   - 收到此事件后，表示所有的资源查询、操作 API 都可以安全调用，并且之后发生的资源变化将通过 `onAssetChanged` 等事件通知。
 
 ### 4. 资源变更监听：`onAssetAdded`, `onAssetChanged`, `onAssetRemoved`
-- **注册方式**：通过 `assets.on(...)` 注册。
+- **注册方式**：通过 `Assets.on('asset-add', ...)`, `Assets.on('asset-change', ...)`, `Assets.on('asset-delete', ...)` 注册。
 - **触发时机**：仅在**就绪阶段**（`ready` 状态为 `true` 后）才会对外触发。
 - **注意事项**：
   - **在启动阶段，这三个事件是无效的（被屏蔽的）**。这是因为启动时的批量冷导入会导致极其频繁的添加、修改操作，如果此时触发事件，会导致上层逻辑处理过载甚至引起死循环。
@@ -77,27 +78,46 @@ sequenceDiagram
 ## 最佳实践示例
 
 ```typescript
-import { assets } from 'cocos-cli';
+import { Assets } from 'cocos-cli';
 
-// 1. 注册进度监听（展示 Loading）
-const removeProgress = assets.onProgress((current, total, message) => {
+// 1. 初始化资源数据库（配置和管理器初始化）
+await Assets.init();
+
+// 2. 注册进度监听（展示 Loading）
+const removeProgress = Assets.onProgress((current, total, message) => {
     console.log(`[Loading] ${current}/${total} - ${message}`);
-    // 更新 UI ...
+    // 更新 UI 进度条 ...
 });
 
-// 2. 注册 Ready 监听（隐藏 Loading，开始正常业务）
-const removeReady = assets.onReady(() => {
+// 3. 注册单数据库就绪监听（可选，用于精细化控制）
+const removeDBReady = Assets.onDBReady((dbName) => {
+    console.log(`[Assets] Database "${dbName}" is ready!`);
+    // 可以在这里做一些针对特定数据库的初始化工作
+});
+
+// 4. 注册全局就绪监听（隐藏 Loading，开始正常业务）
+const removeReady = Assets.onReady(() => {
     console.log('[Assets] All databases are ready!');
     
     // 启动阶段结束，可以清理进度监听了
     removeProgress();
+    removeDBReady(); // 可选：如果不再需要监听单个数据库，也可以清理
     
-    // 3. 在 Ready 之后，再进行常规的资源变更监听（或者在模块初始化时注册也没关系，反正 Ready 前不会触发）
-    assets.on('onAssetAdded', (info) => {
-        console.log(`New asset added: ${info.url}`);
+    // 5. 在 Ready 之后，注册常规的资源变更监听
+    // （注意：在 Ready 之前注册也没关系，因为 Ready 前这些事件不会触发）
+    Assets.on('asset-add', (asset) => {
+        console.log(`New asset added: ${asset.url}`);
+    });
+    
+    Assets.on('asset-change', (asset) => {
+        console.log(`Asset changed: ${asset.url}`);
+    });
+    
+    Assets.on('asset-delete', (asset) => {
+        console.log(`Asset deleted: ${asset.url}`);
     });
 });
 
-// 最后调用 start()
-await assets.start();
+// 5. 启动资源数据库（开始扫描和导入资源）
+await Assets.start();
 ```

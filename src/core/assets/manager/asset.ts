@@ -134,7 +134,6 @@ class AssetManager extends EventEmitter {
      * 注册数据库初始化完全完成后的事件监听。
      * 
      * **注意事项 (Notice)**:
-     * - 这是一个一次性 (`once`) 事件，触发后会自动移除监听。
      * - 触发此事件代表**所有**注册的资源数据库都已经完全导入并初始化完成（启动阶段结束）。
      * - 第一次 ready 后，将不再有 progress 进度消息。
      * 
@@ -142,7 +141,7 @@ class AssetManager extends EventEmitter {
      * @returns 移除监听的函数
      */
     onReady(listener: () => void) {
-        assetDBManager.once('assets:ready', listener);
+        assetDBManager.on('assets:ready', listener);
         return () => {
             assetDBManager.removeListener('assets:ready', listener);
         };
