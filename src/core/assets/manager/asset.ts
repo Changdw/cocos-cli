@@ -131,19 +131,30 @@ class AssetManager extends EventEmitter {
     }
 
     /**
-     * 注册数据库初始化完全完成后的事件监听
+     * 注册数据库初始化完全完成后的事件监听。
+     * 
+     * **注意事项 (Notice)**:
+     * - 这是一个一次性 (`once`) 事件，触发后会自动移除监听。
+     * - 触发此事件代表**所有**注册的资源数据库都已经完全导入并初始化完成（启动阶段结束）。
+     * - 第一次 ready 后，将不再有 progress 进度消息。
+     * 
      * @param listener 回调函数
      * @returns 移除监听的函数
      */
     onReady(listener: () => void) {
-        assetDBManager.on('assets:ready', listener);
+        assetDBManager.once('assets:ready', listener);
         return () => {
             assetDBManager.removeListener('assets:ready', listener);
         };
     }
 
     /**
-     * 注册单个数据库启动完成后的事件监听
+     * 注册单个数据库启动完成后的事件监听。
+     * 
+     * **注意事项 (Notice)**:
+     * - 这个事件可能会被触发多次（如果项目存在多个子数据库，如 `assets`, `internal`）。
+     * - 主要用于需要做更精细化并行控制的上层逻辑，通常情况下普通的业务逻辑不需要关心此事件，直接监听 `onReady` 即可。
+     * 
      * @param listener 回调函数，接收启动完成的 dbName
      * @returns 移除监听的函数
      */
@@ -155,7 +166,12 @@ class AssetManager extends EventEmitter {
     }
 
     /**
-     * 注册初始化过程中的进度监听
+     * 注册初始化过程中的进度监听。
+     * 
+     * **注意事项 (Notice)**:
+     * - **仅在启动阶段有效**。一旦触发过一次 `ready` 事件（即启动阶段结束），将不再会有新的进度消息。
+     * - 启动时的资源冷导入会抛出密集的进度信息，建议在 UI 层面进行适当的节流（throttle）渲染。
+     * 
      * @param listener 回调函数，包含当前进度、总数和当前处理的资源路径
      * @returns 移除监听的函数
      */

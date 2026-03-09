@@ -13,6 +13,10 @@ export interface IExportData {
 
 /**
  * AssetManager 事件类型定义
+ * 
+ * **时序说明 (Timing Notice)**:
+ * - `asset-add`, `asset-change`, `asset-delete`: 仅在**就绪阶段**（即触发过一次 `ready` 之后）才会对外触发。启动阶段发生的批量资源变动将被屏蔽并转换为 `progress` 进度消息。
+ * - `progress`: 仅在**启动阶段**有效，提供启动导入进度，启动完成后将不再触发。
  */
 export interface AssetManagerEvents {
     'asset-add': (asset: IAsset) => void;
