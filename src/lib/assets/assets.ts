@@ -20,6 +20,31 @@ export async function start(): Promise<void> {
     const { startAssetDB } = await import('../../core/assets');
     await startAssetDB();
 }
+
+/**
+ * Register listener for when all asset databases are fully initialized
+ * 注册数据库初始化完全完成后的事件监听
+ */
+export function onReady(listener: () => void): () => void {
+    return assetManager.onReady(listener);
+}
+
+/**
+ * Register listener for when a specific database finishes starting
+ * 注册单个数据库启动完成后的事件监听
+ */
+export function onDBReady(listener: (dbName: string) => void): () => void {
+    return assetManager.onDBReady(listener);
+}
+
+/**
+ * Register listener for initialization progress
+ * 注册初始化过程中的进度监听
+ */
+export function onProgress(listener: (current: number, total: number, message: string) => void): () => void {
+    return assetManager.onProgress(listener);
+}
+
 /**
  * Delete Asset // 删除资源
  */

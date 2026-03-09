@@ -90,11 +90,21 @@ class AssetManager extends EventEmitter {
         db.removeListener('deleted', assetManager._onAssetDeleted.bind(assetManager));
     }
 
+    private _emitProgress(asset: VirtualAsset) {
+        if (!assetDBManager.ready) {
+            const { current, total } = asset._assetDB.assetProgressInfo;
+            this.emit('progress', current, total, asset.url);
+        }
+    }
+
     async _onAssetAdded(asset: IAsset) {
         if (assetDBManager.ready) {
             this.emit('asset-add', asset);
             console.log(`asset-add ${asset.url}`);
             return;
+        }
+        if ('_assetDB' in asset) {
+            this._emitProgress(asset as VirtualAsset);
         }
     }
     async _onAssetChanged(asset: IAsset) {
@@ -102,6 +112,9 @@ class AssetManager extends EventEmitter {
             this.emit('asset-change', asset);
             console.log(`asset-change ${asset.url}`);
             return;
+        }
+        if ('_assetDB' in asset) {
+            this._emitProgress(asset as VirtualAsset);
         }
     }
     async _onAssetDeleted(asset: IAsset) {
@@ -112,6 +125,45 @@ class AssetManager extends EventEmitter {
             console.log(`asset-delete ${asset.url}`);
             return;
         }
+        if ('_assetDB' in asset) {
+            this._emitProgress(asset as VirtualAsset);
+        }
+    }
+
+    /**
+     * 注册数据库初始化完全完成后的事件监听
+     * @param listener 回调函数
+     * @returns 移除监听的函数
+     */
+    onReady(listener: () => void) {
+        assetDBManager.once('assets:ready', listener);
+        return () => {
+            assetDBManager.removeListener('assets:ready', listener);
+        };
+    }
+
+    /**
+     * 注册单个数据库启动完成后的事件监听
+     * @param listener 回调函数，接收启动完成的 dbName
+     * @returns 移除监听的函数
+     */
+    onDBReady(listener: (dbName: string) => void) {
+        assetDBManager.on('assets:db-ready', listener);
+        return () => {
+            assetDBManager.removeListener('assets:db-ready', listener);
+        };
+    }
+
+    /**
+     * 注册初始化过程中的进度监听
+     * @param listener 回调函数，包含当前进度、总数和当前处理的资源路径
+     * @returns 移除监听的函数
+     */
+    onProgress(listener: (current: number, total: number, message: string) => void) {
+        this.on('progress', listener);
+        return () => {
+            this.removeListener('progress', listener);
+        };
     }
 }
 
@@ -167,6 +219,10 @@ export interface TypedAssetManager extends EventEmitter {
     getCreateMap: typeof assetHandlerManager.getCreateMap;
     queryAssetUserDataConfig: typeof assetHandlerManager.queryUserDataConfig;
     getEffectBinPath: typeof assetHandlerManager.getEffectBinPath;
+
+    onReady: typeof assetManager.onReady;
+    onDBReady: typeof assetManager.onDBReady;
+    onProgress: typeof assetManager.onProgress;
 
     url2uuid(url: string): string;
     url2path(url: string): string;

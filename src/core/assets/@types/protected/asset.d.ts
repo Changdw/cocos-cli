@@ -18,6 +18,9 @@ export interface AssetManagerEvents {
     'asset-add': (asset: IAsset) => void;
     'asset-change': (asset: IAsset) => void;
     'asset-delete': (asset: IAsset) => void;
+    'progress': (current: number, total: number, message: string) => void;
+    'db-ready': (dbName: string) => void;
+    'ready': () => void;
 }
 
 export * from '../public';
