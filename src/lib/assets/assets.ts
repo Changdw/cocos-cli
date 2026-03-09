@@ -8,9 +8,17 @@ export type { CreateAssetOptions, IAssetConfig, IAssetDBInfo, ICreateMenuInfo, I
 
 
 export async function init(): Promise<void> {
-    // 启动以及初始化资源数据库
-    const { startupAssetDB } = await import('../../core/assets');
-    await startupAssetDB();
+    // 初始化资源数据库
+    const { initAssetDB } = await import('../../core/assets');
+    await initAssetDB();
+}
+
+/**
+ * Start Asset DB // 启动资源数据库，开始扫描和导入资源
+ */
+export async function start(): Promise<void> {
+    const { startAssetDB } = await import('../../core/assets');
+    await startAssetDB();
 }
 /**
  * Delete Asset // 删除资源

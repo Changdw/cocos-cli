@@ -7,23 +7,23 @@ import assetManager from './manager/asset';
 import assetConfig from './asset-config';
 
 /**
- * 启动资源数据库，依赖于 project, engine 的初始化
+ * 初始化资源数据库相关配置与管理器
  */
-export async function startupAssetDB() {
-    try {
-        // @ts-ignore HACK 目前引擎有在一些资源序列化会调用的接口里使用这个变量，没有合理的传参之前需要临时设置兼容
-        globalThis.Build = true;
-        await assetConfig.init();
-        newConsole.trackMemoryStart('assets:worker-init');
-        await assetManager.init();
-        await assetDBManager.init();
-        newConsole.trackMemoryEnd('asset-db:worker-init');
-        await assetDBManager.start();
-    } catch (error: any) {
-        newConsole.error('Init asset worker failed!');
-        newConsole.error(error);
-        throw error;
-    }
+export async function initAssetDB() {
+    // @ts-ignore HACK 目前引擎有在一些资源序列化会调用的接口里使用这个变量，没有合理的传参之前需要临时设置兼容
+    globalThis.Build = true;
+    await assetConfig.init();
+    newConsole.trackMemoryStart('assets:worker-init');
+    await assetManager.init();
+    await assetDBManager.init();
+    newConsole.trackMemoryEnd('asset-db:worker-init');
+}
+
+/**
+ * 启动资源数据库，开始扫描和导入资源
+ */
+export async function startAssetDB() {
+    await assetDBManager.start();
 }
 
 /**

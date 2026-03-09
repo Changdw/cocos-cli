@@ -61,8 +61,9 @@ export default class Launcher {
         const { Engine } = await import('./engine');
         await scripting.initialize(this.projectPath, GlobalPaths.enginePath, Engine.getConfig().includeModules);
         // 启动以及初始化资源数据库
-        const { startupAssetDB } = await import('./assets');
-        await startupAssetDB();
+        const { initAssetDB, startAssetDB } = await import('./assets');
+        await initAssetDB();
+        await startAssetDB();
     }
 
     /**
