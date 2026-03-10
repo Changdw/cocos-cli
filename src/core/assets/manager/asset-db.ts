@@ -183,7 +183,7 @@ class AssetDBManager extends EventEmitter {
                     this.assetDBInfo[assetDBName].state = 'startup';
                     this.emit('db-started', db);
                     console.debug(`start db ${assetDBName} with cache success`);
-                    this.emit('assets:db-ready', assetDBName);
+                    this.emit('assets:db-ready', this.assetDBInfo[assetDBName]);
                     continue;
                 } catch (error) {
                     console.error(error);
@@ -220,7 +220,7 @@ class AssetDBManager extends EventEmitter {
         }
         await this._createDB(info);
         await this._startDB(info.name);
-        this.emit('assets:db-ready', info.name);
+        this.emit('assets:db-ready', info);
     }
 
     /**

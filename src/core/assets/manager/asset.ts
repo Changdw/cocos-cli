@@ -2,7 +2,7 @@ import { AssetDB, VirtualAsset } from '@cocos/asset-db';
 import assetDBManager from './asset-db';
 import { url2path, url2uuid } from '../utils';
 import EventEmitter from 'events';
-import { AssetManagerEvents, IAsset } from '../@types/private';
+import { AssetManagerEvents, IAsset, IAssetDBInfo } from '../@types/private';
 import assetQuery from './query';
 import assetOperation from './operation';
 import assetHandlerManager from './asset-handler';
@@ -69,6 +69,10 @@ class AssetManager extends EventEmitter {
     async init() {
         assetDBManager.on('db-created', this._onAssetDBCreated);
         assetDBManager.on('db-removed', this._onAssetDBRemoved);
+        // 当所有数据库 ready 后，移除启动阶段的进度追踪监听器
+        assetDBManager.once('assets:ready', () => {
+            this._removeProgressListeners();
+        });
     }
 
     destroyed() {
@@ -78,22 +82,41 @@ class AssetManager extends EventEmitter {
 
     _onAssetDBCreated(db: AssetDB) {
         db.on('unresponsive', onUnResponsive);
-        db.on('add', assetManager._onAssetAdd.bind(assetManager));
-        db.on('added', assetManager._onAssetAdded.bind(assetManager));
-        db.on('change', assetManager._onAssetChange.bind(assetManager));
-        db.on('changed', assetManager._onAssetChanged.bind(assetManager));
-        db.on('delete', assetManager._onAssetDelete.bind(assetManager));
-        db.on('deleted', assetManager._onAssetDeleted.bind(assetManager));
+        // 启动阶段的进度追踪监听器（ready 后会被移除）
+        db.on('add', assetManager._onAssetAdd);
+        db.on('change', assetManager._onAssetChange);
+        db.on('delete', assetManager._onAssetDelete);
+        // 正常运行时的事件监听器（一直保留）
+        db.on('added', assetManager._onAssetAdded);
+        db.on('changed', assetManager._onAssetChanged);
+        db.on('deleted', assetManager._onAssetDeleted);
     }
 
     _onAssetDBRemoved(db: AssetDB) {
         db.removeListener('unresponsive', onUnResponsive);
-        db.removeListener('add', assetManager._onAssetAdd.bind(assetManager));
-        db.removeListener('added', assetManager._onAssetAdded.bind(assetManager));
-        db.removeListener('change', assetManager._onAssetChange.bind(assetManager));
-        db.removeListener('changed', assetManager._onAssetChanged.bind(assetManager));
-        db.removeListener('delete', assetManager._onAssetDelete.bind(assetManager));
-        db.removeListener('deleted', assetManager._onAssetDeleted.bind(assetManager));
+        // 移除启动阶段的进度追踪监听器
+        db.removeListener('add', assetManager._onAssetAdd);
+        db.removeListener('change', assetManager._onAssetChange);
+        db.removeListener('delete', assetManager._onAssetDelete);
+        // 移除正常运行时的事件监听器
+        db.removeListener('added', assetManager._onAssetAdded);
+        db.removeListener('changed', assetManager._onAssetChanged);
+        db.removeListener('deleted', assetManager._onAssetDeleted);
+    }
+
+    /**
+     * 移除所有数据库的启动阶段进度追踪监听器
+     * 在 ready 后调用，清理不再需要的监听器
+     */
+    private _removeProgressListeners() {
+        for (const name in assetDBManager.assetDBMap) {
+            const db = assetDBManager.assetDBMap[name];
+            if (db) {
+                db.removeListener('add', assetManager._onAssetAdd);
+                db.removeListener('change', assetManager._onAssetChange);
+                db.removeListener('delete', assetManager._onAssetDelete);
+            }
+        }
     }
 
     private _getImportState(asset: IAsset, defaultState: 'processing' | 'success' | 'failed') {
@@ -121,17 +144,17 @@ class AssetManager extends EventEmitter {
         }
     }
 
-    async _onAssetAdd(asset: IAsset) {
+    _onAssetAdd = async (asset: IAsset) => {
         this._emitProgress(asset, 'processing');
     }
-    async _onAssetChange(asset: IAsset) {
+    _onAssetChange = async (asset: IAsset) => {
         this._emitProgress(asset, 'processing');
     }
-    async _onAssetDelete(asset: IAsset) {
+    _onAssetDelete = async (asset: IAsset) => {
         this._emitProgress(asset, 'processing');
     }
 
-    async _onAssetAdded(asset: IAsset) {
+    _onAssetAdded = async (asset: IAsset) => {
         if (assetDBManager.ready) {
             this.emit('asset-add', asset);
             console.log(`asset-add ${asset.url}`);
@@ -139,7 +162,7 @@ class AssetManager extends EventEmitter {
         }
         this._emitProgress(asset, 'success');
     }
-    async _onAssetChanged(asset: IAsset) {
+    _onAssetChanged = async (asset: IAsset) => {
         if (assetDBManager.ready) {
             this.emit('asset-change', asset);
             console.log(`asset-change ${asset.url}`);
@@ -147,7 +170,7 @@ class AssetManager extends EventEmitter {
         }
         this._emitProgress(asset, 'success');
     }
-    async _onAssetDeleted(asset: IAsset) {
+    _onAssetDeleted = async (asset: IAsset) => {
         if (assetDBManager.ready) {
             // 暂时这样处理，需要调整整个 asset-db 流程才能合理化这段逻辑
             await assetHandlerManager.destroyAsset(asset);
@@ -164,6 +187,7 @@ class AssetManager extends EventEmitter {
      * **注意事项 (Notice)**:
      * - 触发此事件代表**所有**注册的资源数据库都已经完全导入并初始化完成（启动阶段结束）。
      * - 第一次 ready 后，将不再有 progress 进度消息。
+     * - ready 后会自动移除启动阶段的进度追踪监听器（add/change/delete），这些监听器仅在启动阶段用于进度追踪。
      * 
      * @param listener 回调函数
      * @returns 移除监听的函数
@@ -182,10 +206,10 @@ class AssetManager extends EventEmitter {
      * - 这个事件可能会被触发多次（如果项目存在多个子数据库，如 `assets`, `internal`）。
      * - 主要用于需要做更精细化并行控制的上层逻辑，通常情况下普通的业务逻辑不需要关心此事件，直接监听 `onReady` 即可。
      * 
-     * @param listener 回调函数，接收启动完成的 dbName
+     * @param listener 回调函数，接收启动完成的 dbInfo
      * @returns 移除监听的函数
      */
-    onDBReady(listener: (dbName: string) => void) {
+    onDBReady(listener: (dbInfo: IAssetDBInfo) => void) {
         assetDBManager.on('assets:db-ready', listener);
         return () => {
             assetDBManager.removeListener('assets:db-ready', listener);

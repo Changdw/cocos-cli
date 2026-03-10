@@ -28,7 +28,7 @@ sequenceDiagram
     end
 
     AssetDB-->>Manager: assets:db-ready (某独立子库完成)
-    Manager->>User: 触发 onDBReady(dbName)
+    Manager->>User: 触发 onDBReady(dbInfo)
 
     AssetDB-->>Manager: assets:ready (所有库完成)
     Note over AssetDB,Manager: 启动阶段结束，进入 就绪阶段 (Ready)
@@ -54,7 +54,7 @@ sequenceDiagram
   - 由于进度消息可能非常密集，建议在 UI 层面进行适当的节流（throttle）渲染。
 
 ### 2. 单数据库就绪监听：`onDBReady`
-- **注册方式**：`import { Assets } from 'cocos-cli'; Assets.onDBReady((dbName) => { ... });`
+- **注册方式**：`import { Assets } from 'cocos-cli'; Assets.onDBReady((dbInfo) => { ... });`
 - **触发时机**：当某个独立的资源数据库（例如 `assets` 或 `internal`）单独启动完成并准备就绪时触发。
 - **注意事项**：
   - 这个事件可能会被触发多次（如果项目存在多个子数据库）。
@@ -95,8 +95,8 @@ const removeProgress = Assets.onProgress((current, total, url, state) => {
 });
 
 // 3. 注册单数据库就绪监听（可选，用于精细化控制）
-const removeDBReady = Assets.onDBReady((dbName) => {
-    console.log(`[Assets] Database "${dbName}" is ready!`);
+const removeDBReady = Assets.onDBReady((dbInfo) => {
+    console.log(`[Assets] Database "${dbInfo.name}" (at ${dbInfo.target}) is ready!`);
     // 可以在这里做一些针对特定数据库的初始化工作
 });
 

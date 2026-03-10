@@ -47,10 +47,10 @@ export function onReady(listener: () => void): () => void {
  * - 这个事件可能会被触发多次（如果项目存在多个子数据库，如 `assets`, `internal`）。
  * - 主要用于需要做更精细化并行控制的上层逻辑，通常情况下普通的业务逻辑不需要关心此事件，直接监听 `onReady` 即可。
  * 
- * @param listener 回调函数，接收启动完成的 dbName
+ * @param listener 回调函数，接收启动完成的 dbInfo
  * @returns 移除监听的函数
  */
-export function onDBReady(listener: (dbName: string) => void): () => void {
+export function onDBReady(listener: (dbInfo: IAssetDBInfo) => void): () => void {
     return assetManager.onDBReady(listener);
 }
 

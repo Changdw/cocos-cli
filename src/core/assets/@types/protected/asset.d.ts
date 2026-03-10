@@ -23,7 +23,7 @@ export interface AssetManagerEvents {
     'asset-change': (asset: IAsset) => void;
     'asset-delete': (asset: IAsset) => void;
     'progress': (current: number, total: number, url: string, state: 'processing' | 'success' | 'failed') => void;
-    'db-ready': (dbName: string) => void;
+    'db-ready': (dbInfo: IAssetDBInfo) => void;
     'ready': () => void;
 }
 
