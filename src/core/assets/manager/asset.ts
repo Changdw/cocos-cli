@@ -82,10 +82,12 @@ class AssetManager extends EventEmitter {
 
     _onAssetDBCreated(db: AssetDB) {
         db.on('unresponsive', onUnResponsive);
-        // 启动阶段的进度追踪监听器（ready 后会被移除）
-        db.on('add', assetManager._onAssetAdd);
-        db.on('change', assetManager._onAssetChange);
-        db.on('delete', assetManager._onAssetDelete);
+        // 启动阶段的进度追踪监听器（只有在 ready 前创建的 db 才需要，且 ready 后会被统一移除）
+        if (!assetDBManager.ready) {
+            db.on('add', assetManager._onAssetAdd);
+            db.on('change', assetManager._onAssetChange);
+            db.on('delete', assetManager._onAssetDelete);
+        }
         // 正常运行时的事件监听器（一直保留）
         db.on('added', assetManager._onAssetAdded);
         db.on('changed', assetManager._onAssetChanged);
@@ -127,21 +129,19 @@ class AssetManager extends EventEmitter {
     }
 
     private _emitProgress(asset: IAsset, state: 'processing' | 'success' | 'failed') {
-        if (!assetDBManager.ready) {
-            let globalCurrent = 0;
-            let globalTotal = 0;
-            
-            // 汇总所有数据库的进度
-            for (const name in assetDBManager.assetDBMap) {
-                const db = assetDBManager.assetDBMap[name];
-                if (db && db.assetProgressInfo) {
-                    globalCurrent += db.assetProgressInfo.current || 0;
-                    globalTotal += db.assetProgressInfo.total || 0;
-                }
+        let globalCurrent = 0;
+        let globalTotal = 0;
+        
+        // 汇总所有数据库的进度
+        for (const name in assetDBManager.assetDBMap) {
+            const db = assetDBManager.assetDBMap[name];
+            if (db && db.assetProgressInfo) {
+                globalCurrent += db.assetProgressInfo.current || 0;
+                globalTotal += db.assetProgressInfo.total || 0;
             }
-            
-            this.emit('progress', globalCurrent, globalTotal, asset.url, this._getImportState(asset, state));
         }
+        
+        this.emit('progress', globalCurrent, globalTotal, asset.url, this._getImportState(asset, state));
     }
 
     _onAssetAdd = async (asset: IAsset) => {
