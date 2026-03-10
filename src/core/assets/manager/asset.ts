@@ -96,14 +96,14 @@ class AssetManager extends EventEmitter {
         db.removeListener('deleted', assetManager._onAssetDeleted.bind(assetManager));
     }
 
-    private _getImportState(asset: VirtualAsset, defaultState: 'processing' | 'success' | 'failed') {
+    private _getImportState(asset: IAsset, defaultState: 'processing' | 'success' | 'failed') {
         if (asset.invalid || asset.importError) {
             return 'failed';
         }
         return defaultState;
     }
 
-    private _emitProgress(asset: VirtualAsset, state: 'processing' | 'success' | 'failed') {
+    private _emitProgress(asset: IAsset, state: 'processing' | 'success' | 'failed') {
         if (!assetDBManager.ready) {
             let globalCurrent = 0;
             let globalTotal = 0;
@@ -122,19 +122,13 @@ class AssetManager extends EventEmitter {
     }
 
     async _onAssetAdd(asset: IAsset) {
-        if ('_assetDB' in asset) {
-            this._emitProgress(asset as VirtualAsset, 'processing');
-        }
+        this._emitProgress(asset, 'processing');
     }
     async _onAssetChange(asset: IAsset) {
-        if ('_assetDB' in asset) {
-            this._emitProgress(asset as VirtualAsset, 'processing');
-        }
+        this._emitProgress(asset, 'processing');
     }
     async _onAssetDelete(asset: IAsset) {
-        if ('_assetDB' in asset) {
-            this._emitProgress(asset as VirtualAsset, 'processing');
-        }
+        this._emitProgress(asset, 'processing');
     }
 
     async _onAssetAdded(asset: IAsset) {
@@ -143,9 +137,7 @@ class AssetManager extends EventEmitter {
             console.log(`asset-add ${asset.url}`);
             return;
         }
-        if ('_assetDB' in asset) {
-            this._emitProgress(asset as VirtualAsset, 'success');
-        }
+        this._emitProgress(asset, 'success');
     }
     async _onAssetChanged(asset: IAsset) {
         if (assetDBManager.ready) {
@@ -153,9 +145,7 @@ class AssetManager extends EventEmitter {
             console.log(`asset-change ${asset.url}`);
             return;
         }
-        if ('_assetDB' in asset) {
-            this._emitProgress(asset as VirtualAsset, 'success');
-        }
+        this._emitProgress(asset, 'success');
     }
     async _onAssetDeleted(asset: IAsset) {
         if (assetDBManager.ready) {
@@ -165,9 +155,7 @@ class AssetManager extends EventEmitter {
             console.log(`asset-delete ${asset.url}`);
             return;
         }
-        if ('_assetDB' in asset) {
-            this._emitProgress(asset as VirtualAsset, 'success');
-        }
+        this._emitProgress(asset, 'success');
     }
 
     /**
