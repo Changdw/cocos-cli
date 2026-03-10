@@ -78,19 +78,32 @@ class AssetManager extends EventEmitter {
 
     _onAssetDBCreated(db: AssetDB) {
         db.on('unresponsive', onUnResponsive);
+        db.on('add', assetManager._onAssetAdd.bind(assetManager));
         db.on('added', assetManager._onAssetAdded.bind(assetManager));
+        db.on('change', assetManager._onAssetChange.bind(assetManager));
         db.on('changed', assetManager._onAssetChanged.bind(assetManager));
+        db.on('delete', assetManager._onAssetDelete.bind(assetManager));
         db.on('deleted', assetManager._onAssetDeleted.bind(assetManager));
     }
 
     _onAssetDBRemoved(db: AssetDB) {
         db.removeListener('unresponsive', onUnResponsive);
+        db.removeListener('add', assetManager._onAssetAdd.bind(assetManager));
         db.removeListener('added', assetManager._onAssetAdded.bind(assetManager));
+        db.removeListener('change', assetManager._onAssetChange.bind(assetManager));
         db.removeListener('changed', assetManager._onAssetChanged.bind(assetManager));
+        db.removeListener('delete', assetManager._onAssetDelete.bind(assetManager));
         db.removeListener('deleted', assetManager._onAssetDeleted.bind(assetManager));
     }
 
-    private _emitProgress(asset: VirtualAsset) {
+    private _getImportState(asset: VirtualAsset, defaultState: 'processing' | 'success' | 'failed') {
+        if (asset.invalid || asset.importError) {
+            return 'failed';
+        }
+        return defaultState;
+    }
+
+    private _emitProgress(asset: VirtualAsset, state: 'processing' | 'success' | 'failed') {
         if (!assetDBManager.ready) {
             let globalCurrent = 0;
             let globalTotal = 0;
@@ -104,7 +117,23 @@ class AssetManager extends EventEmitter {
                 }
             }
             
-            this.emit('progress', globalCurrent, globalTotal, asset.url);
+            this.emit('progress', globalCurrent, globalTotal, asset.url, this._getImportState(asset, state));
+        }
+    }
+
+    async _onAssetAdd(asset: IAsset) {
+        if ('_assetDB' in asset) {
+            this._emitProgress(asset as VirtualAsset, 'processing');
+        }
+    }
+    async _onAssetChange(asset: IAsset) {
+        if ('_assetDB' in asset) {
+            this._emitProgress(asset as VirtualAsset, 'processing');
+        }
+    }
+    async _onAssetDelete(asset: IAsset) {
+        if ('_assetDB' in asset) {
+            this._emitProgress(asset as VirtualAsset, 'processing');
         }
     }
 
@@ -115,7 +144,7 @@ class AssetManager extends EventEmitter {
             return;
         }
         if ('_assetDB' in asset) {
-            this._emitProgress(asset as VirtualAsset);
+            this._emitProgress(asset as VirtualAsset, 'success');
         }
     }
     async _onAssetChanged(asset: IAsset) {
@@ -125,7 +154,7 @@ class AssetManager extends EventEmitter {
             return;
         }
         if ('_assetDB' in asset) {
-            this._emitProgress(asset as VirtualAsset);
+            this._emitProgress(asset as VirtualAsset, 'success');
         }
     }
     async _onAssetDeleted(asset: IAsset) {
@@ -137,7 +166,7 @@ class AssetManager extends EventEmitter {
             return;
         }
         if ('_assetDB' in asset) {
-            this._emitProgress(asset as VirtualAsset);
+            this._emitProgress(asset as VirtualAsset, 'success');
         }
     }
 
@@ -182,10 +211,10 @@ class AssetManager extends EventEmitter {
      * - **仅在启动阶段有效**。一旦触发过一次 `ready` 事件（即启动阶段结束），将不再会有新的进度消息。
      * - 启动时的资源冷导入会抛出密集的进度信息，建议在 UI 层面进行适当的节流（throttle）渲染。
      * 
-     * @param listener 回调函数，包含当前进度、总数和当前处理的资源路径
+     * @param listener 回调函数，包含当前进度、总数、当前处理的资源 url 以及导入状态
      * @returns 移除监听的函数
      */
-    onProgress(listener: (current: number, total: number, message: string) => void) {
+    onProgress(listener: (current: number, total: number, url: string, state: 'processing' | 'success' | 'failed') => void) {
         this.on('progress', listener);
         return () => {
             this.removeListener('progress', listener);

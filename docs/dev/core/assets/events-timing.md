@@ -22,9 +22,9 @@ sequenceDiagram
     Note over AssetDB: 启动阶段 (Starting)
 
     loop 资源冷导入与扫描
-        AssetDB-->>Manager: 内部变更事件 (added/changed/deleted)
+        AssetDB-->>Manager: 内部变更事件 (add/change/delete/added/changed/deleted)
         Note over Manager: 处于启动阶段：屏蔽真实变更<br/>转换为 progress 事件
-        Manager->>User: 触发 onProgress (current, total, message)
+        Manager->>User: 触发 onProgress (current, total, url, state)
     end
 
     AssetDB-->>Manager: assets:db-ready (某独立子库完成)
@@ -46,7 +46,7 @@ sequenceDiagram
 ## 核心监听回调说明
 
 ### 1. 进度监听：`onProgress`
-- **注册方式**：`import { Assets } from 'cocos-cli'; Assets.onProgress((current, total, message) => { ... });`
+- **注册方式**：`import { Assets } from 'cocos-cli'; Assets.onProgress((current, total, url, state) => { ... });`
 - **触发时机**：仅在**启动阶段**触发。当底层资源数据库在进行资源扫描和冷导入时，会不断抛出进度信息。
 - **注意事项**：
   - 一旦触发过一次 `ready` 事件（即启动阶段结束），**将不再会有新的进度消息**，除非系统被重新启动。
@@ -84,8 +84,13 @@ import { Assets } from 'cocos-cli';
 await Assets.init();
 
 // 2. 注册进度监听（展示 Loading）
-const removeProgress = Assets.onProgress((current, total, message) => {
-    console.log(`[Loading] ${current}/${total} - ${message}`);
+const removeProgress = Assets.onProgress((current, total, url, state) => {
+    let logMsg = '';
+    if (state === 'processing') logMsg = `正在导入 ${url}`;
+    else if (state === 'success') logMsg = `${url} 导入完成`;
+    else if (state === 'failed') logMsg = `${url} 导入失败`;
+    
+    console.log(`[Loading] ${current}/${total} - ${logMsg}`);
     // 更新 UI 进度条 ...
 });
 

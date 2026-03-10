@@ -63,10 +63,10 @@ export function onDBReady(listener: (dbName: string) => void): () => void {
  * - **仅在启动阶段有效**。一旦触发过一次 `ready` 事件（即启动阶段结束），将不再会有新的进度消息。
  * - 启动时的资源冷导入会抛出密集的进度信息，建议在 UI 层面进行适当的节流（throttle）渲染。
  * 
- * @param listener 回调函数，包含当前进度、总数和当前处理的资源路径
+ * @param listener 回调函数，包含当前进度、总数、当前处理的资源 url 和导入状态
  * @returns 移除监听的函数
  */
-export function onProgress(listener: (current: number, total: number, message: string) => void): () => void {
+export function onProgress(listener: (current: number, total: number, url: string, state: 'processing' | 'success' | 'failed') => void): () => void {
     return assetManager.onProgress(listener);
 }
 
