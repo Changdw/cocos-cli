@@ -123,6 +123,9 @@ class AssetManager extends EventEmitter {
      * @returns 资源变更信息
      */
     private _extractAssetChangeInfo(asset: IAsset): IAssetInfo | null {
+        if (!asset || !asset.uuid) {
+            return null;
+        }
         return assetManager.queryAssetInfo(asset.uuid);
     }
 
