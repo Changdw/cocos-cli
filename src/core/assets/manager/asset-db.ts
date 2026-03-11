@@ -3,7 +3,9 @@
 import { AssetDBRegisterInfo, IAsset, IAssetDBInfo, IAssetInfo, QueryAssetsOption } from '../@types/private';
 import * as assetdb from '@cocos/asset-db';
 import EventEmitter from 'events';
-import { ensureDirSync, existsSync } from 'fs-extra';
+import { fse } from '../../filesystem/fs';
+const { ensureDirSync, existsSync } = fse;
+import { workspaceFs } from '../../filesystem';
 import { extname, join, relative } from 'path';
 import { newConsole } from '../../base/console';
 import { decidePromiseState, PROMISE_STATE } from '../utils';
