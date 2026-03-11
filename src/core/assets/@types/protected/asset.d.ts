@@ -22,6 +22,9 @@ export interface AssetManagerEvents {
     'asset-add': (asset: IAsset) => void;
     'asset-change': (asset: IAsset) => void;
     'asset-delete': (asset: IAsset) => void;
+    'onAssetAdded': (info: IAssetInfo) => void;
+    'onAssetChanged': (info: IAssetInfo) => void;
+    'onAssetRemoved': (info: IAssetInfo) => void;
     'progress': (current: number, total: number, url: string, state: 'processing' | 'success' | 'failed') => void;
     'db-ready': (dbInfo: IAssetDBInfo) => void;
     'ready': () => void;

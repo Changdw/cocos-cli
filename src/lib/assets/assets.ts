@@ -286,3 +286,59 @@ export async function queryAssetConfigMap(): Promise<Record<string, IAssetConfig
     return await assetManager.queryAssetConfigMap();
 }
 
+/**
+ * Listen to Asset Added Event // 监听资源添加事件
+ * @param listener Callback function that receives asset information
+ * @returns Function to remove the listener
+ * 
+ * 推荐用法：
+ * ```typescript
+ * const removeListener = onAssetAdded((info) => {
+ *     console.log(`资源已添加: ${info.name}`);
+ *     console.log(`  逻辑路径: ${info.url}`);
+ *     console.log(`  物理路径: ${info.file}`);
+ * });
+ * // 稍后移除监听
+ * removeListener();
+ * ```
+ */
+export function onAssetAdded(listener: (info: IAssetInfo) => void): () => void {
+    return assetManager.onAssetAdded(listener);
+}
+
+/**
+ * Listen to Asset Changed Event // 监听资源变更事件
+ * @param listener Callback function that receives asset information
+ * @returns Function to remove the listener
+ * 
+ * 推荐用法：
+ * ```typescript
+ * const removeListener = onAssetChanged((info) => {
+ *     console.log(`资源已变更: ${info.name}`);
+ * });
+ * // 稍后移除监听
+ * removeListener();
+ * ```
+ */
+export function onAssetChanged(listener: (info: IAssetInfo) => void): () => void {
+    return assetManager.onAssetChanged(listener);
+}
+
+/**
+ * Listen to Asset Removed Event // 监听资源删除事件
+ * @param listener Callback function that receives asset information
+ * @returns Function to remove the listener
+ * 
+ * 推荐用法：
+ * ```typescript
+ * const removeListener = onAssetRemoved((info) => {
+ *     console.log(`资源已删除: ${info.name}`);
+ * });
+ * // 稍后移除监听
+ * removeListener();
+ * ```
+ */
+export function onAssetRemoved(listener: (info: IAssetInfo) => void): () => void {
+    return assetManager.onAssetRemoved(listener);
+}
+
