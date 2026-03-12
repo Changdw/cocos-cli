@@ -338,11 +338,6 @@ describe('测试 db 的查询接口', function () {
 
         it('查询 internal 目录下 ccType = cc.SceneAsset 资源', async () => {
             const allScenes = await assetManager.queryAssetInfos({ ccType: 'cc.SceneAsset', pattern: 'db://internal/**/*' });
-            console.log(`[Scene Assets] 找到 ${allScenes.length} 个场景资源:`);
-            allScenes.forEach((scene) => {
-                console.log(`      file: ${scene.file}`);
-                console.log('');
-            });
             expect(allScenes.length).toBe(6);
         });
         it('查询 internal 目录下 extname = mp4资源', async () => {
