@@ -135,7 +135,9 @@ export class ScriptBuilder {
         // 执行静态编译检查
         // 注意：如果在 BuildCommand 中已经执行过，这里会重复执行。
         // 但为了确保脚本编译的安全性，这里强制检查。
-        const checkResult = await runStaticCompileCheck(project.path, true);
+        // 传入 temp/cli/tsconfig.cocos.json，避免使用根目录 tsconfig 导致重复包含 d.ts
+        const tsconfigPath = join(project.path, 'temp', 'cli', 'tsconfig.cocos.json');
+        const checkResult = await runStaticCompileCheck(project.path, true, tsconfigPath);
         if (!checkResult.passed) {
             // 构建失败，抛出错误，错误码为 500
             const errorMessage = checkResult.errorMessage || 'Found assets-related TypeScript errors';
