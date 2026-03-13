@@ -133,7 +133,12 @@ export async function runStaticCompileCheck(projectPath: string, showOutput: boo
         }
 
         // 过滤出包含 "assets" 的错误
-        const filteredOutput = filterAssetsErrors(output);
+        let filteredOutput = filterAssetsErrors(output);
+
+        // 如果输出只包含 TS18003 (No inputs were found)，说明项目没有 ts 文件，这是正常的，不视为错误
+        if (filteredOutput && filteredOutput.includes('TS18003') && filteredOutput.split('\n').every(line => line.includes('TS18003') || !line.trim())) {
+            filteredOutput = '';
+        }
 
         if (filteredOutput) {
             // 有 assets 相关的错误
@@ -175,7 +180,12 @@ export async function runStaticCompileCheck(projectPath: string, showOutput: boo
         }
 
         // 过滤出包含 "assets" 的错误
-        const filteredOutput = filterAssetsErrors(fullOutput);
+        let filteredOutput = filterAssetsErrors(fullOutput);
+
+        // 如果输出只包含 TS18003 (No inputs were found)，说明项目没有 ts 文件，这是正常的，不视为错误
+        if (filteredOutput && filteredOutput.includes('TS18003') && filteredOutput.split('\n').every(line => line.includes('TS18003') || !line.trim())) {
+            filteredOutput = '';
+        }
 
         if (filteredOutput) {
             // 有 assets 相关的错误
