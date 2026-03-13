@@ -89,6 +89,9 @@ export class TypeScriptConfigBuilder {
 
             // True by default.
             strict: true,
+            strictNullChecks: false,
+            noImplicitAny: false,
+            strictPropertyInitialization: false,
 
             types,
 
