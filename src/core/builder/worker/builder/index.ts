@@ -403,7 +403,9 @@ export class BuildTask extends BuildTaskBase implements IBuilder {
             !this.options.includeModules.includes('custom-pipeline') && this.options.includeModules.push('custom-pipeline');
             // 使用了内置管线的情况下, 添加 custom-pipeline-builtin-scripts 模块方能打包对应的脚本
             if (CUSTOM_PIPELINE_NAME === 'Builtin' || !CUSTOM_PIPELINE_NAME) {
-                this.options.includeModules.push('custom-pipeline-builtin-scripts');
+                if (!this.options.includeModules.includes('custom-pipeline-builtin-scripts')) {
+                    this.options.includeModules.push('custom-pipeline-builtin-scripts');
+                }
             }
         } else {
             const customPipelineIndex = this.options.includeModules.findIndex((module: string) => module === 'custom-pipeline');

@@ -437,6 +437,9 @@ export async function checkProjectSetting(options: IInternalBuildOptions | IInte
         options.includeModules.push('debug-renderer');
     }
 
+    // 自定义管线配置
+    options.customPipeline = options.customPipeline || options.includeModules.includes('custom-pipeline');
+
     if (!options.flags) {
         options.flags = {
             LOAD_BULLET_MANUALLY: false,
