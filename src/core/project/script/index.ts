@@ -4,6 +4,8 @@ import { existsSync, mkdir, readJSON } from 'fs-extra';
 import { ProjectInfo, ProjectType } from '../@types/public';
 import { safeOutputJSON } from '../utils';
 
+import { defaultEngineSettings, defaultProjectSettings } from './settings-template';
+
 export interface IProject {
     /**
      * Gets the project directory path
@@ -150,13 +152,21 @@ export class Project implements IProject {
             await mkdir(projectPath, { recursive: true });
             const requiredDirs = [
                 join(projectPath, 'temp'),
-                join(projectPath, 'library')
+                join(projectPath, 'library'),
+                join(projectPath, 'settings', 'v2', 'packages')
             ].map(dir => !existsSync(dir) ? mkdir(dir, { recursive: true }) : Promise.resolve());
 
             await Promise.all(requiredDirs);
             await safeOutputJSON(packageJSONPath, Project.generateProjectInfo(projectPath, type));
+            
+            // 写入默认的 settings
+            const settingsDir = join(projectPath, 'settings', 'v2', 'packages');
+            await safeOutputJSON(join(settingsDir, 'engine.json'), defaultEngineSettings);
+            await safeOutputJSON(join(settingsDir, 'project.json'), defaultProjectSettings);
+
             return true;
         } catch (error) {
+            console.error(error);
             return false;
         }
     }
