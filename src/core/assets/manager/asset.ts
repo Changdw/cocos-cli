@@ -129,6 +129,13 @@ class AssetManager extends EventEmitter {
         return assetManager.queryAssetInfo(asset.uuid);
     }
 
+    private _snapshotAssetChangeInfo(asset: IAsset): IAssetInfo | null {
+        if (!asset || !asset.uuid) {
+            return null;
+        }
+        return assetQuery.encodeAsset(asset, ['subAssets', 'displayName'], true);
+    }
+
     _onAssetDBCreated(db: AssetDB) {
         db.on('unresponsive', onUnResponsive);
         // 启动阶段的进度追踪监听器（只有在 ready 前创建的 db 才需要，且 ready 后会被统一移除）
@@ -223,10 +230,10 @@ class AssetManager extends EventEmitter {
     }
     _onAssetDeleted = async (asset: IAsset) => {
         if (assetDBManager.ready) {
-            // 暂时这样处理，需要调整整个 asset-db 流程才能合理化这段逻辑
+            const removedInfo = this._snapshotAssetChangeInfo(asset);
             await assetHandlerManager.destroyAsset(asset);
             this.emit('asset-delete', asset);
-            this.emit('onAssetRemoved', this._extractAssetChangeInfo(asset));
+            this.emit('onAssetRemoved', removedInfo);
             console.log(`asset-delete ${asset.url}`);
             return;
         }
