@@ -116,7 +116,6 @@ export async function handleImageUserData(asset: Asset | VirtualAsset, imageData
     const userData = asset.userData as ImageAssetUserData;
     const sharpResult = Sharp(imageDataBufferOrimagePath);
     const metaData = await sharpResult.metadata();
-    userData.hasAlpha = metaData.hasAlpha;
     userData.type ||= 'texture';
     // Do flip if needed.
     const flipVertical = !!userData.flipVertical;
@@ -188,7 +187,26 @@ export async function handleImageUserData(asset: Asset | VirtualAsset, imageData
         const opts = { raw: { width: width!, height: height!, channels: channels! } };
         imageDataBufferOrimagePath = await Sharp(buffer, opts).toFormat('png').toBuffer();
     }
+    userData.hasAlpha = await hasMeaningfulAlpha(imageDataBufferOrimagePath, !!userData.isRGBE);
     return imageDataBufferOrimagePath;
+}
+
+async function hasMeaningfulAlpha(imageData: Buffer, isRGBE: boolean) {
+    const sharpResult = Sharp(imageData);
+    const metaData = await sharpResult.metadata();
+    if (!metaData.hasAlpha) {
+        return false;
+    }
+    if (isRGBE) {
+        return true;
+    }
+    const pixelData = await sharpResult.ensureAlpha().raw().toBuffer();
+    for (let index = Color.Alpha; index < pixelData.length; index += RGBAChannels) {
+        if (pixelData[index] !== 255) {
+            return true;
+        }
+    }
+    return false;
 }
 
 export async function importWithType(asset: Asset | VirtualAsset, type: ImageImportType, displayName: string, extName: string) {

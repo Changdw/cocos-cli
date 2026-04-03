@@ -38,7 +38,7 @@ export const ImageHandler: AssetHandler = {
     },
     importer: {
         // 版本号如果变更，则会强制重新导入
-        version: '1.0.27',
+        version: '1.0.28',
         /**
          * 是否强制刷新
          * @param asset
@@ -66,8 +66,7 @@ export const ImageHandler: AssetHandler = {
                 extName = converted.extName;
                 imageDataBufferOrimagePath = converted.source;
 
-                // bmp 导入的，默认钩上 isRGBE
-                userData.isRGBE = true;
+                userData.isRGBE = converted.isRGBE;
                 // 对于 rgbe 类型图片默认关闭这个选项
                 userData.fixAlphaTransparencyArtifacts ||= false;
             } else if (extName === '.znt') {
@@ -81,7 +80,7 @@ export const ImageHandler: AssetHandler = {
                 imageDataBufferOrimagePath = converted.source;
                 // 对于 rgbe 类型图片默认关闭这个选项
                 userData.fixAlphaTransparencyArtifacts = false;
-                userData.isRGBE = true;
+                userData.isRGBE = converted.isRGBE;
             } else if (extName === '.hdr' || extName === '.exr') {
                 const source = asset.source;
                 const converted = await convertHDROrEXR(extName, source, asset.uuid, asset.temp);
@@ -93,8 +92,7 @@ export const ImageHandler: AssetHandler = {
                 imageDataBufferOrimagePath = converted.source;
                 // 对于 rgbe 类型图片默认关闭这个选项
                 userData.fixAlphaTransparencyArtifacts = false;
-                // hdr 导入的，默认钩上 isRGBE
-                userData.isRGBE = true;
+                userData.isRGBE = converted.isRGBE;
                 const sharpResult = await Sharp(imageDataBufferOrimagePath);
                 const metaData = await sharpResult.metadata();
                 // 长宽符合 cubemap 的导入规则时，默认导入成 texture cube

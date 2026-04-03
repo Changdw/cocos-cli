@@ -15,8 +15,8 @@ import { getDependUUIDList } from '../utils';
 import { AssetHandler } from '../../@types/protected';
 import { TextureCubeAssetUserData } from '../../@types/userDatas';
 import { makeDefaultTextureCubeAssetUserData } from './image/utils';
-import { GlobalPaths } from '../../../../global';
 import utils from '../../../base/utils';
+import { resolveCmftTool } from './utils/cmft';
 
 type ITextureCubeMipMap = cc.TextureCube['mipmaps'][0];
 
@@ -142,7 +142,7 @@ export const ERPTextureCubeHandler: AssetHandler = {
 
                         console.log(`Start to bake asset {asset[${asset.uuid}](${asset.uuid})}`);
 
-                        const cmdTool = join(GlobalPaths.staticDir, 'tools/cmft/cmftRelease64') + (process.platform === 'win32' ? '.exe' : '');
+                        const cmdTool = resolveCmftTool();
                         await utils.Process.quickSpawn(cmdTool, vectorParams, {
                             stdio: 'inherit',
                         });

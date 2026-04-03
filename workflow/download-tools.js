@@ -1,15 +1,16 @@
 const fs = require('fs');
 const path = require('path');
-const https = require('https');
 const http = require('http');
-const { execSync } = require('child_process');
+const https = require('https');
+const { execFileSync } = require('child_process');
 
-// 工具配置
 const tools = {
     win32: [
         {
             url: 'http://download.cocos.com/CocosSDK/tools/unzip.exe',
             dist: 'unzip.exe',
+            fileName: 'unzip.exe',
+            outputs: ['unzip.exe'],
         },
         {
             url: 'http://download.cocos.com/CocosSDK/tools/PVRTexToolCLI_win32_20251028.zip',
@@ -55,11 +56,6 @@ const tools = {
             url: 'http://download.cocos.com/CocosSDK/tools/cmake-3.24.3-windows-x86_64.zip',
             dist: 'cmake',
         },
-        // 注意：windows-process-tree 的 URL 可能已失效，暂时注释
-        // {
-        //     url: 'http://ftp.cocos.org/TestBuilds/Editor-3d/npm/windows-process-tree-0.6.0-28.0.0_win32.zip',
-        //     dist: 'windows-process-tree',
-        // }
     ],
     darwin: [
         {
@@ -100,8 +96,26 @@ const tools = {
         },
         {
             url: 'http://download.cocos.com/CocosSDK/tools/process-info-20231116-darwin.zip',
-            dist: 'process-info'
-        }
+            dist: 'process-info',
+        },
+    ],
+    linux: [
+        {
+            url: 'https://github.com/dariomanesku/cmft-bin/raw/master/cmft_lin64.zip',
+            dist: 'cmft',
+            outputs: ['linux/cmftRelease64'],
+            moves: [
+                { from: 'cmft', to: 'linux/cmftRelease64' },
+            ],
+            executables: ['linux/cmftRelease64'],
+        },
+        {
+            url: 'https://github.com/facebookincubator/FBX2glTF/releases/download/v0.9.7/FBX2glTF-linux-x64',
+            dist: 'FBX2glTF',
+            fileName: 'FBX2glTF',
+            outputs: ['FBX2glTF'],
+            executables: ['FBX2glTF'],
+        },
     ],
     common: [
         {
@@ -115,11 +129,10 @@ const tools = {
         {
             url: 'http://download.cocos.com/CocosSDK/tools/debug.keystore-201112.zip',
             dist: 'keystore',
-        }
-    ]
+        },
+    ],
 };
 
-// 工具类
 class ToolDownloader {
     constructor() {
         this.scriptDir = __dirname;
@@ -129,44 +142,69 @@ class ToolDownloader {
         this.platform = process.platform;
     }
 
-    // 确保目录存在
+    resolveUnzipTool() {
+        if (this.platform === 'win32') {
+            return null;
+        }
+
+        const candidates = [
+            path.join(this.toolsDir, 'unzip'),
+            path.join(this.toolsDir, 'unzip', 'bin', 'unzip'),
+            'unzip',
+        ];
+
+        for (const candidate of candidates) {
+            try {
+                if (candidate.includes(path.sep)) {
+                    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+                        return candidate;
+                    }
+                    continue;
+                }
+
+                execFileSync('which', [candidate], { stdio: 'pipe' });
+                return candidate;
+            } catch {
+                continue;
+            }
+        }
+
+        return null;
+    }
+
     ensureDir(dirPath) {
         if (!fs.existsSync(dirPath)) {
             fs.mkdirSync(dirPath, { recursive: true });
-            console.log(`📁 创建目录: ${path.relative(this.projectRoot, dirPath)}`);
+            console.log(`Create directory: ${path.relative(this.projectRoot, dirPath)}`);
         }
     }
 
-    // 下载文件（带重试机制）
     async downloadFile(url, destPath, retries = 3) {
         for (let attempt = 1; attempt <= retries; attempt++) {
             try {
                 await this._downloadFileSingle(url, destPath);
-                return; // 成功则退出
+                return;
             } catch (error) {
-                console.log(`\n⚠️  下载失败 (尝试 ${attempt}/${retries}): ${error.message}`);
+                console.log(`\nRetry ${attempt}/${retries} failed: ${error.message}`);
 
-                // 清理失败的文件
                 if (fs.existsSync(destPath)) {
                     fs.unlinkSync(destPath);
                 }
 
                 if (attempt === retries) {
-                    throw error; // 最后一次尝试失败，抛出错误
+                    throw error;
                 }
 
-                // 等待一段时间后重试
                 const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-                console.log(`⏳ ${delay}ms 后重试...`);
+                console.log(`Retrying in ${delay}ms...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
             }
         }
     }
 
-    // 单次下载文件
     async _downloadFileSingle(url, destPath) {
         return new Promise((resolve, reject) => {
-            console.log(`📥 下载: ${url}`);
+            console.log(`Downloading: ${url}`);
 
             const protocol = url.startsWith('https:') ? https : http;
             const file = fs.createWriteStream(destPath);
@@ -181,7 +219,7 @@ class ToolDownloader {
                         downloadedSize += chunk.length;
                         if (totalSize > 0) {
                             const progress = ((downloadedSize / totalSize) * 100).toFixed(1);
-                            process.stdout.write(`\r📥 下载进度: ${progress}% (${this.formatBytes(downloadedSize)}/${this.formatBytes(totalSize)})`);
+                            process.stdout.write(`\rDownloading: ${progress}% (${this.formatBytes(downloadedSize)}/${this.formatBytes(totalSize)})`);
                         }
                     });
 
@@ -189,11 +227,10 @@ class ToolDownloader {
 
                     file.on('finish', () => {
                         file.close();
-                        console.log(`\n✅ 下载完成: ${path.basename(destPath)}`);
+                        console.log(`\nDownload complete: ${path.basename(destPath)}`);
                         resolve();
                     });
                 } else if (response.statusCode === 302 || response.statusCode === 301) {
-                    // 处理重定向
                     file.close();
                     if (fs.existsSync(destPath)) {
                         fs.unlinkSync(destPath);
@@ -204,7 +241,7 @@ class ToolDownloader {
                     if (fs.existsSync(destPath)) {
                         fs.unlinkSync(destPath);
                     }
-                    reject(new Error(`文件不存在 (404): ${url}`));
+                    reject(new Error(`File not found (404): ${url}`));
                 } else {
                     file.close();
                     if (fs.existsSync(destPath)) {
@@ -214,182 +251,243 @@ class ToolDownloader {
                 }
             });
 
-            request.on('error', (err) => {
+            request.on('error', (error) => {
                 file.close();
                 if (fs.existsSync(destPath)) {
                     fs.unlinkSync(destPath);
                 }
-                reject(err);
+                reject(error);
             });
 
-            // 设置超时
             request.setTimeout(120000, () => {
                 request.destroy();
-                reject(new Error('下载超时 (120秒)'));
+                reject(new Error('Download timeout (120s)'));
             });
         });
     }
 
-    // 解压文件
-    async extractFile(zipPath, extractDir) {
-        console.log(`📦 解压: ${path.basename(zipPath)}`);
+    extractFile(zipPath, extractDir) {
+        console.log(`Extracting: ${path.basename(zipPath)}`);
 
         try {
-            let command , options = {};
             if (this.platform === 'win32') {
-                // Windows 使用 PowerShell 的 Expand-Archive
-                command = `powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${extractDir}' -Force"`;
+                execFileSync(
+                    'powershell',
+                    ['-Command', `Expand-Archive -Path '${zipPath}' -DestinationPath '${extractDir}' -Force`],
+                    { stdio: 'pipe', maxBuffer: 1024 * 1024 * 50 },
+                );
             } else {
-                // macOS/Linux 使用 unzip
-                command = `unzip -o '${zipPath}' -d '${extractDir}'`;
-                // 增加缓冲区大小
-                options = {
-                    maxBuffer: 1024 * 1024 * 50 // 增加到 50MB，防止解压失败
-                };
+                const unzipTool = this.resolveUnzipTool();
+                if (!unzipTool) {
+                    throw new Error('Missing unzip command');
+                }
+
+                execFileSync(unzipTool, ['-o', zipPath, '-d', extractDir], {
+                    stdio: 'pipe',
+                    maxBuffer: 1024 * 1024 * 50,
+                });
             }
 
-            execSync(command, { stdio: 'pipe', ...options });
-            console.log(`✅ 解压完成: ${path.basename(zipPath)}`);
+            console.log(`Extract complete: ${path.basename(zipPath)}`);
         } catch (error) {
-            throw new Error(`解压失败: ${error.message}`);
+            throw new Error(`Extract failed: ${error.message}`);
         }
     }
 
-    // 格式化字节数
     formatBytes(bytes) {
-        if (bytes === 0) return '0 B';
+        if (bytes === 0) {
+            return '0 B';
+        }
+
         const k = 1024;
         const sizes = ['B', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
     }
 
-    // 检查解压工具是否可用
     checkExtractTools() {
         try {
             if (this.platform === 'win32') {
-                execSync('powershell -Command "Get-Command Expand-Archive"', { stdio: 'pipe' });
-            } else {
-                execSync('which unzip', { stdio: 'pipe' });
+                execFileSync('powershell', ['-Command', 'Get-Command Expand-Archive'], { stdio: 'pipe' });
+                return true;
             }
-            return true;
+
+            return Boolean(this.resolveUnzipTool());
         } catch {
             return false;
         }
     }
 
-    // 检查文件是否需要解压
     isArchiveFile(filePath) {
         const ext = path.extname(filePath).toLowerCase();
         return ['.zip', '.tar', '.gz', '.7z', '.rar'].includes(ext);
     }
 
-    // 复制文件到目标目录
-    async copyFile(sourcePath, targetDir) {
-        console.log(`📋 复制: ${path.basename(sourcePath)}`);
+    getToolRoot(tool) {
+        return path.join(this.toolsDir, tool.dist);
+    }
 
-        try {
-            const fileName = path.basename(sourcePath);
-            const targetPath = path.join(targetDir, fileName);
+    getExpectedOutputs(tool) {
+        const toolRoot = this.getToolRoot(tool);
+        if (Array.isArray(tool.outputs) && tool.outputs.length > 0) {
+            return tool.outputs.map(output => path.join(toolRoot, output));
+        }
 
-            // 确保目标目录存在
-            this.ensureDir(targetDir);
+        return [toolRoot];
+    }
 
-            // 复制文件
-            fs.copyFileSync(sourcePath, targetPath);
-            console.log(`✅ 复制完成: ${fileName}`);
-        } catch (error) {
-            throw new Error(`复制失败: ${error.message}`);
+    isExecutable(filePath) {
+        if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+            return false;
+        }
+
+        if (this.platform === 'win32') {
+            return true;
+        }
+
+        return Boolean(fs.statSync(filePath).mode & 0o111);
+    }
+
+    isToolInstalled(tool) {
+        if (!this.getExpectedOutputs(tool).every(output => fs.existsSync(output))) {
+            return false;
+        }
+
+        for (const executable of tool.executables || []) {
+            if (!this.isExecutable(path.join(this.getToolRoot(tool), executable))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    copyFile(sourcePath, targetDir, targetName) {
+        const fileName = targetName || path.basename(sourcePath);
+        const targetPath = path.join(targetDir, fileName);
+
+        this.ensureDir(targetDir);
+        fs.copyFileSync(sourcePath, targetPath);
+        console.log(`Copied: ${path.relative(this.projectRoot, targetPath)}`);
+        return targetPath;
+    }
+
+    applyMoves(tool, targetDir) {
+        for (const move of tool.moves || []) {
+            const sourcePath = path.join(targetDir, move.from);
+            const destPath = path.join(targetDir, move.to);
+
+            if (!fs.existsSync(sourcePath)) {
+                throw new Error(`Expected extracted file is missing: ${path.relative(this.projectRoot, sourcePath)}`);
+            }
+
+            this.ensureDir(path.dirname(destPath));
+            if (fs.existsSync(destPath)) {
+                fs.rmSync(destPath, { recursive: true, force: true });
+            }
+            fs.renameSync(sourcePath, destPath);
+            console.log(`Moved: ${path.relative(this.projectRoot, sourcePath)} -> ${path.relative(this.projectRoot, destPath)}`);
         }
     }
 
-    // 主处理函数
+    ensureExecutables(tool, targetDir) {
+        if (this.platform === 'win32') {
+            return;
+        }
+
+        for (const executable of tool.executables || []) {
+            const executablePath = path.join(targetDir, executable);
+            if (!fs.existsSync(executablePath)) {
+                throw new Error(`Executable is missing: ${path.relative(this.projectRoot, executablePath)}`);
+            }
+
+            const mode = fs.statSync(executablePath).mode;
+            fs.chmodSync(executablePath, mode | 0o755);
+            console.log(`chmod +x ${path.relative(this.projectRoot, executablePath)}`);
+        }
+    }
+
+    getTempFileName(tool) {
+        return path.basename(new URL(tool.url).pathname);
+    }
+
     async processTool(tool, index, total) {
         const progress = `[${index + 1}/${total}]`;
-        console.log(`\n${progress} 处理: ${tool.dist}`);
+        const targetDir = this.getToolRoot(tool);
+
+        console.log(`\n${progress} Processing: ${tool.dist}`);
 
         try {
-            // 生成文件路径
-            const fileName = path.basename(tool.url);
-            const tempFilePath = path.join(this.tempDir, fileName);
-            const targetDir = path.join(this.toolsDir, tool.dist);
-
-            // 检查是否已存在
-            if (fs.existsSync(targetDir)) {
-                console.log(`⏭️  跳过 ${tool.dist} (已存在)`);
+            if (this.isToolInstalled(tool)) {
+                console.log(`Skip ${tool.dist} (already installed)`);
                 return { success: true, skipped: true };
             }
 
-            // 下载
+            const tempFilePath = path.join(this.tempDir, this.getTempFileName(tool));
             await this.downloadFile(tool.url, tempFilePath);
 
-            // 创建目标目录
             this.ensureDir(targetDir);
 
-            // 判断是否需要解压
             if (this.isArchiveFile(tempFilePath)) {
-                // 解压文件
-                await this.extractFile(tempFilePath, targetDir);
+                this.extractFile(tempFilePath, targetDir);
             } else {
-                // 直接复制文件
-                await this.copyFile(tempFilePath, targetDir);
+                this.copyFile(tempFilePath, targetDir, tool.fileName);
             }
 
-            // 清理临时文件
-            fs.unlinkSync(tempFilePath);
+            this.applyMoves(tool, targetDir);
+            this.ensureExecutables(tool, targetDir);
 
-            console.log(`✅ ${tool.dist} 处理完成`);
+            if (fs.existsSync(tempFilePath)) {
+                fs.unlinkSync(tempFilePath);
+            }
+
+            console.log(`${tool.dist} is ready`);
             return { success: true, skipped: false };
-
         } catch (error) {
-            console.error(`❌ ${tool.dist} 处理失败:`, error.message);
+            console.error(`${tool.dist} failed: ${error.message}`);
             return { success: false, error: error.message };
         }
     }
 
-    // 清理临时目录
     cleanupTempDir() {
-        if (fs.existsSync(this.tempDir)) {
-            try {
-                const files = fs.readdirSync(this.tempDir);
-                if (files.length === 0) {
-                    fs.rmdirSync(this.tempDir);
-                    console.log('🧹 清理临时目录');
-                } else {
-                    console.log(`⚠️  临时目录中还有 ${files.length} 个文件未清理`);
-                }
-            } catch (error) {
-                console.log(`⚠️  清理临时目录失败: ${error.message}`);
+        if (!fs.existsSync(this.tempDir)) {
+            return;
+        }
+
+        try {
+            const files = fs.readdirSync(this.tempDir);
+            if (files.length === 0) {
+                fs.rmdirSync(this.tempDir);
+                console.log('Cleaned temporary directory');
+            } else {
+                console.log(`Temporary directory still contains ${files.length} file(s)`);
             }
+        } catch (error) {
+            console.log(`Failed to clean temporary directory: ${error.message}`);
         }
     }
 
-    // 主函数
     async run() {
-        console.log(`🖥️  当前平台: ${this.platform}`);
+        console.log(`Current platform: ${this.platform}`);
 
-        // 检查解压工具
         if (!this.checkExtractTools()) {
-            console.error('❌ 缺少解压工具，请安装 unzip (macOS/Linux) 或确保 PowerShell 可用 (Windows)');
+            console.error('Missing extract tool. Install unzip on Linux/macOS or make sure PowerShell is available on Windows.');
             process.exit(1);
         }
 
-        // 创建目录
         this.ensureDir(this.tempDir);
         this.ensureDir(this.toolsDir);
 
-        // 获取工具列表
         const platformTools = tools[this.platform] || [];
         const commonTools = tools.common || [];
         const allTools = [...platformTools, ...commonTools];
 
-        console.log(`📋 需要下载 ${allTools.length} 个工具文件\n`);
+        console.log(`Need to process ${allTools.length} tool item(s)\n`);
 
         let successCount = 0;
         let skipCount = 0;
         let failCount = 0;
 
-        // 处理每个工具
         for (let i = 0; i < allTools.length; i++) {
             const result = await this.processTool(allTools[i], i, allTools.length);
 
@@ -404,34 +502,23 @@ class ToolDownloader {
             }
         }
 
-        // 清理临时目录
         this.cleanupTempDir();
 
-        // 显示统计信息
-        console.log(`\n🎉 处理完成!`);
-        console.log(`✅ 成功: ${successCount}`);
-        console.log(`⏭️ 跳过: ${skipCount}`);
-        console.log(`❌ 失败: ${failCount}`);
+        console.log('\nProcess complete');
+        console.log(`Success: ${successCount}`);
+        console.log(`Skipped: ${skipCount}`);
+        console.log(`Failed: ${failCount}`);
 
         if (failCount > 0) {
-            console.log(`\n💡 提示:`);
-            console.log(`   - 失败的下载可能是网络问题或文件不存在`);
-            console.log(`   - 可以重新运行脚本重试: npm run download-tools`);
-            console.log(`   - 某些工具可能不是必需的，可以继续使用其他功能`);
-
-            // 不强制退出，让用户决定是否继续
-            console.log(`\n⚠️  有 ${failCount} 个工具下载失败，但脚本将继续完成`);
-        } else {
-            console.log(`\n🎊 所有工具下载成功！`);
+            console.log('\nSome downloads failed. You can rerun `npm run download-tools` after fixing network or source issues.');
         }
     }
 }
 
-// 运行脚本
 if (require.main === module) {
     const downloader = new ToolDownloader();
     downloader.run().catch((error) => {
-        console.error('❌ 脚本执行失败:', error.message);
+        console.error('download-tools.js failed:', error.message);
         process.exit(1);
     });
 }

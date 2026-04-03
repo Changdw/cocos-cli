@@ -5,7 +5,7 @@ import { AssetHandlerBase } from '../../../@types/protected';
 import { createReadStream, createWriteStream, ensureDirSync, existsSync, readdirSync, removeSync } from 'fs-extra';
 import { dirname, join, parse } from 'path';
 import utils from '../../../../base/utils';
-import { GlobalPaths } from '../../../../../global';
+import { resolveUnzipTool } from '../utils/unzip';
 
 export const InstantiationAssetHandler: AssetHandlerBase = {
     // Handler 的名字，用于指定 Handler as 等
@@ -25,7 +25,7 @@ export const InstantiationAssetHandler: AssetHandlerBase = {
         async import(asset: Asset) {
             const temp = join(asset._assetDB.options.temp, asset.uuid);
 
-            const uzipTool = process.platform === 'darwin' ? 'unzip' : join(GlobalPaths.staticDir, 'tools/unzip.exe');
+            const uzipTool = resolveUnzipTool();
 
             await utils.Process.quickSpawn(uzipTool, [asset.source, '-d', temp]);
 

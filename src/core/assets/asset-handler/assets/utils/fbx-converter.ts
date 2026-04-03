@@ -5,6 +5,32 @@ import fs, { pathExists } from 'fs-extra';
 import cp from 'child_process';
 import { i18nTranslate, linkToAssetTarget } from '../../utils';
 import { I18nKeys } from '../../../../../i18n/types/generated';
+import { resolveExecutable } from './tool-resolver';
+import { GlobalPaths } from '../../../../../global';
+
+export function hasFbxGlTfConvTool() {
+    return Boolean(resolveFbxGlTfConvTool());
+}
+
+function resolveFbxGlTfConvTool() {
+    const fileCandidates =
+        process.platform === 'linux'
+            ? [
+                ps.join(GlobalPaths.staticDir, 'tools', 'FBX-glTF-conv', 'FBX-glTF-conv'),
+                ps.join(GlobalPaths.staticDir, 'tools', 'FBX-glTF-conv', 'linux', 'FBX-glTF-conv'),
+            ]
+            : (() => {
+                const packageJsonPath = require.resolve('@cocos/fbx-gltf-conv/package.json');
+                const packageDir = ps.dirname(packageJsonPath);
+                return process.platform === 'win32'
+                    ? [ps.join(packageDir, 'bin', 'win32', 'FBX-glTF-conv.exe')]
+                    : [ps.join(packageDir, 'bin', 'darwin', 'FBX-glTF-conv')];
+            })();
+
+    return resolveExecutable({
+        fileCandidates,
+    });
+}
 
 export function createFbxConverter(options: {
     unitConversion?: 'geometry-level' | 'hierarchy-level' | 'disabled';
@@ -14,7 +40,15 @@ export function createFbxConverter(options: {
     matchMeshNames?: boolean;
 }): IAbstractConverter<string> {
     const outFileName = 'out.gltf';
-    let { tool: toolPath } = require('@cocos/fbx-gltf-conv');
+    let toolPath = resolveFbxGlTfConvTool();
+
+    if (!toolPath) {
+        throw new Error(
+            process.platform === 'linux'
+                ? 'Unable to locate FBX-glTF-conv. Place the Linux binary under `static/tools/FBX-glTF-conv/` or provide `static/tools/FBX2glTF/FBX2glTF` so Linux can fall back to FBX2glTF.'
+                : 'Unable to locate FBX-glTF-conv.',
+        );
+    }
 
     const temp = toolPath.replace('app.asar', 'app.asar.unpacked');
     if (fs.existsSync(temp)) {
@@ -34,7 +68,7 @@ export function createFbxConverter(options: {
             const cliArgs: string[] = [];
 
             // <input file>
-            cliArgs.push(quotPathArg(asset.source));
+            cliArgs.push(asset.source);
 
             // --unit-conversion
             cliArgs.push('--unit-conversion', options.unitConversion ?? 'geometry-level');
@@ -56,17 +90,17 @@ export function createFbxConverter(options: {
             // --out
             const outFile = ps.join(outputDir, outFileName);
             await fs.ensureDir(ps.dirname(outFile));
-            cliArgs.push('--out', quotPathArg(outFile));
+            cliArgs.push('--out', outFile);
 
             // --fbm-dir
             const fbmDir = ps.join(outputDir, '.fbm');
             await fs.ensureDir(fbmDir);
-            cliArgs.push('--fbm-dir', quotPathArg(fbmDir));
+            cliArgs.push('--fbm-dir', fbmDir);
 
             // --log-file
             const logFile = getLogFile(outputDir);
             await fs.ensureDir(ps.dirname(logFile));
-            cliArgs.push('--log-file', quotPathArg(logFile));
+            cliArgs.push('--log-file', logFile);
 
             let callOk = await callFbxGLTFConv(toolPath, cliArgs, outputDir);
             if (callOk && !(await pathExists(outFile))) {
@@ -101,15 +135,10 @@ export function createFbxConverter(options: {
         },
     };
 
-    function quotPathArg(p: string) {
-        return `"${p}"`;
-    }
-
     function callFbxGLTFConv(tool: string, args: string[], cwd: string) {
         return new Promise<boolean>((resolve, reject) => {
-            const child = cp.spawn(quotPathArg(tool), args, {
+            const child = cp.spawn(tool, args, {
                 cwd,
-                shell: true,
             });
 
             let output = '';

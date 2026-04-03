@@ -8,10 +8,11 @@ import { fork } from 'child_process';
 import path from 'path';
 import { GlobalPaths } from '../../../../../global';
 import assetConfig from '../../../asset-config';
-import { createFbxConverter } from '../utils/fbx-converter';
+import { createFbxConverter, hasFbxGlTfConvTool } from '../utils/fbx-converter';
 import { modelConvertRoutine } from '../utils/model-convert-routine';
 import { fbxToGlTf } from './fbx-to-gltf';
 import { I18nKeys } from '../../../../../i18n/types/generated';
+import { hasFbx2GltfTool } from '../utils/fbx2glTf';
 
 class GlTfReaderManager {
     private _map = new Map<string, GltfConverter>();
@@ -49,7 +50,12 @@ export async function getFbxFilePath(asset: Asset, importerVersion: string,) {
         (userData.fbx ??= {}).smartMaterialEnabled = await assetConfig.getProject<boolean>('fbx.material.smart') ?? false;
     }
     let outGLTFFile: string;
-    if (userData.legacyFbxImporter) {
+    const shouldUseLegacyImporter = userData.legacyFbxImporter
+        || (process.platform === 'linux' && !hasFbxGlTfConvTool() && hasFbx2GltfTool());
+    if (shouldUseLegacyImporter) {
+        if (!userData.legacyFbxImporter && process.platform === 'linux') {
+            console.warn('FBX-glTF-conv is unavailable on Linux, fallback to FBX2glTF.');
+        }
         outGLTFFile = await fbxToGlTf(asset, asset._assetDB, importerVersion);
     } else {
         const options: Parameters<typeof createFbxConverter>[0] = {};

@@ -9,6 +9,12 @@ import os from 'os';
 import path from 'path';
 import rimraf from 'rimraf';
 import { i18nTranslate } from '../../utils';
+import { resolveExecutable } from './tool-resolver';
+import { GlobalPaths } from '../../../../../global';
+
+export function hasFbx2GltfTool() {
+    return Boolean(resolveFbx2GltfTool());
+}
 
 /**
  * Converts an FBX to a GTLF or GLB file.
@@ -22,18 +28,14 @@ import { i18nTranslate } from '../../utils';
 export function convert(srcFile: string, destFile: string, opts: string[] = []) {
     return new Promise((resolve, reject) => {
         try {
-            const fbx2gltfRoot = path.dirname(require.resolve('@cocos/fbx2gltf'));
+            const tool = resolveFbx2GltfTool();
 
-            const binExt = os.type() === 'Windows_NT' ? '.exe' : '';
-            let tool = path.join(fbx2gltfRoot, 'bin', os.type(), 'FBX2glTF' + binExt);
-
-            const temp = tool.replace('app.asar', 'app.asar.unpacked');
-            if (fs.existsSync(temp)) {
-                tool = temp;
-            }
-
-            if (!fs.existsSync(tool)) {
-                throw new Error(`Unsupported OS: ${os.type()}`);
+            if (!tool) {
+                throw new Error(
+                    os.type() === 'Linux'
+                        ? 'Unable to locate FBX2glTF. Place the Linux binary at `static/tools/FBX2glTF/FBX2glTF`.'
+                        : 'Unable to locate FBX2glTF.',
+                );
             }
 
             let destExt = '';
@@ -99,5 +101,28 @@ export function convert(srcFile: string, destFile: string, opts: string[] = []) 
         } catch (error) {
             reject(error);
         }
+    });
+}
+
+function resolveFbx2GltfTool() {
+    const binExt = os.type() === 'Windows_NT' ? '.exe' : '';
+    const fileCandidates = [
+        path.join(GlobalPaths.staticDir, 'tools', 'FBX2glTF', 'FBX2glTF' + binExt),
+    ];
+
+    if (os.type() === 'Linux') {
+        fileCandidates.push(path.join(GlobalPaths.staticDir, 'tools', 'FBX2glTF', 'linux', 'FBX2glTF'));
+    } else {
+        const fbx2gltfRoot = path.dirname(require.resolve('@cocos/fbx2gltf'));
+        let tool = path.join(fbx2gltfRoot, 'bin', os.type(), 'FBX2glTF' + binExt);
+        const temp = tool.replace('app.asar', 'app.asar.unpacked');
+        if (fs.existsSync(temp)) {
+            tool = temp;
+        }
+        fileCandidates.push(tool);
+    }
+
+    return resolveExecutable({
+        fileCandidates,
     });
 }
