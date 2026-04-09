@@ -11,6 +11,7 @@ export function resolveUnzipTool(): string {
             join(GlobalPaths.staticDir, 'tools', 'unzip.exe', 'unzip.exe'),
         ]
         : [
+            join(GlobalPaths.staticDir, 'tools', 'unzip', 'unzip'),
             join(GlobalPaths.staticDir, 'tools', 'unzip'),
             join(GlobalPaths.staticDir, 'tools', 'unzip', 'bin', 'unzip'),
         ];
@@ -26,6 +27,6 @@ export function resolveUnzipTool(): string {
     throw new Error(
         process.platform === 'win32'
             ? 'Unable to locate unzip.exe. Place it under `static/tools/unzip.exe/`.'
-            : 'Unable to locate unzip. Place the Linux binary under `static/tools/unzip/`.',
+            : 'Unable to locate unzip. Place the Linux binary under `static/tools/unzip/` (for example `static/tools/unzip/unzip`).',
     );
 }
