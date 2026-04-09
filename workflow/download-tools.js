@@ -101,18 +101,24 @@ const tools = {
     ],
     linux: [
         {
-            url: 'https://github.com/dariomanesku/cmft-bin/raw/master/cmft_lin64.zip',
-            dist: 'cmft',
-            outputs: ['linux/cmftRelease64'],
-            moves: [
-                { from: 'cmft', to: 'linux/cmftRelease64' },
-            ],
-            executables: ['linux/cmftRelease64'],
+            url: 'http://download.cocos.com/CocosSDK/tools/unzip-linux',
+            dist: 'unzip',
+            fileName: 'unzip',
+            outputs: ['unzip'],
+            executables: ['unzip'],
         },
         {
-            url: 'https://github.com/facebookincubator/FBX2glTF/releases/download/v0.9.7/FBX2glTF-linux-x64',
+            url: 'http://download.cocos.com/CocosSDK/tools/cmft-linux.zip',
+            dist: 'cmft',
+            outputs: ['cmftRelease64'],
+            moves: [
+                { from: 'cmft', to: 'cmftRelease64' },
+            ],
+            executables: ['cmftRelease64'],
+        },
+        {
+            url: 'http://download.cocos.com/CocosSDK/tools/FBX2glTF-linux.zip',
             dist: 'FBX2glTF',
-            fileName: 'FBX2glTF',
             outputs: ['FBX2glTF'],
             executables: ['FBX2glTF'],
         },
@@ -148,15 +154,16 @@ class ToolDownloader {
         }
 
         const candidates = [
+            'unzip',
+            path.join(this.toolsDir, 'unzip', 'unzip'),
             path.join(this.toolsDir, 'unzip'),
             path.join(this.toolsDir, 'unzip', 'bin', 'unzip'),
-            'unzip',
         ];
 
         for (const candidate of candidates) {
             try {
                 if (candidate.includes(path.sep)) {
-                    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+                    if (this.isExecutable(candidate)) {
                         return candidate;
                     }
                     continue;
@@ -470,17 +477,30 @@ class ToolDownloader {
     async run() {
         console.log(`Current platform: ${this.platform}`);
 
-        if (!this.checkExtractTools()) {
-            console.error('Missing extract tool. Install unzip on Linux/macOS or make sure PowerShell is available on Windows.');
-            process.exit(1);
-        }
-
         this.ensureDir(this.tempDir);
         this.ensureDir(this.toolsDir);
 
         const platformTools = tools[this.platform] || [];
         const commonTools = tools.common || [];
         const allTools = [...platformTools, ...commonTools];
+        const hasArchiveTools = allTools.some((tool) => this.isArchiveFile(this.getTempFileName(tool)));
+
+        if (this.platform === 'linux' && hasArchiveTools && !this.checkExtractTools()) {
+            const bootstrapTool = platformTools[0];
+            if (bootstrapTool && !this.isArchiveFile(this.getTempFileName(bootstrapTool))) {
+                console.log(`No extract tool detected. Bootstrapping: ${bootstrapTool.dist}`);
+                const result = await this.processTool(bootstrapTool, 0, 1);
+                if (!result.success) {
+                    console.error(`Failed to bootstrap extract tool: ${bootstrapTool.dist}`);
+                    process.exit(1);
+                }
+            }
+        }
+
+        if (hasArchiveTools && !this.checkExtractTools()) {
+            console.error('Missing extract tool. Install unzip on macOS, make sure PowerShell is available on Windows, or provide the Linux bootstrap unzip from the download server.');
+            process.exit(1);
+        }
 
         console.log(`Need to process ${allTools.length} tool item(s)\n`);
 
