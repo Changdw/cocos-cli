@@ -1,4 +1,5 @@
 import { join } from 'path';
+import { existsSync, readdirSync } from 'fs';
 import { AssetDBRegisterInfo } from './@types/private';
 import { configurationRegistry, ConfigurationScope, IBaseConfiguration } from '../configuration';
 import project from '../project';
@@ -93,6 +94,39 @@ class AssetConfig {
             visible: true,
             library: join(enginePath, 'editor/library'),
         }];
+
+        // Scan project extensions for asset-db mount contributions and register their db:// domains
+        const extensionsDir = join(this._assetConfig.root, 'extensions');
+        if (existsSync(extensionsDir)) {
+            try {
+                const entries = readdirSync(extensionsDir, { withFileTypes: true });
+                for (const entry of entries) {
+                    if (!entry.isDirectory()) continue;
+                    const extDir = join(extensionsDir, entry.name);
+                    const pkgJsonPath = join(extDir, 'package.json');
+                    if (!existsSync(pkgJsonPath)) continue;
+                    try {
+                        const pkgJson = JSON.parse(require('fs').readFileSync(pkgJsonPath, 'utf8'));
+                        const mount = pkgJson?.contributions?.['asset-db']?.mount;
+                        if (!mount?.path) continue;
+                        const mountTarget = join(extDir, mount.path);
+                        if (!existsSync(mountTarget)) continue;
+                        this._assetConfig.assetDBList.push({
+                            name: pkgJson.name || entry.name,
+                            target: mountTarget,
+                            readonly: mount.readonly ?? true,
+                            visible: mount.visible ?? false,
+                            library: join(this._assetConfig.root, `library/cli-extensions/${pkgJson.name || entry.name}`),
+                        });
+                    } catch {
+                        // Skip extensions with invalid package.json
+                    }
+                }
+            } catch {
+                // Ignore errors scanning extensions directory
+            }
+        }
+
         this._init = true;
     }
 
