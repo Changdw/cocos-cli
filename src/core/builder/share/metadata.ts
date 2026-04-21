@@ -1,5 +1,6 @@
 import lodash from 'lodash';
 import type { IBuildCacheUseConfig } from '../@types';
+import type { BuildConfiguration } from '../@types/config-export';
 import type { ICocosConfigurationNode, IConfigurationItem } from '../../configuration/script/metadata';
 import {
     convertConfigItem,
@@ -12,6 +13,8 @@ import {
 interface IBuilderMetadataSource {
     commonOptionConfigs: Record<string, IConfigurationItem>;
     useCacheDefaults: IBuildCacheUseConfig;
+    bundleConfigDefault?: BuildConfiguration['bundleConfig'];
+    textureCompressConfigDefault?: BuildConfiguration['textureCompressConfig'];
     commonOptionConfig: Record<string, Record<string, IConfigurationItem>>;
     configMap: Record<string, Record<string, {
         displayName?: string;
@@ -20,13 +23,28 @@ interface IBuilderMetadataSource {
     platformTitles: Record<string, string>;
 }
 
+const DEFAULT_BUNDLE_CONFIG: BuildConfiguration['bundleConfig'] = {
+    custom: {},
+};
+
+const DEFAULT_TEXTURE_COMPRESS_CONFIG: BuildConfiguration['textureCompressConfig'] = {
+    userPreset: {},
+    defaultConfig: {},
+    customConfigs: {},
+    genMipmaps: false,
+};
+
 export function createBuilderCoreMetadataNodes(
     commonOptionConfigs: Record<string, IConfigurationItem>,
-    useCacheDefaults: IBuildCacheUseConfig
+    useCacheDefaults: IBuildCacheUseConfig,
+    bundleConfigDefault: BuildConfiguration['bundleConfig'],
+    textureCompressConfigDefault: BuildConfiguration['textureCompressConfig']
 ): ICocosConfigurationNode[] {
     return [
         createBuilderCommonNode(commonOptionConfigs, 11),
         createBuilderUseCacheNode(useCacheDefaults, 12),
+        createBuilderTextureCompressNode(textureCompressConfigDefault, 13),
+        createBuilderBundleConfigNode(bundleConfigDefault, 14),
     ];
 }
 
@@ -42,7 +60,9 @@ export function createBuilderPlatformMetadataNodes(
 export function createBuilderMetadataNodes(source: IBuilderMetadataSource): ICocosConfigurationNode[] {
     const nodes: ICocosConfigurationNode[] = createBuilderCoreMetadataNodes(
         source.commonOptionConfigs,
-        source.useCacheDefaults
+        source.useCacheDefaults,
+        source.bundleConfigDefault ?? DEFAULT_BUNDLE_CONFIG,
+        source.textureCompressConfigDefault ?? DEFAULT_TEXTURE_COMPRESS_CONFIG
     );
 
     const registeredPlatforms = Object.keys(source.configMap);
@@ -93,6 +113,32 @@ function createBuilderUseCacheNode(
             default: defaults.autoAtlas,
             title: 'i18n:configuration.builder.useCache.autoAtlas.title',
         },
+    }, order);
+}
+
+function createBuilderTextureCompressNode(
+    defaults: BuildConfiguration['textureCompressConfig'],
+    order: number
+): ICocosConfigurationNode {
+    return createNode('builder.textureCompressConfig', 'i18n:configuration.builder.textureCompressConfig.title', 'builder', {
+        'builder.textureCompressConfig': objectSchema(undefined, {
+            default: defaults,
+            title: 'i18n:configuration.builder.textureCompressConfig.title',
+            description: 'i18n:configuration.builder.textureCompressConfig.description',
+        }),
+    }, order);
+}
+
+function createBuilderBundleConfigNode(
+    defaults: BuildConfiguration['bundleConfig'],
+    order: number
+): ICocosConfigurationNode {
+    return createNode('builder.bundleConfig', 'i18n:configuration.builder.bundleConfig.title', 'builder', {
+        'builder.bundleConfig': objectSchema(undefined, {
+            default: defaults,
+            title: 'i18n:configuration.builder.bundleConfig.title',
+            description: 'i18n:configuration.builder.bundleConfig.description',
+        }),
     }, order);
 }
 

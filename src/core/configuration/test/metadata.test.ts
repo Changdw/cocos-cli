@@ -119,8 +119,19 @@ describe('configuration metadata', () => {
         await runtime.pluginManager.init();
 
         const beforePlatformRegister = await runtime.getMetadata();
+        const textureCompressNode = findNode(beforePlatformRegister, 'builder.textureCompressConfig');
+        const bundleConfigNode = findNode(beforePlatformRegister, 'builder.bundleConfig');
+        const textureCompressProperty = findProperty(textureCompressNode, 'builder.textureCompressConfig');
+        const bundleConfigProperty = findProperty(bundleConfigNode, 'builder.bundleConfig');
+
         expect(findNode(beforePlatformRegister, 'builder.common')).toBeDefined();
         expect(findNode(beforePlatformRegister, 'builder.useCacheConfig')).toBeDefined();
+        expect(textureCompressProperty.type).toBe('object');
+        expect(textureCompressProperty.default).toEqual(runtime.builderConfig.getDefaultConfig().textureCompressConfig);
+        expect(textureCompressProperty.properties).toBeUndefined();
+        expect(bundleConfigProperty.type).toBe('object');
+        expect(bundleConfigProperty.default).toEqual(runtime.builderConfig.getDefaultConfig().bundleConfig);
+        expect(bundleConfigProperty.properties).toBeUndefined();
         expect(tryFindNode(beforePlatformRegister, 'builder.platforms.web-mobile')).toBeUndefined();
 
         await runtime.pluginManager.register('web-mobile');

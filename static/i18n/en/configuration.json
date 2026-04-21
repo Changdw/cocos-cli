@@ -18,6 +18,14 @@
         "title": "Auto Atlas Cache"
       }
     },
+    "textureCompressConfig": {
+      "title": "Texture Compression Settings",
+      "description": "Texture compression presets and custom configurations"
+    },
+    "bundleConfig": {
+      "title": "Bundle Settings",
+      "description": "Custom Bundle build configurations"
+    },
     "platform": {
       "configSuffix": "Platform Settings",
       "outputName": {

@@ -18,6 +18,14 @@
         "title": "自动合图缓存"
       }
     },
+    "textureCompressConfig": {
+      "title": "纹理压缩配置",
+      "description": "纹理压缩预设和自定义配置"
+    },
+    "bundleConfig": {
+      "title": "Bundle 配置",
+      "description": "自定义 Bundle 构建配置"
+    },
     "platform": {
       "configSuffix": "平台配置",
       "outputName": {

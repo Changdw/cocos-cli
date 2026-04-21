@@ -493,7 +493,12 @@ class BuilderConfig {
             };
             this._configInstance = await configurationRegistry.register('builder', {
                 defaults: defaultConfig,
-                nodes: () => createBuilderCoreMetadataNodes(this.commonOptionConfigs, useCacheDefaults),
+                nodes: () => createBuilderCoreMetadataNodes(
+                    this.commonOptionConfigs,
+                    useCacheDefaults,
+                    defaultConfig.bundleConfig,
+                    defaultConfig.textureCompressConfig
+                ),
             });
         } catch (error) {
             this._init = false;
