@@ -1,5 +1,5 @@
 import type { IConfiguration, ConfigurationScope } from '../../core/configuration/script/interface';
-import { ICocosConfigurationNode } from '../../core/configuration/script/metadata';
+import type { ICocosConfigurationNode } from '../../core/configuration/script/metadata';
 
 export { IConfiguration, ConfigurationScope } from '../../core/configuration/script/interface';
 export { IBaseConfiguration } from '../../core/configuration/script/config';
@@ -50,7 +50,6 @@ export async function save(force?: boolean): Promise<void> {
 export { ICocosConfigurationNode, ICocosConfigurationPropertySchema } from '../../core/configuration/script/metadata';
 
 export async function getMetadata(): Promise<ICocosConfigurationNode[]> {
-    const { getCocosConfigNodes } = await import('../../core/configuration/script/metadata');
-    return getCocosConfigNodes();
+    const { configurationRegistry } = await import('../../core/configuration');
+    return configurationRegistry.getMetadata();
 }
-

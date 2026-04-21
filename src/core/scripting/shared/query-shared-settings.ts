@@ -8,6 +8,7 @@ import { existsSync } from 'fs';
 import { configurationRegistry, ConfigurationScope, IBaseConfiguration } from '../../configuration';
 import Utils from '../../base/utils';
 import { ScriptProjectConfig } from '../@types/config-export';
+import { createScriptMetadataNodes } from './metadata';
 
 export interface SharedSettings extends Pick<ScriptProjectConfig, 'useDefineForClassFields' | 'allowDeclareFields' | 'loose' | 'guessCommonJsExports' | 'exportsConditions'> {
     useDefineForClassFields: boolean;
@@ -50,7 +51,10 @@ class ScriptConfig {
         if (this._init) {
             return;
         }
-        this._configInstance = await configurationRegistry.register('script', getDefaultSharedSettings());
+        this._configInstance = await configurationRegistry.register('script', {
+            defaults: getDefaultSharedSettings(),
+            nodes: () => createScriptMetadataNodes(),
+        });
         this._init = true;
     }
 

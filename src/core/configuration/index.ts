@@ -12,4 +12,4 @@ export {
     configurationManager,
 };
 
-export { getCocosConfigNodes, ICocosConfigurationNode, ICocosConfigurationPropertySchema } from './script/metadata';
+export { ICocosConfigurationNode, ICocosConfigurationPropertySchema } from './script/metadata';

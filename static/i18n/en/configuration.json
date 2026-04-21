@@ -1,0 +1,274 @@
+{
+  "builder": {
+    "common": {
+      "title": "Build Common Settings"
+    },
+    "useCache": {
+      "title": "Cache Settings",
+      "serializeData": {
+        "title": "Serialized Data Cache"
+      },
+      "engine": {
+        "title": "Engine Cache"
+      },
+      "textureCompress": {
+        "title": "Texture Compression Cache"
+      },
+      "autoAtlas": {
+        "title": "Auto Atlas Cache"
+      }
+    },
+    "platform": {
+      "configSuffix": "Platform Settings",
+      "outputName": {
+        "title": "Output Name",
+        "description": "The output directory name used by subsequent build tasks"
+      },
+      "packageOptions": {
+        "title": "Build Options"
+      }
+    }
+  },
+  "import": {
+    "title": "Asset Import",
+    "globList": {
+      "title": "Glob List",
+      "description": "Asset import glob matching rules",
+      "itemTitle": "Glob Rule"
+    },
+    "restoreAssetDBFromCache": {
+      "title": "Restore Asset Database from Cache"
+    },
+    "createTemplateRoot": {
+      "title": "Template Root Directory"
+    },
+    "userDataTemplate": {
+      "title": "Asset UserData Template",
+      "description": "Default values for asset userData"
+    },
+    "fbx": {
+      "title": "FBX Import Settings",
+      "legacyFbxImporter": {
+        "title": "Legacy FBX Importer",
+        "visible": {
+          "title": "Show Legacy FBX Importer Toggle"
+        }
+      },
+      "material": {
+        "title": "Material Settings",
+        "smart": {
+          "title": "Smart Material Conversion"
+        }
+      }
+    }
+  },
+  "script": {
+    "title": "Script",
+    "useDefineForClassFields": {
+      "title": "Use defineProperty for class fields"
+    },
+    "allowDeclareFields": {
+      "title": "Allow Declare Fields"
+    },
+    "loose": {
+      "title": "Loose Mode"
+    },
+    "guessCommonJsExports": {
+      "title": "Infer CommonJS Exports",
+      "description": "Whether to automatically infer CommonJS module exports"
+    },
+    "exportsConditions": {
+      "title": "Export Conditions"
+    },
+    "preserveSymlinks": {
+      "title": "Preserve Symlinks"
+    },
+    "importMap": {
+      "title": "Import Map"
+    },
+    "previewBrowserslistConfigFile": {
+      "title": "Preview Browserslist Config File"
+    },
+    "updateAutoUpdateImportConfig": {
+      "title": "Auto Update Import Configuration"
+    }
+  },
+  "engine": {
+    "dynamic": {
+      "includeModules": {
+        "title": "Included Modules",
+        "description": "Feature modules included in the engine",
+        "itemTitle": "Module"
+      },
+      "flags": {
+        "title": "Feature Flags",
+        "description": "Engine feature toggles"
+      }
+    },
+    "physicsConfig": {
+      "title": "Physics Settings",
+      "gravity": {
+        "title": "Gravity",
+        "description": "Gravity vector for the physics world"
+      },
+      "allowSleep": {
+        "title": "Allow Sleep",
+        "description": "Whether rigid bodies are allowed to sleep"
+      },
+      "sleepThreshold": {
+        "title": "Sleep Threshold",
+        "description": "Velocity threshold for a rigid body to enter sleep"
+      },
+      "autoSimulation": {
+        "title": "Auto Simulation",
+        "description": "Whether physics simulation runs automatically"
+      },
+      "fixedTimeStep": {
+        "title": "Fixed Time Step",
+        "description": "Fixed time step for physics simulation (seconds)"
+      },
+      "maxSubSteps": {
+        "title": "Max Substeps",
+        "description": "Maximum physics substeps per frame"
+      },
+      "useNodeChains": {
+        "title": "Use Node Chains"
+      },
+      "physicsEngine": {
+        "title": "Physics Engine",
+        "description": "Physics backend in use"
+      },
+      "collisionMatrix": {
+        "title": "Collision Matrix",
+        "description": "Collision group matrix"
+      },
+      "defaultMaterial": {
+        "title": "Default Physics Material",
+        "description": "UUID of the default physics material"
+      },
+      "physX": {
+        "title": "PhysX Settings",
+        "description": "PhysX engine settings"
+      }
+    },
+    "designResolution": {
+      "title": "Design Resolution",
+      "width": {
+        "title": "Width"
+      },
+      "height": {
+        "title": "Height"
+      },
+      "fitWidth": {
+        "title": "Fit Width"
+      },
+      "fitHeight": {
+        "title": "Fit Height"
+      }
+    },
+    "splashScreen": {
+      "title": "Splash Screen",
+      "displayRatio": {
+        "title": "Display Ratio"
+      },
+      "totalTime": {
+        "title": "Display Duration (ms)"
+      },
+      "watermarkLocation": {
+        "title": "Watermark Location",
+        "options": {
+          "default": "Default",
+          "topLeft": "Top Left",
+          "topRight": "Top Right",
+          "topCenter": "Top Center",
+          "bottomLeft": "Bottom Left",
+          "bottomCenter": "Bottom Center",
+          "bottomRight": "Bottom Right"
+        }
+      },
+      "autoFit": {
+        "title": "Auto Fit"
+      },
+      "logo": {
+        "title": "Logo Settings"
+      },
+      "background": {
+        "title": "Background Settings"
+      }
+    },
+    "moduleConfig": {
+      "title": "Module Settings",
+      "noDeprecatedFeatures": {
+        "title": "Disable Deprecated Features",
+        "description": "Whether deprecated features are disabled"
+      }
+    },
+    "rendering": {
+      "title": "Rendering",
+      "renderPipeline": {
+        "title": "Render Pipeline",
+        "description": "UUID of the render pipeline"
+      },
+      "customPipeline": {
+        "title": "Custom Pipeline",
+        "description": "Whether to use a custom render pipeline"
+      },
+      "highQuality": {
+        "title": "High Quality"
+      },
+      "downloadMaxConcurrency": {
+        "title": "Max Download Concurrency"
+      },
+      "customJointTextureLayouts": {
+        "title": "Custom Joint Texture Layouts",
+        "description": "Custom skeletal animation texture layouts"
+      }
+    },
+    "macroConfig": {
+      "title": "Macro Settings",
+      "macroCustom": {
+        "title": "Custom Macros",
+        "description": "Custom macro list",
+        "itemTitle": "Custom Macro",
+        "key": {
+          "title": "Macro Name"
+        },
+        "value": {
+          "title": "Macro Value"
+        }
+      }
+    },
+    "layers": {
+      "title": "Layer Settings",
+      "customLayers": {
+        "title": "Custom Layers",
+        "description": "List of custom layers"
+      },
+      "sortingLayers": {
+        "title": "Sorting Layers",
+        "description": "List of sorting layers"
+      }
+    },
+    "projectConfig": {
+      "title": "Project Settings",
+      "globalConfigKey": {
+        "title": "Global Config Key"
+      },
+      "configs": {
+        "title": "Engine Module Configurations"
+      },
+      "configItem": {
+        "title": "Engine Module Configuration"
+      },
+      "noDeprecatedFeatureConfig": {
+        "title": "Deprecated Feature Settings",
+        "value": {
+          "title": "Enabled"
+        },
+        "version": {
+          "title": "Version"
+        }
+      }
+    }
+  }
+}

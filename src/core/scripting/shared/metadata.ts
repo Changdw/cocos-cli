@@ -1,0 +1,55 @@
+import type { ICocosConfigurationNode } from '../../configuration/script/metadata';
+import { createNode } from '../../configuration/script/metadata';
+
+export function createScriptMetadataNodes(): ICocosConfigurationNode[] {
+    return [
+        createNode('script', 'i18n:configuration.script.title', 'script', {
+            'script.useDefineForClassFields': {
+                type: 'boolean',
+                default: true,
+                title: 'i18n:configuration.script.useDefineForClassFields.title',
+            },
+            'script.allowDeclareFields': {
+                type: 'boolean',
+                default: true,
+                title: 'i18n:configuration.script.allowDeclareFields.title',
+            },
+            'script.loose': {
+                type: 'boolean',
+                default: false,
+                title: 'i18n:configuration.script.loose.title',
+            },
+            'script.guessCommonJsExports': {
+                type: 'boolean',
+                default: false,
+                title: 'i18n:configuration.script.guessCommonJsExports.title',
+                description: 'i18n:configuration.script.guessCommonJsExports.description',
+            },
+            'script.exportsConditions': {
+                type: 'array',
+                default: [],
+                title: 'i18n:configuration.script.exportsConditions.title',
+            },
+            'script.preserveSymlinks': {
+                type: 'boolean',
+                default: false,
+                title: 'i18n:configuration.script.preserveSymlinks.title',
+            },
+            'script.importMap': {
+                type: 'string',
+                default: '',
+                title: 'i18n:configuration.script.importMap.title',
+            },
+            'script.previewBrowserslistConfigFile': {
+                type: 'string',
+                default: '',
+                title: 'i18n:configuration.script.previewBrowserslistConfigFile.title',
+            },
+            'script.updateAutoUpdateImportConfig': {
+                type: 'boolean',
+                default: false,
+                title: 'i18n:configuration.script.updateAutoUpdateImportConfig.title',
+            },
+        }, 9),
+    ];
+}

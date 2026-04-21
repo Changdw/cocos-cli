@@ -2,6 +2,8 @@ import { ConfigurationRegistry } from '../script/registry';
 import { BaseConfiguration } from '../script/config';
 import { IBaseConfiguration } from '../script/config';
 import { MessageType } from '../script/interface';
+import type { ICocosConfigurationNode } from '../script/metadata';
+import i18n from '../../base/i18n';
 
 // Mock console.warn to avoid test output noise
 const originalConsoleWarn = console.warn;
@@ -297,6 +299,132 @@ describe('ConfigurationRegistry', () => {
             await registry.register('eventModule', customInstance);
 
             expect(eventSpy).toHaveBeenCalledWith(customInstance);
+        });
+    });
+
+    describe('metadata aggregation', () => {
+        const metadataNode: ICocosConfigurationNode = {
+            id: 'test.metadata',
+            title: 'Test Metadata',
+            group: 'test',
+            properties: {
+                'test-module.enabled': {
+                    type: 'boolean',
+                    default: true,
+                    title: 'Enabled',
+                },
+            },
+        };
+
+        it('should aggregate metadata from registered modules and clear it on unregister', async () => {
+            await registry.register(moduleName, {
+                nodes: [metadataNode],
+            });
+
+            await expect(registry.getMetadata()).resolves.toEqual([metadataNode]);
+            expect(registry.getInstance(moduleName)?.getDefaultConfig()).toEqual({
+                enabled: true,
+            });
+
+            await registry.unregister(moduleName);
+            await expect(registry.getMetadata()).resolves.toEqual([]);
+        });
+
+        it('should allow node contributions to be attached when a module is re-registered later', async () => {
+            await registry.register(moduleName, defaultConfig);
+            await registry.register(moduleName, {
+                nodes: [metadataNode],
+            });
+
+            await expect(registry.getMetadata()).resolves.toEqual([metadataNode]);
+            expect(registry.getInstance(moduleName)?.getDefaultConfig()).toEqual({
+                ...defaultConfig,
+                enabled: true,
+            });
+        });
+
+        it('should merge repeated node contributions for the same module and node id', async () => {
+            await registry.register(moduleName, {
+                nodes: [metadataNode],
+            });
+
+            await registry.register(moduleName, {
+                nodes: [{
+                    id: 'test.metadata',
+                    title: 'Test Metadata',
+                    group: 'test',
+                    properties: {
+                        'test-module.mode': {
+                            type: 'string',
+                            default: 'fast',
+                            title: 'Mode',
+                        },
+                    },
+                }],
+            });
+
+            await expect(registry.getMetadata()).resolves.toEqual([{
+                id: 'test.metadata',
+                title: 'Test Metadata',
+                group: 'test',
+                properties: {
+                    ...metadataNode.properties,
+                    'test-module.mode': {
+                        type: 'string',
+                        default: 'fast',
+                        title: 'Mode',
+                    },
+                },
+            }]);
+            expect(registry.getInstance(moduleName)?.getDefaultConfig()).toEqual({
+                enabled: true,
+                mode: 'fast',
+            });
+        });
+
+        it('should resolve metadata providers using the current global language', async () => {
+            await registry.register(moduleName, {
+                nodes: async () => [{
+                    id: 'test.metadata',
+                    title: i18n._lang === 'en' ? 'Test Metadata' : '测试元数据',
+                    group: 'test',
+                    properties: {
+                        'test-module.enabled': {
+                            type: 'boolean',
+                            default: true,
+                            title: i18n._lang === 'en' ? 'Enabled' : '启用',
+                        },
+                    },
+                }],
+            });
+
+            i18n.setLanguage('zh');
+            await expect(registry.getMetadata()).resolves.toEqual([{
+                id: 'test.metadata',
+                title: '测试元数据',
+                group: 'test',
+                properties: {
+                    'test-module.enabled': {
+                        type: 'boolean',
+                        default: true,
+                        title: '启用',
+                    },
+                },
+            }]);
+
+            i18n.setLanguage('en');
+            await expect(registry.getMetadata()).resolves.toEqual([{
+                id: 'test.metadata',
+                title: 'Test Metadata',
+                group: 'test',
+                properties: {
+                    'test-module.enabled': {
+                        type: 'boolean',
+                        default: true,
+                        title: 'Enabled',
+                    },
+                },
+            }]);
         });
     });
 });

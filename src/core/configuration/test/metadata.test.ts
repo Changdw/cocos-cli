@@ -1,0 +1,241 @@
+import { TestGlobalEnv } from '../../../tests/global-env';
+import type { ICocosConfigurationNode, ICocosConfigurationPropertySchema } from '../script/metadata';
+
+interface IMetadataRuntime {
+    getMetadata: typeof import('../../../lib/configuration/configuration').getMetadata;
+    i18n: typeof import('../../base/i18n').default;
+    project: typeof import('../../project').default;
+    Engine: typeof import('../../engine').Engine;
+    builderConfig: typeof import('../../builder/share/builder-config').default;
+    pluginManager: typeof import('../../builder/manager/plugin').pluginManager;
+    assetConfig: typeof import('../../assets/asset-config').default;
+    scriptConfig: typeof import('../../scripting/shared/query-shared-settings').scriptConfig;
+}
+
+function findNode(nodes: ICocosConfigurationNode[], id: string): ICocosConfigurationNode {
+    const node = nodes.find((item) => item.id === id);
+    if (!node) {
+        throw new Error(`Node not found: ${id}`);
+    }
+    return node;
+}
+
+function findProperty(
+    node: ICocosConfigurationNode,
+    key: string
+): ICocosConfigurationPropertySchema {
+    const property = node.properties[key];
+    if (!property) {
+        throw new Error(`Property not found: ${key}`);
+    }
+    return property;
+}
+
+function tryFindNode(nodes: ICocosConfigurationNode[], id: string): ICocosConfigurationNode | undefined {
+    return nodes.find((item) => item.id === id);
+}
+
+async function loadFreshRuntime(): Promise<IMetadataRuntime> {
+    jest.resetModules();
+    try {
+        const { getMetadata } = require('../../../lib/configuration/configuration') as typeof import('../../../lib/configuration/configuration');
+        const i18n = (require('../../base/i18n') as typeof import('../../base/i18n')).default;
+        const project = (require('../../project') as typeof import('../../project')).default;
+        const { Engine } = require('../../engine') as typeof import('../../engine');
+        const builderConfig = (require('../../builder/share/builder-config') as typeof import('../../builder/share/builder-config')).default;
+        const { pluginManager } = require('../../builder/manager/plugin') as typeof import('../../builder/manager/plugin');
+        const assetConfig = (require('../../assets/asset-config') as typeof import('../../assets/asset-config')).default;
+        const { scriptConfig } = require('../../scripting/shared/query-shared-settings') as typeof import('../../scripting/shared/query-shared-settings');
+
+        return {
+            getMetadata,
+            i18n,
+            project,
+            Engine,
+            builderConfig,
+            pluginManager,
+            assetConfig,
+            scriptConfig,
+        };
+    } catch (error) {
+        // Keep the thrown object visible in Jest output; otherwise some module-load failures render as blank.
+        console.error('loadFreshRuntime failed:', error);
+        throw error;
+    }
+}
+
+describe('configuration metadata', () => {
+    it('should return no metadata before any module has registered metadata', async () => {
+        const { getMetadata } = await loadFreshRuntime();
+
+        await expect(getMetadata()).resolves.toEqual([]);
+    });
+
+    it('should expose engine metadata from the registered engine module using direct config keys', async () => {
+        const runtime = await loadFreshRuntime();
+        await runtime.project.open(TestGlobalEnv.projectRoot);
+        await runtime.Engine.init(TestGlobalEnv.engineRoot);
+
+        const nodes = await runtime.getMetadata();
+        const engineModuleNode = findNode(nodes, 'engine.moduleConfig');
+        const engineMacroNode = findNode(nodes, 'engine.macroConfig');
+        const includeModulesProperty = findProperty(engineModuleNode, 'engine.includeModules');
+        const physXFlagProperty = findProperty(engineModuleNode, 'engine.flags.LOAD_PHYSX_MANUALLY');
+        const macroProperty = findProperty(engineMacroNode, 'engine.macroConfig.ENABLE_TILEDMAP_CULLING');
+
+        expect(includeModulesProperty.type).toBe('array');
+        expect(includeModulesProperty.default).toEqual(runtime.Engine.getConfig(true).includeModules);
+        expect(includeModulesProperty).not.toHaveProperty('scope');
+        expect(physXFlagProperty.type).toBe('boolean');
+        expect(physXFlagProperty).not.toHaveProperty('scope');
+        expect(macroProperty.type).toBe('boolean');
+        expect(macroProperty).not.toHaveProperty('scope');
+        expect(engineMacroNode.properties['engine.macroConfig']).toBeUndefined();
+    });
+
+    it('should describe engine.macroCustom using the customMacroList item structure', async () => {
+        const runtime = await loadFreshRuntime();
+        await runtime.project.open(TestGlobalEnv.projectRoot);
+        await runtime.Engine.init(TestGlobalEnv.engineRoot);
+
+        const nodes = await runtime.getMetadata();
+        const engineMacroNode = findNode(nodes, 'engine.macroConfig');
+        const macroCustomProperty = findProperty(engineMacroNode, 'engine.macroCustom');
+        const macroCustomItemSchema = Array.isArray(macroCustomProperty.items)
+            ? macroCustomProperty.items[0]
+            : macroCustomProperty.items;
+
+        expect(macroCustomProperty.type).toBe('array');
+        expect(macroCustomProperty.default).toEqual(runtime.Engine.getConfig(true).macroCustom);
+        expect(macroCustomItemSchema?.type).toBe('object');
+        expect(macroCustomItemSchema?.properties?.key?.type).toBe('string');
+        expect(macroCustomItemSchema?.properties?.value?.type).toBe('boolean');
+    });
+
+    it('should only expose builder platform metadata after the corresponding platform plugin has registered', async () => {
+        const runtime = await loadFreshRuntime();
+        await runtime.project.open(TestGlobalEnv.projectRoot);
+        await runtime.builderConfig.init();
+        await runtime.pluginManager.init();
+
+        const beforePlatformRegister = await runtime.getMetadata();
+        expect(findNode(beforePlatformRegister, 'builder.common')).toBeDefined();
+        expect(findNode(beforePlatformRegister, 'builder.useCacheConfig')).toBeDefined();
+        expect(tryFindNode(beforePlatformRegister, 'builder.platforms.web-mobile')).toBeUndefined();
+
+        await runtime.pluginManager.register('web-mobile');
+
+        const afterPlatformRegister = await runtime.getMetadata();
+        expect(findNode(afterPlatformRegister, 'builder.platforms.web-mobile')).toBeDefined();
+    });
+
+    it('should expose import and script metadata only after those modules register themselves', async () => {
+        const runtime = await loadFreshRuntime();
+        await runtime.project.open(TestGlobalEnv.projectRoot);
+        await runtime.Engine.init(TestGlobalEnv.engineRoot);
+
+        const beforeRegister = await runtime.getMetadata();
+        expect(tryFindNode(beforeRegister, 'import')).toBeUndefined();
+        expect(tryFindNode(beforeRegister, 'script')).toBeUndefined();
+
+        await runtime.assetConfig.init();
+        await runtime.scriptConfig.init();
+
+        const afterRegister = await runtime.getMetadata();
+        const importNode = findNode(afterRegister, 'import');
+        const scriptNode = findNode(afterRegister, 'script');
+
+        expect(findProperty(importNode, 'import.restoreAssetDBFromCache').type).toBe('boolean');
+        expect(findProperty(scriptNode, 'script.useDefineForClassFields').type).toBe('boolean');
+    });
+
+    it('should keep import defaults aligned with metadata defaults', async () => {
+        const runtime = await loadFreshRuntime();
+        await runtime.project.open(TestGlobalEnv.projectRoot);
+        await runtime.Engine.init(TestGlobalEnv.engineRoot);
+        await runtime.assetConfig.init();
+
+        await expect(runtime.assetConfig.getProject<string[]>('globList', 'default')).resolves.toEqual([]);
+    });
+
+    it('should preserve readable localized titles and descriptions in registered metadata', async () => {
+        const runtime = await loadFreshRuntime();
+        runtime.i18n.setLanguage('zh');
+        await runtime.project.open(TestGlobalEnv.projectRoot);
+        await runtime.Engine.init(TestGlobalEnv.engineRoot);
+        await runtime.builderConfig.init();
+        await runtime.pluginManager.init();
+        await runtime.assetConfig.init();
+        await runtime.scriptConfig.init();
+
+        const nodes = await runtime.getMetadata();
+        const enginePhysicsNode = findNode(nodes, 'engine.physicsConfig');
+        const builderCommonNode = findNode(nodes, 'builder.common');
+        const builderCacheNode = findNode(nodes, 'builder.useCacheConfig');
+        const importNode = findNode(nodes, 'import');
+        const scriptNode = findNode(nodes, 'script');
+
+        expect(enginePhysicsNode.title).toBe('物理配置');
+        expect(findProperty(enginePhysicsNode, 'engine.physicsConfig.gravity').title).toBe('重力');
+        expect(findProperty(enginePhysicsNode, 'engine.physicsConfig.gravity').description).toBe('物理世界重力向量');
+        expect(builderCommonNode.title).toBe('构建通用配置');
+        expect(builderCacheNode.title).toBe('缓存配置');
+        expect(findProperty(builderCacheNode, 'builder.useCacheConfig.textureCompress').title).toBe('纹理压缩缓存');
+        expect(importNode.title).toBe('资源导入');
+        expect(findProperty(importNode, 'import.globList').title).toBe('Glob 列表');
+        expect(findProperty(importNode, 'import.globList').description).toBe('资源导入 glob 匹配规则');
+        expect(scriptNode.title).toBe('脚本');
+        expect(findProperty(scriptNode, 'script.useDefineForClassFields').title).toBe('使用 defineProperty 定义类字段');
+    });
+
+    it('should localize metadata titles after switching the global language', async () => {
+        const runtime = await loadFreshRuntime();
+        runtime.i18n.setLanguage('zh');
+        await runtime.project.open(TestGlobalEnv.projectRoot);
+        await runtime.Engine.init(TestGlobalEnv.engineRoot);
+        await runtime.builderConfig.init();
+        await runtime.pluginManager.init();
+        await runtime.assetConfig.init();
+        await runtime.scriptConfig.init();
+
+        const zhNodes = await runtime.getMetadata();
+        runtime.i18n.setLanguage('en');
+        const enNodes = await runtime.getMetadata();
+
+        expect(findNode(zhNodes, 'script').title).toBe('脚本');
+        expect(findNode(enNodes, 'script').title).toBe('Script');
+        expect(findProperty(findNode(zhNodes, 'builder.common'), 'builder.common.platform').title).toBe('平台');
+        expect(findProperty(findNode(enNodes, 'builder.common'), 'builder.common.platform').title).toBe('Platform');
+        expect(findProperty(findNode(zhNodes, 'import'), 'import.globList').description).toBe('资源导入 glob 匹配规则');
+        expect(findProperty(findNode(enNodes, 'import'), 'import.globList').description).toBe('Asset import glob matching rules');
+    });
+
+    it('should localize fallback engine metadata using the current language', () => {
+        const runtime = jest.requireActual('../../base/i18n') as typeof import('../../base/i18n');
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            runtime.default.setLanguage('en');
+            const { getEngineDynamicConfigContribution } = jest.requireActual('../../engine/dynamic-metadata') as typeof import('../../engine/dynamic-metadata');
+            const { translateMetadataText } = jest.requireActual('../script/metadata') as typeof import('../script/metadata');
+            const contribution = getEngineDynamicConfigContribution({
+                engineRoot: '__missing_engine_root__',
+                fallbackConfig: {
+                    includeModules: ['2d'],
+                    flags: { LOAD_SPINE_MANUALLY: false },
+                    macroConfig: { ENABLE_TILEDMAP_CULLING: true },
+                },
+            });
+            const schemas = contribution.metadata;
+
+            expect(schemas.includeModules.title).toBe('i18n:configuration.engine.dynamic.includeModules.title');
+            expect(schemas.includeModules.description).toBe('i18n:configuration.engine.dynamic.includeModules.description');
+            expect(Array.isArray(schemas.includeModules.default)).toBe(true);
+            expect((schemas.includeModules.items as any)?.title).toBe('i18n:configuration.engine.dynamic.includeModules.itemTitle');
+            expect(translateMetadataText(schemas.includeModules.title)).toBe('Included Modules');
+            expect(translateMetadataText(schemas.includeModules.description)).toBe('Feature modules included in the engine');
+            expect(translateMetadataText((schemas.includeModules.items as any)?.title)).toBe('Module');
+        } finally {
+            warnSpy.mockRestore();
+        }
+    });
+});

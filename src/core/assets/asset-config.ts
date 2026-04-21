@@ -4,6 +4,7 @@ import { AssetDBRegisterInfo } from './@types/private';
 import { configurationRegistry, ConfigurationScope, IBaseConfiguration } from '../configuration';
 import project from '../project';
 import { Engine } from '../engine';
+import { createImportMetadataNodes } from './metadata';
 
 export interface AssetDBConfig {
     restoreAssetDBFromCache: boolean;
@@ -42,6 +43,7 @@ class AssetConfig {
     private _assetConfig: AssetDBConfig = {
         restoreAssetDBFromCache: false,
         flagReimportCheck: false,
+        globList: [],
         assetDBList: [],
         root: '',
         libraryRoot: '',
@@ -70,9 +72,12 @@ class AssetConfig {
             return;
         }
         this._configInstance = await configurationRegistry.register('import', {
-            restoreAssetDBFromCache: this._assetConfig.restoreAssetDBFromCache,
-            globList: this._assetConfig.globList,
-            createTemplateRoot: join(this._assetConfig.root, '.creator/templates'),
+            defaults: {
+                restoreAssetDBFromCache: this._assetConfig.restoreAssetDBFromCache,
+                globList: this._assetConfig.globList ?? [],
+                createTemplateRoot: join(this._assetConfig.root, '.creator/templates'),
+            },
+            nodes: () => createImportMetadataNodes(),
         });
         if (!project.path) {
             throw new Error('Project not found');

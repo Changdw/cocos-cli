@@ -1,10 +1,13 @@
 import fse from 'fs-extra';
 import { EngineInfo } from './@types/public';
 import { IEngineConfig, IEngineProjectConfig, IInitEngineInfo } from './@types/config';
-import { IModuleConfig } from './@types/modules';
+import { IModuleConfig, ModuleRenderConfig } from './@types/modules';
 import { join } from 'path';
+import { cloneDeep } from 'lodash';
 import { configurationRegistry, IBaseConfiguration } from '../configuration';
 import { assetManager } from '../assets';
+import { getEngineDynamicConfigContribution, getEngineRenderConfig } from './dynamic-metadata';
+import { createEngineMetadataNodes } from './metadata';
 
 /**
  * 整合 engine 的一些编译、配置读取等功能
@@ -15,6 +18,7 @@ export interface IEngine {
     getConfig(): IEngineConfig;
     init(enginePath: string): Promise<this>;
     initEngine(info: IInitEngineInfo): Promise<this>;
+    queryRenderConfig(): ModuleRenderConfig;
 }
 
 const layerMask: number[] = [];
@@ -56,10 +60,15 @@ class EngineManager implements IEngine {
             builtin: '',
         }
     };
-    private _config: IEngineConfig = this.defaultConfig;
+    private _defaultConfig: IEngineConfig = this.createFallbackDefaultConfig();
+    private _config: IEngineConfig = cloneDeep(this._defaultConfig);
     private _configInstance!: IBaseConfiguration;
 
     private get defaultConfig(): IEngineConfig {
+        return cloneDeep(this._defaultConfig);
+    }
+
+    private createFallbackDefaultConfig(): IEngineConfig {
         return {
             includeModules: [
                 '2d',
@@ -166,6 +175,25 @@ class EngineManager implements IEngine {
         };
     }
 
+    private resolveDefaultConfig(engineRoot: string): IEngineConfig {
+        const fallbackConfig = this.createFallbackDefaultConfig();
+        const contribution = getEngineDynamicConfigContribution({
+            engineRoot,
+            fallbackConfig: {
+                includeModules: fallbackConfig.includeModules,
+                flags: fallbackConfig.flags,
+                macroConfig: fallbackConfig.macroConfig,
+            },
+        });
+
+        return {
+            ...fallbackConfig,
+            includeModules: contribution.defaults.includeModules,
+            flags: contribution.defaults.flags,
+            macroConfig: contribution.defaults.macroConfig,
+        };
+    }
+
     /**
      * TODO init data in register project modules
      */
@@ -218,7 +246,15 @@ class EngineManager implements IEngine {
         this._info.native.builtin = this._info.native.path = join(enginePath, 'native');
         this._info.version = await import(join(enginePath, 'package.json')).then((pkg) => pkg.version);
         this._info.tmpDir = join(enginePath, '.temp');
-        const configInstance = await configurationRegistry.register('engine', this.defaultConfig);
+        this._defaultConfig = this.resolveDefaultConfig(this._info.typescript.path);
+        this._config = this.defaultConfig;
+        const configInstance = await configurationRegistry.register('engine', {
+            defaults: this.defaultConfig,
+            nodes: () => createEngineMetadataNodes({
+                defaultConfig: this.defaultConfig,
+                engineRoot: this._info.typescript.path,
+            }),
+        });
         this._configInstance = configInstance;
         this._init = true;
         await this.updateConfig();
@@ -426,6 +462,13 @@ class EngineManager implements IEngine {
      */
     queryModuleConfig() {
         return this.moduleConfigCache;
+    }
+
+    queryRenderConfig(): ModuleRenderConfig {
+        if (!this._init) {
+            throw new Error('Engine not init');
+        }
+        return getEngineRenderConfig(this._info.typescript.path);
     }
 }
 

@@ -17,6 +17,7 @@ export interface IBaseConfiguration extends EventEmitterMethods {
      * 默认配置数据
      */
     getDefaultConfig(): Record<string, any> | undefined;
+    mergeDefaultConfig(defaultConfig?: Record<string, any>): void;
 
     /**
      * 获取配置值
@@ -60,13 +61,23 @@ export class BaseConfiguration extends EventEmitter implements IBaseConfiguratio
 
     constructor(
         public readonly moduleName: string,
-        protected readonly defaultConfigs?: Record<string, any>
+        protected defaultConfigs: Record<string, any> = {}
     ) {
         super();
     }
 
     public getDefaultConfig(): Record<string, any> {
-        return this.defaultConfigs || {};
+        return this.defaultConfigs;
+    }
+
+    public mergeDefaultConfig(defaultConfig?: Record<string, any>): void {
+        if (!defaultConfig) {
+            return;
+        }
+        this.defaultConfigs = utils.deepMerge(
+            utils.deepMerge({}, this.defaultConfigs),
+            defaultConfig
+        );
     }
 
     public getAll(scope: ConfigurationScope = 'project'): Record<string, any> | undefined {

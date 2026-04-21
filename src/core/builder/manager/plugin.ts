@@ -12,6 +12,8 @@ import lodash from 'lodash';
 import { configGroups } from '../share/texture-compress';
 import { newConsole } from '../../base/console';
 import builderConfig from '../share/builder-config';
+import { createBuilderPlatformMetadataNodes } from '../share/metadata';
+import { configurationRegistry } from '../../configuration';
 import { GlobalPaths } from '../../../global';
 import { existsSync, readdirSync } from 'fs';
 import utils from '../../base/utils';
@@ -274,6 +276,19 @@ export class PluginManager extends EventEmitter {
 
         this.pkgPriorities[pkgName] = config.priority || 0;
         this.configMap[platform][pkgName] = config;
+        await configurationRegistry.register('builder', {
+            nodes: () => createBuilderPlatformMetadataNodes(platform, {
+                commonOptionConfigs: builderConfig.commonOptionConfigs,
+                useCacheDefaults: {},
+                commonOptionConfig: this.commonOptionConfig,
+                configMap: {
+                    [platform]: this.configMap[platform],
+                },
+                platformTitles: {
+                    [platform]: this.platformConfig[platform]?.name || platform,
+                },
+            }),
+        });
         // 注册 hooks 路径
         if (registerInfo.hooks) {
             config.hooks = registerInfo.hooks;

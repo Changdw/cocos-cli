@@ -15,7 +15,9 @@ class SceneConfig {
     private configInstance!: IBaseConfiguration;
 
     async init() {
-        this.configInstance = await configurationRegistry.register('scene', this.defaultConfig);
+        this.configInstance = await configurationRegistry.register('scene', {
+            defaults: this.defaultConfig,
+        });
     }
 
     public get<T>(path?: string, scope?: ConfigurationScope): Promise<T> {
