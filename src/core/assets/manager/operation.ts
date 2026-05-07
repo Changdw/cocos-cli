@@ -173,6 +173,7 @@ class AssetOperation extends EventEmitter {
             handler: createInfo.handler,
             target,
             overwrite: options?.overwrite ?? false,
+            rename: options?.rename ?? false,
             template: createInfo.template,
             content: options?.content,
         });

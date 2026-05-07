@@ -1,6 +1,6 @@
 'use strict';
 import { join } from 'path';
-import { existsSync, statSync, readJSONSync, writeJSONSync, readFileSync, remove, outputFile } from 'fs-extra';
+import { existsSync, statSync, readJSONSync, writeJSONSync, readFileSync, remove, outputFile, ensureDir } from 'fs-extra';
 import { globalSetup } from '../../test/global-setup';
 import { TestGlobalEnv } from '../../../tests/global-env';
 import { assetManager } from '..';
@@ -83,6 +83,23 @@ describe('测试 db 的操作接口', function () {
             });
             expect(asset).not.toBeNull();
             expect(readFileSync(dest, 'utf8')).toEqual('createAssetOverwrite');
+        });
+
+        it('createAssetByType 传 rename 时，遇到重名会自动生成新文件名', async function () {
+            const baseName = `${name}-create-asset-by-type-rename`;
+            const dest = join(databasePath, baseName);
+            await ensureDir(dest);
+
+            const asset = await assetManager.createAssetByType('directory', databasePath, baseName, {
+                rename: true,
+            });
+
+            expect(asset).not.toBeNull();
+            expect(existsSync(dest)).toBeTruthy();
+            expect(statSync(dest).isDirectory()).toBeTruthy();
+            expect(asset!.file).not.toEqual(dest);
+            expect(existsSync(asset!.file)).toBeTruthy();
+            expect(statSync(asset!.file).isDirectory()).toBeTruthy();
         });
 
         it('创建资源会广播 asset-add 消息', async function () {
