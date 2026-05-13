@@ -64,6 +64,13 @@ export function getEngineRenderConfig(engineRoot: string): ModuleRenderConfig {
     return JSON.parse(readUtf8File(renderConfigPath)) as ModuleRenderConfig;
 }
 
+export function getLocalizedEngineRenderConfig(engineRoot: string): ModuleRenderConfig {
+    const locale = i18n._lang ?? 'zh';
+    const renderConfig = getEngineRenderConfig(engineRoot);
+    const localization = loadLocalization(engineRoot, locale);
+    return localizeRenderConfig(renderConfig, localization);
+}
+
 export function getEngineDynamicConfigContribution(options: IEngineDynamicConfigOptions): IEngineDynamicConfigContribution {
     try {
         const locale = i18n._lang ?? 'zh';
@@ -200,7 +207,53 @@ function resolveLocalizationText(
     const key = value.slice('i18n:'.length);
     const resolved = getByPath(localization, key)
         ?? getByPath(localization, key.split('.').slice(1).join('.'));
-    return typeof resolved === 'string' ? resolved : fallback;
+    if (typeof resolved === 'string') {
+        return resolved;
+    }
+
+    const translatedByI18n = i18n.transI18nName(value);
+    if (translatedByI18n && translatedByI18n !== value) {
+        return translatedByI18n;
+    }
+
+    return fallback;
+}
+
+function localizeRenderConfig(
+    renderConfig: ModuleRenderConfig,
+    localization?: LocalizationValue
+): ModuleRenderConfig {
+    return translateRenderConfigValue(renderConfig, localization);
+}
+
+function translateRenderConfigValue<T>(value: T, localization?: LocalizationValue): T {
+    if (Array.isArray(value)) {
+        return value.map((item) => translateRenderConfigValue(item, localization)) as T;
+    }
+
+    if (value && typeof value === 'object') {
+        return Object.fromEntries(
+            Object.entries(value as Record<string, unknown>).map(([key, childValue]) => [
+                key,
+                translateRenderConfigValue(childValue, localization),
+            ])
+        ) as T;
+    }
+
+    if (typeof value === 'string') {
+        return translateRenderConfigText(value, localization) as T;
+    }
+
+    return value;
+}
+
+function translateRenderConfigText(value: string, localization?: LocalizationValue): string {
+    if (!value.startsWith('i18n:')) {
+        return value;
+    }
+
+    return resolveLocalizationText(value, localization, value.slice('i18n:'.length))
+        ?? value.slice('i18n:'.length);
 }
 
 function getByPath(target: unknown, keyPath: string): unknown {
