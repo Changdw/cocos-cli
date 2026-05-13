@@ -32,6 +32,8 @@ import './gizmo/components/circle-collider-2d';
 import './gizmo/components/polygon-collider-2d';
 import './gizmo/components/mesh-renderer';
 import './gizmo/components/skinned-mesh-renderer';
+import './gizmo/components/video-player';
+import './gizmo/components/web-view';
 
 type TGizmoType = 'icon' | 'persistent' | 'component';
 
@@ -105,9 +107,19 @@ function walkNodeComponent(node: Node, callback: (comp: Component) => void): voi
     }
 }
 
+function getNodeByPath(path: string): Node | null {
+    const EditorExtends = (cc as any).EditorExtends || (globalThis as any).EditorExtends;
+    return EditorExtends?.Node?.getNodeByPath?.(path) ?? null;
+}
+
 function getNodeByUuid(uuid: string): Node | null {
     const EditorExtends = (cc as any).EditorExtends || (globalThis as any).EditorExtends;
     return EditorExtends?.Node?.getNode?.(uuid) ?? null;
+}
+
+function getNodePath(node: Node): string {
+    const EditorExtends = (cc as any).EditorExtends || (globalThis as any).EditorExtends;
+    return EditorExtends?.Node?.getNodePath?.(node) ?? '';
 }
 
 @register('Gizmo')
@@ -172,9 +184,14 @@ export class GizmoService extends BaseService<IGizmoEvents> implements IGizmoSer
             this.emit('gizmo:tool-changed', name);
         });
 
-        // 与 cocos-editor 一致：2D 视图下隐藏 IconGizmo，让 UI 编辑更干净
+        // 与 cocos-editor gizmos.ts 一致：dimension-changed 时切换相机 2D/3D 模式
         this.transformToolData.on('dimension-changed', (is2D: boolean) => {
             this.setIconVisible(!is2D);
+            try {
+                Service.Camera.is2D = is2D;
+            } catch (e) {
+                // Camera not ready yet
+            }
         });
 
         // Listen for camera mode changes to lock/unlock gizmo tool
@@ -188,11 +205,11 @@ export class GizmoService extends BaseService<IGizmoEvents> implements IGizmoSer
         }
 
         // 与 cocos-editor 一致：直接监听 Selection 事件
-        ServiceEvents.on('selection:select', (uuid: string) => {
-            this.onSelectionSelect(uuid);
+        ServiceEvents.on('selection:select', (path: string) => {
+            this.onSelectionSelect(path);
         });
-        ServiceEvents.on('selection:unselect', (uuid: string) => {
-            this.onSelectionUnselect(uuid);
+        ServiceEvents.on('selection:unselect', (path: string) => {
+            this.onSelectionUnselect(path);
         });
         ServiceEvents.on('selection:clear', () => {
             this.onSelectionClear();
@@ -364,32 +381,31 @@ export class GizmoService extends BaseService<IGizmoEvents> implements IGizmoSer
 
     // ── Selection integration ───────────────────────────────────────────────────
 
-    onSelectionSelect(uuid: string): void {
+    onSelectionSelect(path: string): void {
+        const node = getNodeByPath(path);
+        if (!node) return;
+        const uuid = node.uuid;
         if (this._selection.includes(uuid)) return;
         this._selection.push(uuid);
         try {
-            const node = getNodeByUuid(uuid);
-            if (node) {
-                this.showAllGizmoOfNode(node);
-                this._onNodeSelectionChanged(node, true);
-            }
+            this.showAllGizmoOfNode(node);
+            this._onNodeSelectionChanged(node, true);
         } catch (e) {
             // Scene not ready
         }
     }
 
-    onSelectionUnselect(uuid: string): void {
+    onSelectionUnselect(path: string): void {
+        const node = getNodeByPath(path);
+        if (!node) return;
+        const uuid = node.uuid;
         const idx = this._selection.indexOf(uuid);
         if (idx >= 0) this._selection.splice(idx, 1);
         try {
-            const node = getNodeByUuid(uuid);
-            if (node) {
-                this._onNodeSelectionChanged(node, false);
-                // Only remove component gizmos on unselect, keep icon/persistent
-                walkNodeComponent(node, (component: Component) => {
-                    this._removeGizmo('component', component);
-                });
-            }
+            this._onNodeSelectionChanged(node, false);
+            walkNodeComponent(node, (component: Component) => {
+                this._removeGizmo('component', component);
+            });
         } catch (e) {
             // Scene not ready
         }
