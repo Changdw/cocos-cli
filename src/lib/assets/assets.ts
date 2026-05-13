@@ -1,4 +1,4 @@
-import type { AssetOperationOption, CreateAssetByTypeOptions, IAssetInfo, IAssetMeta, ISupportCreateType, QueryAssetsOption } from '../../core/assets/@types/public';
+import type { AssetOperationOption, CreateAssetByTypeOptions, DeleteAssetOptions, IAssetFileSystemProvider, IAssetInfo, IAssetMeta, ISupportCreateType, QueryAssetsOption } from '../../core/assets/@types/public';
 import type { CreateAssetOptions, IAssetConfig, IAssetDBInfo, ICreateMenuInfo, IUerDataConfigItem, QueryAssetType, ThumbnailInfo, ThumbnailSize } from '../../core/assets/@types/protected';
 import type { FilterPluginOptions, IPluginScriptInfo } from '../../core/scripting/interface';
 import { assetDBManager, assetManager } from '../../core/assets';
@@ -11,6 +11,13 @@ export async function init(): Promise<void> {
     // 初始化资源数据库
     const { initAssetDB } = await import('../../core/assets');
     await initAssetDB();
+}
+
+/**
+ * Register asset filesystem provider before initializing the asset database.
+ */
+export function setFileSystemProvider(provider: IAssetFileSystemProvider): void {
+    assetDBManager.setFileSystemProvider(provider);
 }
 
 /**
@@ -73,8 +80,8 @@ export function onProgress(listener: (current: number, total: number, url: strin
 /**
  * Delete Asset // 删除资源
  */
-export async function deleteAsset(dbPath: string): Promise<IAssetInfo | null> {
-    return await assetManager.removeAsset(dbPath);
+export async function deleteAsset(dbPath: string, options?: DeleteAssetOptions): Promise<IAssetInfo | null> {
+    return await assetManager.removeAsset(dbPath, options);
 }
 
 /**

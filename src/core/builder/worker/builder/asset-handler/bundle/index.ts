@@ -29,6 +29,7 @@ import script from '../../../../../scripting';
 import builderConfig from '../../../../share/builder-config';
 import { IPluginScriptInfo } from '../../../../../scripting/interface';
 import assetQuery from '../../../../../assets/manager/query';
+import { isAssetDirectorySync } from '../../../../../assets/utils';
 import { BuildGlobalInfo } from '../../../../share/global';
 
 const { MAIN, START_SCENE, INTERNAL, RESOURCES } = BuiltinBundleName;
@@ -478,7 +479,7 @@ export class BundleManager extends BuildTaskBase implements IBundleManager {
         const assets = buildAssetLibrary.assets;
         for (let i = 0; i < assets.length; i++) {
             const assetInfo = assets[i];
-            if (assetInfo.isDirectory()) {
+            if (isAssetDirectorySync(assetInfo)) {
                 continue;
             }
             const assetType = buildAssetLibrary.getAssetProperty(assetInfo, 'type');

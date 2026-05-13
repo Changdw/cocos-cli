@@ -7,7 +7,7 @@ import { copy, move, remove, rename, existsSync } from 'fs-extra';
 import { isAbsolute, dirname, join, relative, extname } from 'path';
 import { IMoveOptions } from '../@types/private';
 import { IAsset, CreateAssetOptions, IExportOptions, IExportData, CreateAssetByTypeOptions, ICreateMenuInfo } from '../@types/protected';
-import { AssetOperationOption, AssetUserDataMap, IAssetInfo, IAssetMeta, ISupportCreateType } from '../@types/public';
+import { AssetOperationOption, AssetUserDataMap, DeleteAssetOptions, IAssetInfo, IAssetMeta, ISupportCreateType } from '../@types/public';
 import assetConfig from '../asset-config';
 import { url2path, ensureOutputData, url2uuid, removeFile } from '../utils';
 import assetDBManager from './asset-db';
@@ -422,7 +422,7 @@ class AssetOperation extends EventEmitter {
      * @param path 
      * @returns 
      */
-    async removeAsset(uuidOrURLOrPath: string): Promise<IAssetInfo | null> {
+    async removeAsset(uuidOrURLOrPath: string, options: DeleteAssetOptions = { useTrash: true }): Promise<IAssetInfo | null> {
         const asset = assetQuery.queryAsset(uuidOrURLOrPath);
         if (!asset) {
             throw new Error(`${i18n.t('assets.delete_asset.fail.unexist')} \nsource: ${uuidOrURLOrPath}`);
@@ -433,13 +433,13 @@ class AssetOperation extends EventEmitter {
             throw new Error(`子资源无法单独删除，请传递父资源的 URL 地址`);
         }
         const path = asset.source;
-        const res = await assetDBManager.addTask(this._removeAsset.bind(this), [path]);
+        const res = await assetDBManager.addTask(this._removeAsset.bind(this), [path, options]);
         return res ? assetQuery.encodeAsset(asset) : null;
     }
 
-    private async _removeAsset(path: string): Promise<boolean> {
+    private async _removeAsset(path: string, options: DeleteAssetOptions = { useTrash: true }): Promise<boolean> {
         let res = false;
-        await removeFile(path);
+        await removeFile(path, { useTrash: options.useTrash !== false });
         await this.refreshAsset(path);
         res = true;
         console.debug(`remove asset ${path} success`);

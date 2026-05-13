@@ -10,6 +10,7 @@ import { IAsset } from '../../../../../assets/@types/protected';
 import { IAssetPathInfo, IImportAssetPathInfo } from '../../../../@types';
 import { BundleFilterConfig, IBundle } from '../../../../@types/protected';
 import assetManager from '../../../../../assets/manager/asset';
+import { isAssetDirectorySync } from '../../../../../assets/utils';
 import { BuildGlobalInfo } from '../../../../share/global';
 
 /**
@@ -188,7 +189,7 @@ export function initBundleConfig(bundleConfigs?: BundleFilterConfig[]): BundleFi
                 continue;
             }
             // 文件夹直接转换为 url 配置
-            if (asset.isDirectory()) {
+            if (isAssetDirectorySync(asset)) {
                 newConfigs.push({
                     type: 'url',
                     range: config.range,

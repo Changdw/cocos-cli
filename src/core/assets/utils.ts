@@ -1,13 +1,14 @@
 'use strict';
 
 import { Asset, VirtualAsset, queryUUID, Utils as dbUtils, queryAsset as dbQueryAsset, queryPath } from '@cocos/asset-db/index';
-import { isAbsolute, join, relative, resolve } from 'path';
+import { extname, isAbsolute, join, relative, resolve } from 'path';
 import { existsSync, move, readFile, readJSON, remove } from 'fs-extra';
 import type { Asset as CCAsset, Details } from 'cc';
 import type { CCON } from 'cc/editor/serialization';
 import i18n from '../base/i18n';
 import Utils from '../base/utils';
 import { IAsset, IExportData, ISerializedOptions, SerializedAsset } from './@types/private';
+import { DeleteAssetOptions } from './@types/public';
 import { MissingClass } from '../engine/editor-extends/missing-reporter/missing-class-reporter';
 
 export function url2path(url: string) {
@@ -56,7 +57,7 @@ export function url2uuid(url: string) {
     }
     if (wUUID) {
         const asset = dbQueryAsset(uuid);
-        if (!asset || (asset.isDirectory() && subAssetName.length > 0)) {
+        if (!asset || (isAssetDirectorySync(asset) && subAssetName.length > 0)) {
             uuid = '';
         } else {
             uuid = asset.uuid;
@@ -95,6 +96,19 @@ export function libArr2Obj(asset: IAsset) {
         }
     }
     return result;
+}
+
+export function isAssetDirectorySync(asset: Pick<IAsset, 'source' | 'isDirectory'> & { _isDirectory?: boolean }) {
+    if (typeof asset._isDirectory === 'boolean') {
+        return asset._isDirectory;
+    }
+
+    const result = (asset as { isDirectory(): boolean | Promise<boolean> }).isDirectory();
+    if (typeof result === 'boolean') {
+        return result;
+    }
+
+    return extname(asset.source) === '';
 }
 
 export function getExtendsFromCCType(ccType: string) {
@@ -145,13 +159,22 @@ export function decidePromiseState(promise: Promise<any>) {
  * 删除文件
  * @param file
  */
-export async function removeFile(file: string): Promise<boolean> {
+async function deleteAssetFile(file: string, useTrash: boolean): Promise<void> {
+    if (useTrash) {
+        await Utils.File.trashItem(file);
+        return;
+    }
+    await remove(file);
+}
+
+export async function removeFile(file: string, options: DeleteAssetOptions = {}): Promise<boolean> {
     if (!existsSync(file)) {
         return true;
     }
+    const useTrash = options.useTrash !== false;
 
     try {
-        await Utils.File.trashItem(file);
+        await deleteAssetFile(file, useTrash);
     } catch (error) {
         console.error(error);
         throw new Error(`asset db removeFile ${file} fail!`);
@@ -161,7 +184,7 @@ export async function removeFile(file: string): Promise<boolean> {
     try {
         const metaFile = file + '.meta';
         if (existsSync(metaFile)) {
-            await Utils.File.trashItem(metaFile);
+            await deleteAssetFile(metaFile, useTrash);
         }
     } catch (error) {
         // do nothing

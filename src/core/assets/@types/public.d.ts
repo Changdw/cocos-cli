@@ -1,4 +1,14 @@
 import { AssetHandlerType, ISupportCreateType, AssetUserDataMap, IAssetType } from './asset-types';
+export type {
+    IAssetDeleteOptions,
+    IAssetFileStat,
+    IAssetFileSystemProvider,
+    IAssetOperationContext,
+    IAssetOperationKind,
+    IAssetOperationOrigin,
+    IAssetRenameOptions,
+    IAssetWriteFileOptions,
+} from '@cocos/asset-db/libs/filesystem';
 
 export interface IAssetMeta<T extends ISupportCreateType | 'unknown' = 'unknown'> {
     ver: string;
@@ -57,6 +67,10 @@ export interface AssetOperationOption {
     overwrite?: boolean;
     // 是否自动重命名冲突文件，默认 false ，传递后会以内部规则自动重命名冲突文件，新的文件名可以在返回值中获取
     rename?: boolean;
+}
+
+export interface DeleteAssetOptions {
+    useTrash?: boolean;
 }
 
 // Basic information about the resource
