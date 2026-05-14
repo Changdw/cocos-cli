@@ -3,15 +3,16 @@
  */
 
 import { refresh, reimport, queryUrl, Asset } from '@cocos/asset-db';
-import { copy, move, remove, rename, existsSync } from 'fs-extra';
+import { copy, move, remove, existsSync } from 'fs-extra';
 import { isAbsolute, dirname, join, relative, extname } from 'path';
 import { IMoveOptions } from '../@types/private';
 import { IAsset, CreateAssetOptions, IExportOptions, IExportData, CreateAssetByTypeOptions, ICreateMenuInfo } from '../@types/protected';
 import { AssetOperationOption, AssetUserDataMap, DeleteAssetOptions, IAssetInfo, IAssetMeta, ISupportCreateType } from '../@types/public';
 import assetConfig from '../asset-config';
-import { url2path, ensureOutputData, url2uuid, removeFile } from '../utils';
+import { url2path, ensureOutputData, url2uuid } from '../utils';
 import assetDBManager from './asset-db';
 import assetHandlerManager from './asset-handler';
+import { moveAssetSource, removeAssetSource, renamePath } from './filesystem';
 import i18n from '../../base/i18n';
 import assetQuery from './query';
 import utils from '../../base/utils';
@@ -357,7 +358,7 @@ class AssetOperation extends EventEmitter {
         this._checkReadonly(asset);
         source = asset.source;
         target = this._checkOverwrite(target, option);
-        await moveFile(source, target, option);
+        await moveAssetSource(source, target, option);
 
         const url = queryUrl(target);
         const reg = /db:\/\/[^/]+/.exec(url);
@@ -405,13 +406,13 @@ class AssetOperation extends EventEmitter {
         const temp = join(dirname(target), '.rename_temp');
 
         // 改到临时路径，然后刷新，删除原来的缓存
-        await rename(source + '.meta', temp + '.meta');
-        await rename(source, temp);
+        await renamePath(source + '.meta', temp + '.meta');
+        await renamePath(source, temp);
         await this._refreshAsset(source, false);
 
         // 改为真正的路径，然后刷新，用新名字重新导入
-        await rename(temp + '.meta', target + '.meta');
-        await rename(temp, target);
+        await renamePath(temp + '.meta', target + '.meta');
+        await renamePath(temp, target);
         await this._refreshAsset(target);
         // TODO 返回资源信息
         console.debug(`rename asset from ${source} -> ${target} success`);
@@ -439,7 +440,7 @@ class AssetOperation extends EventEmitter {
 
     private async _removeAsset(path: string, options: DeleteAssetOptions = { useTrash: true }): Promise<boolean> {
         let res = false;
-        await removeFile(path, { useTrash: options.useTrash !== false });
+        await removeAssetSource(path, { useTrash: options.useTrash !== false });
         await this.refreshAsset(path);
         res = true;
         console.debug(`remove asset ${path} success`);

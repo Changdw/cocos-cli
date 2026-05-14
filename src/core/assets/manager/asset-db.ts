@@ -10,6 +10,7 @@ import { newConsole } from '../../base/console';
 import { decidePromiseState, PROMISE_STATE } from '../utils';
 import pluginManager from './plugin';
 import assetHandlerManager from './asset-handler';
+import { setFileSystemProvider as setCLIFileSystemProvider } from './filesystem';
 import i18n from '../../base/i18n';
 import Utils from '../../base/utils';
 import assetConfig from '../asset-config';
@@ -52,6 +53,7 @@ class AssetDBManager extends EventEmitter {
     public globalInternalLibrary = false;
 
     public setFileSystemProvider(provider: IAssetFileSystemProvider) {
+        setCLIFileSystemProvider(provider);
         assetdb.setFileSystemProvider(provider);
     }
 

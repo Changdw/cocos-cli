@@ -1,14 +1,25 @@
 export {};
 
-const mockRemoveAssetSource = jest.fn();
+const mockExistsSync = jest.fn();
+const mockMoveAssetSource = jest.fn();
+const mockRenamePath = jest.fn();
 const mockQueryAsset = jest.fn();
-const mockEncodeAsset = jest.fn((asset) => ({ source: asset.source }));
+const mockQueryUrl = jest.fn();
 const mockAddTask = jest.fn(async (func: Function, args: any[]) => await func(...args));
+const { dirname, join } = require('path') as typeof import('path');
+
+jest.mock('fs-extra', () => ({
+    copy: jest.fn(),
+    move: jest.fn(),
+    remove: jest.fn(),
+    rename: jest.fn(),
+    existsSync: (...args: any[]) => mockExistsSync(...args),
+}));
 
 jest.mock('@cocos/asset-db', () => ({
     refresh: jest.fn(async () => 0),
     reimport: jest.fn(),
-    queryUrl: jest.fn(),
+    queryUrl: (...args: any[]) => mockQueryUrl(...args),
     Asset: class {},
 }));
 
@@ -19,9 +30,9 @@ jest.mock('../utils', () => ({
 }));
 
 jest.mock('../manager/filesystem', () => ({
-    removeAssetSource: (...args: any[]) => mockRemoveAssetSource(...args),
-    moveAssetSource: jest.fn(),
-    renamePath: jest.fn(),
+    moveAssetSource: (...args: any[]) => mockMoveAssetSource(...args),
+    renamePath: (...args: any[]) => mockRenamePath(...args),
+    removeAssetSource: jest.fn(),
     setFileSystemProvider: jest.fn(),
     resetFileSystemProvider: jest.fn(),
 }));
@@ -55,11 +66,15 @@ jest.mock('../manager/query', () => ({
     __esModule: true,
     default: {
         queryAsset: (...args: any[]) => mockQueryAsset(...args),
-        encodeAsset: (asset: any) => mockEncodeAsset(asset),
+        encodeAsset: jest.fn((asset) => ({ source: asset.source })),
         queryUrl: jest.fn(),
         queryAssetInfo: jest.fn(),
         queryAssetInfos: jest.fn(),
     },
+}));
+
+jest.mock('../asset-handler/utils', () => ({
+    mergeMeta: jest.fn(),
 }));
 
 jest.mock('../../base/i18n', () => ({
@@ -69,52 +84,66 @@ jest.mock('../../base/i18n', () => ({
     },
 }));
 
-describe('asset delete options', () => {
+describe('asset operation filesystem bridge', () => {
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
-    it('removeAsset should default useTrash to true for user asset deletion', async () => {
+    it('renameAsset should delegate rename steps to filesystem bridge', async () => {
         const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const source = 'D:/project/assets/source.txt';
+        const target = join(dirname(source), 'renamed.txt');
+        const temp = join(dirname(target), '.rename_temp');
         const asset = {
-            source: 'D:/project/assets/test.txt',
+            source,
             _parent: null,
+            isDirectory: () => false,
             _assetDB: {
                 options: {
                     readonly: false,
                 },
             },
-            url: 'db://assets/test.txt',
+            url: 'db://assets/source.txt',
         };
 
         mockQueryAsset.mockReturnValue(asset);
-        mockRemoveAssetSource.mockResolvedValue(true);
-        jest.spyOn(assetOperation, 'refreshAsset').mockResolvedValue(0);
+        mockExistsSync.mockImplementation((path: string) => path === source);
+        mockRenamePath.mockResolvedValue(undefined);
 
-        await assetOperation.removeAsset(asset.source);
+        await assetOperation.renameAsset(source, 'renamed.txt');
 
-        expect(mockRemoveAssetSource).toHaveBeenCalledWith(asset.source, { useTrash: true });
+        expect(mockRenamePath.mock.calls).toEqual([
+            [`${source}.meta`, `${temp}.meta`],
+            [source, temp],
+            [`${temp}.meta`, `${target}.meta`],
+            [temp, target],
+        ]);
     });
 
-    it('removeAsset should forward explicit useTrash option', async () => {
+    it('moveAsset should delegate source move to filesystem bridge', async () => {
         const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const source = 'D:/project/assets/source.txt';
+        const target = 'D:/project/assets/folder/source.txt';
         const asset = {
-            source: 'D:/project/assets/test.txt',
+            source,
             _parent: null,
+            isDirectory: () => false,
             _assetDB: {
                 options: {
                     readonly: false,
                 },
             },
-            url: 'db://assets/test.txt',
+            url: 'db://assets/source.txt',
         };
 
         mockQueryAsset.mockReturnValue(asset);
-        mockRemoveAssetSource.mockResolvedValue(true);
+        mockQueryUrl.mockReturnValue('db://assets/folder/source.txt');
+        mockExistsSync.mockReturnValue(false);
+        mockMoveAssetSource.mockResolvedValue(undefined);
         jest.spyOn(assetOperation, 'refreshAsset').mockResolvedValue(0);
 
-        await (assetOperation as any).removeAsset(asset.source, { useTrash: false });
+        await assetOperation.moveAsset(source, target);
 
-        expect(mockRemoveAssetSource).toHaveBeenCalledWith(asset.source, { useTrash: false });
+        expect(mockMoveAssetSource).toHaveBeenCalledWith(source, target, undefined);
     });
 });

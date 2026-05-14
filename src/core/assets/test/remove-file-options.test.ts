@@ -1,6 +1,6 @@
-const mockExistsSync = jest.fn();
-const mockRemove = jest.fn();
-const mockTrashItem = jest.fn();
+export {};
+
+const mockRemoveAssetSource = jest.fn();
 
 jest.mock('@cocos/asset-db/index', () => ({
     Asset: class {},
@@ -14,11 +14,9 @@ jest.mock('@cocos/asset-db/index', () => ({
 }));
 
 jest.mock('fs-extra', () => ({
-    existsSync: (...args: any[]) => mockExistsSync(...args),
     move: jest.fn(),
     readFile: jest.fn(),
     readJSON: jest.fn(),
-    remove: (...args: any[]) => mockRemove(...args),
 }));
 
 jest.mock('../../base/i18n', () => ({
@@ -29,13 +27,14 @@ jest.mock('../../base/i18n', () => ({
 jest.mock('../../base/utils', () => ({
     __esModule: true,
     default: {
-        File: {
-            trashItem: (...args: any[]) => mockTrashItem(...args),
-        },
         Path: {
             resolveToRaw: jest.fn((value) => value),
         },
     },
+}));
+
+jest.mock('../manager/filesystem', () => ({
+    removeAssetSource: (...args: any[]) => mockRemoveAssetSource(...args),
 }));
 
 jest.mock('../../engine/editor-extends/missing-reporter/missing-class-reporter', () => ({
@@ -49,17 +48,14 @@ describe('removeFile options', () => {
         jest.clearAllMocks();
     });
 
-    it('removeFile should delete directly when useTrash is false', async () => {
+    it('removeFile should delegate to filesystem bridge', async () => {
         const file = 'D:/project/assets/test.txt';
         const { removeFile } = require('../utils') as typeof import('../utils');
 
-        mockExistsSync.mockImplementation((path: string) => path === file || path === `${file}.meta`);
-        mockRemove.mockResolvedValue(undefined);
+        mockRemoveAssetSource.mockResolvedValue(true);
 
         await (removeFile as any)(file, { useTrash: false });
 
-        expect(mockRemove).toHaveBeenCalledWith(file);
-        expect(mockRemove).toHaveBeenCalledWith(`${file}.meta`);
-        expect(mockTrashItem).not.toHaveBeenCalled();
+        expect(mockRemoveAssetSource).toHaveBeenCalledWith(file, { useTrash: false });
     });
 });

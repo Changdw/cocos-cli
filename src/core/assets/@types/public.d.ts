@@ -1,7 +1,6 @@
 import { AssetHandlerType, ISupportCreateType, AssetUserDataMap, IAssetType } from './asset-types';
 export type {
     IAssetDeleteOptions,
-    IAssetFileStat,
     IAssetFileSystemProvider,
     IAssetOperationContext,
     IAssetOperationKind,

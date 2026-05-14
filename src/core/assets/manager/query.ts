@@ -3,7 +3,7 @@ import { isAbsolute, basename, extname } from 'path';
 import { QueryAssetType, IAsset } from '../@types/protected';
 import { AssetHandlerType, IAssetInfo, IAssetMeta, QueryAssetsOption } from '../@types/public';
 import { FilterPluginOptions, IPluginScriptInfo } from '../../scripting/interface';
-import { url2uuid, libArr2Obj, getExtendsFromCCType, isAssetDirectorySync, url2path } from '../utils';
+import { url2uuid, libArr2Obj, getExtendsFromCCType, url2path } from '../utils';
 import assetDBManager from './asset-db';
 import assetHandlerManager from './asset-handler';
 import script from '../../scripting';
@@ -357,7 +357,7 @@ class AssetQueryManager {
         }
         let isDirectory = false;
         try {
-            isDirectory = isAssetDirectorySync(asset);
+            isDirectory = asset.isDirectory();
         } catch (error) {
             if (invalid) {
                 // 被删除的资源此处抛异常不报错
@@ -445,7 +445,7 @@ class AssetQueryManager {
                         }
                     }
 
-                    const isDirectory = isAssetDirectorySync(asset);
+                    const isDirectory = asset.isDirectory();
                     if (!isDirectory) {
                         loadUrl = loadUrl.replace(/\.[^./]+$/, '');
                     }
