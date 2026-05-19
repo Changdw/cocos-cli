@@ -41,6 +41,27 @@ describe('asset filesystem manager', () => {
         jest.clearAllMocks();
     });
 
+    it('should expose a provider-shaped local fallback and keep fallback methods after partial override', () => {
+        const filesystem = require('../manager/filesystem') as typeof import('../manager/filesystem');
+
+        filesystem.resetFileSystemProvider();
+
+        let provider = filesystem.getFileSystemProvider();
+        expect(typeof provider.createDirectory).toBe('function');
+        expect(typeof provider.delete).toBe('function');
+        expect(typeof provider.rename).toBe('function');
+
+        const customRename = jest.fn(async () => {});
+        filesystem.setFileSystemProvider({
+            rename: customRename,
+        });
+
+        provider = filesystem.getFileSystemProvider();
+        expect(typeof provider.createDirectory).toBe('function');
+        expect(typeof provider.delete).toBe('function');
+        expect(provider.rename).toBe(customRename);
+    });
+
     it('removeAssetSource should delegate delete to custom provider and forward useTrash', async () => {
         const filesystem = require('../manager/filesystem') as typeof import('../manager/filesystem');
         const provider = {

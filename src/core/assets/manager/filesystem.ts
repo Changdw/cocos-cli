@@ -8,18 +8,62 @@ import type { DeleteAssetOptions } from '../@types/public';
 import assetConfig from '../asset-config';
 import Utils from '../../base/utils';
 
-let provider: IAssetFileSystemProvider = {};
+const localFileSystemProvider: IAssetFileSystemProvider = {
+    async createDirectory(path: string): Promise<void> {
+        await ensureDir(path);
+    },
+    async delete(path: string, options: DeleteAssetOptions = {}): Promise<void> {
+        if (options.useTrash !== false) {
+            await Utils.File.trashItem(path);
+            return;
+        }
+
+        await remove(path);
+    },
+    async rename(oldPath: string, newPath: string, options?: IAssetRenameOptions): Promise<void> {
+        await move(oldPath, newPath, { overwrite: !!options?.overwrite });
+    },
+};
+
+let provider: IAssetFileSystemProvider = localFileSystemProvider;
+
+function assignProviderMethod<K extends keyof IAssetFileSystemProvider>(
+    targetProvider: IAssetFileSystemProvider,
+    key: K,
+    method: IAssetFileSystemProvider[K],
+): void {
+    targetProvider[key] = method;
+}
+
+function mergeFileSystemProvider(nextProvider?: IAssetFileSystemProvider): IAssetFileSystemProvider {
+    const mergedProvider: IAssetFileSystemProvider = {
+        ...localFileSystemProvider,
+    };
+
+    if (!nextProvider) {
+        return mergedProvider;
+    }
+
+    for (const key of Object.keys(nextProvider) as Array<keyof IAssetFileSystemProvider>) {
+        const method = nextProvider[key];
+        if (method) {
+            assignProviderMethod(mergedProvider, key, method);
+        }
+    }
+
+    return mergedProvider;
+}
 
 export function getFileSystemProvider(): IAssetFileSystemProvider {
     return provider;
 }
 
 export function setFileSystemProvider(nextProvider: IAssetFileSystemProvider): void {
-    provider = nextProvider || {};
+    provider = mergeFileSystemProvider(nextProvider);
 }
 
 export function resetFileSystemProvider(): void {
-    provider = {};
+    provider = mergeFileSystemProvider();
 }
 
 async function ensureParentDirectory(path: string): Promise<void> {
@@ -28,36 +72,16 @@ async function ensureParentDirectory(path: string): Promise<void> {
         return;
     }
 
-    if (provider.createDirectory) {
-        await Promise.resolve(provider.createDirectory(dir));
-        return;
-    }
-
-    await ensureDir(dir);
+    await Promise.resolve(provider.createDirectory!(dir));
 }
 
 async function deletePath(path: string, options: DeleteAssetOptions = {}): Promise<void> {
-    if (provider.delete) {
-        await Promise.resolve(provider.delete(path, options));
-        return;
-    }
-
-    if (options.useTrash !== false) {
-        await Utils.File.trashItem(path);
-        return;
-    }
-
-    await remove(path);
+    await Promise.resolve(provider.delete!(path, options));
 }
 
 export async function renamePath(oldPath: string, newPath: string, options?: IAssetRenameOptions): Promise<void> {
-    if (provider.rename) {
-        await ensureParentDirectory(newPath);
-        await Promise.resolve(provider.rename(oldPath, newPath, options));
-        return;
-    }
-
-    await move(oldPath, newPath, { overwrite: !!options?.overwrite });
+    await ensureParentDirectory(newPath);
+    await Promise.resolve(provider.rename!(oldPath, newPath, options));
 }
 
 export async function removeAssetSource(file: string, options: DeleteAssetOptions = {}): Promise<boolean> {
