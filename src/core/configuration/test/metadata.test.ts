@@ -157,6 +157,8 @@ describe('configuration metadata', () => {
         const scriptNode = findNode(afterRegister, 'script');
 
         expect(findProperty(importNode, 'import.restoreAssetDBFromCache').type).toBe('boolean');
+        expect(findProperty(importNode, 'import.fbx.material.smart').type).toBe('boolean');
+        expect(importNode.properties['import.fbx']).toBeUndefined();
         expect(findProperty(scriptNode, 'script.useDefineForClassFields').type).toBe('boolean');
     });
 
@@ -166,7 +168,14 @@ describe('configuration metadata', () => {
         await runtime.Engine.init(TestGlobalEnv.engineRoot);
         await runtime.assetConfig.init();
 
+        const nodes = await runtime.getMetadata();
+        const importNode = findNode(nodes, 'import');
+
         await expect(runtime.assetConfig.getProject<string[]>('globList', 'default')).resolves.toEqual([]);
+        await expect(runtime.assetConfig.getProject<string>('createTemplateRoot', 'default')).resolves.toEqual('.creator/templates');
+        await expect(runtime.assetConfig.getProject<boolean>('fbx.material.smart', 'default')).resolves.toEqual(false);
+        expect(findProperty(importNode, 'import.createTemplateRoot').default).toBe('.creator/templates');
+        expect(findProperty(importNode, 'import.fbx.material.smart').default).toBe(false);
     });
 
     it('should preserve readable localized titles and descriptions in registered metadata', async () => {
