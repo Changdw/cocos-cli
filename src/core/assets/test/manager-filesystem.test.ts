@@ -2,15 +2,21 @@ export {};
 
 const mockExistsSync = jest.fn();
 const mockMove = jest.fn();
+const mockCopy = jest.fn();
 const mockRemove = jest.fn();
 const mockEnsureDir = jest.fn();
+const mockOutputFile = jest.fn();
+const mockReadFile = jest.fn();
 const mockTrashItem = jest.fn();
 
 jest.mock('fs-extra', () => ({
     existsSync: (...args: any[]) => mockExistsSync(...args),
     move: (...args: any[]) => mockMove(...args),
+    copy: (...args: any[]) => mockCopy(...args),
     remove: (...args: any[]) => mockRemove(...args),
     ensureDir: (...args: any[]) => mockEnsureDir(...args),
+    outputFile: (...args: any[]) => mockOutputFile(...args),
+    readFile: (...args: any[]) => mockReadFile(...args),
 }));
 
 jest.mock('../../base/utils', () => ({
@@ -47,9 +53,12 @@ describe('asset filesystem manager', () => {
         filesystem.resetFileSystemProvider();
 
         let provider = filesystem.getFileSystemProvider();
+        expect(typeof provider.readFile).toBe('function');
+        expect(typeof provider.writeFile).toBe('function');
         expect(typeof provider.createDirectory).toBe('function');
         expect(typeof provider.delete).toBe('function');
         expect(typeof provider.rename).toBe('function');
+        expect(typeof provider.copy).toBe('function');
 
         const customRename = jest.fn(async () => {});
         filesystem.setFileSystemProvider({
@@ -57,9 +66,38 @@ describe('asset filesystem manager', () => {
         });
 
         provider = filesystem.getFileSystemProvider();
+        expect(typeof provider.readFile).toBe('function');
+        expect(typeof provider.writeFile).toBe('function');
         expect(typeof provider.createDirectory).toBe('function');
         expect(typeof provider.delete).toBe('function');
         expect(provider.rename).toBe(customRename);
+        expect(typeof provider.copy).toBe('function');
+    });
+
+    it('local fallback writeFile and copy should delegate to fs-extra implementations', async () => {
+        const filesystem = require('../manager/filesystem') as typeof import('../manager/filesystem');
+
+        filesystem.resetFileSystemProvider();
+
+        const provider = filesystem.getFileSystemProvider();
+        const target = 'D:/project/assets/test.txt';
+        const copyTarget = 'D:/project/assets/copied.txt';
+        const defaultCopyTarget = 'D:/project/assets/copied-default.txt';
+        const content = 'hello';
+
+        mockReadFile.mockResolvedValue(content);
+
+        await provider.writeFile!(target, content);
+        await provider.copy!(target, copyTarget, { overwrite: true });
+        await provider.copy!(target, defaultCopyTarget);
+        const result = await provider.readFile!(target, 'utf8');
+
+        expect(mockEnsureDir).toHaveBeenCalledWith('D:/project/assets');
+        expect(mockOutputFile).toHaveBeenCalledWith(target, content);
+        expect(mockCopy).toHaveBeenCalledWith(target, copyTarget, { overwrite: true });
+        expect(mockCopy.mock.calls[1]).toEqual([target, defaultCopyTarget]);
+        expect(mockReadFile).toHaveBeenCalledWith(target, 'utf8');
+        expect(result).toBe(content);
     });
 
     it('removeAssetSource should delegate delete to custom provider and forward useTrash', async () => {

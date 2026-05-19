@@ -1,15 +1,19 @@
 export {};
 
+const mockCopy = jest.fn();
 const mockExistsSync = jest.fn();
+const mockCopyPath = jest.fn();
 const mockMoveAssetSource = jest.fn();
 const mockRenamePath = jest.fn();
 const mockQueryAsset = jest.fn();
+const mockQueryAssetInfo = jest.fn();
+const mockQueryAssetInfos = jest.fn();
 const mockQueryUrl = jest.fn();
 const mockAddTask = jest.fn(async (func: Function, args: any[]) => await func(...args));
 const { dirname, join } = require('path') as typeof import('path');
 
 jest.mock('fs-extra', () => ({
-    copy: jest.fn(),
+    copy: (...args: any[]) => mockCopy(...args),
     move: jest.fn(),
     remove: jest.fn(),
     rename: jest.fn(),
@@ -30,6 +34,7 @@ jest.mock('../utils', () => ({
 }));
 
 jest.mock('../manager/filesystem', () => ({
+    copyPath: (...args: any[]) => mockCopyPath(...args),
     moveAssetSource: (...args: any[]) => mockMoveAssetSource(...args),
     renamePath: (...args: any[]) => mockRenamePath(...args),
     removeAssetSource: jest.fn(),
@@ -68,8 +73,8 @@ jest.mock('../manager/query', () => ({
         queryAsset: (...args: any[]) => mockQueryAsset(...args),
         encodeAsset: jest.fn((asset) => ({ source: asset.source })),
         queryUrl: jest.fn(),
-        queryAssetInfo: jest.fn(),
-        queryAssetInfos: jest.fn(),
+        queryAssetInfo: (...args: any[]) => mockQueryAssetInfo(...args),
+        queryAssetInfos: (...args: any[]) => mockQueryAssetInfos(...args),
     },
 }));
 
@@ -145,5 +150,25 @@ describe('asset operation filesystem bridge', () => {
         await assetOperation.moveAsset(source, target);
 
         expect(mockMoveAssetSource).toHaveBeenCalledWith(source, target, undefined);
+    });
+
+    it('importAsset should delegate copy to filesystem bridge', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const source = 'D:/outside/source.txt';
+        const target = 'D:/project/assets/source.txt';
+        const assetInfo = {
+            isDirectory: false,
+            url: 'db://assets/source.txt',
+        };
+
+        mockCopyPath.mockResolvedValue(undefined);
+        mockQueryAssetInfo.mockReturnValue(assetInfo);
+        jest.spyOn(assetOperation, 'refreshAsset').mockResolvedValue(0);
+
+        const result = await assetOperation.importAsset(source, target, { overwrite: true });
+
+        expect(mockCopyPath).toHaveBeenCalledWith(source, target, { overwrite: true });
+        expect(mockCopy).not.toHaveBeenCalled();
+        expect(result).toEqual([assetInfo]);
     });
 });

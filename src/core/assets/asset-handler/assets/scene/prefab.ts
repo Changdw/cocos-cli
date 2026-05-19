@@ -2,10 +2,11 @@
 
 import { Asset } from '@cocos/asset-db';
 import { version, versionCode } from './index';
-import { readJSON, writeFile } from 'fs-extra';
+import { readJSON } from 'fs-extra';
 
 import { AssetHandler } from '../../../@types/protected';
 import { getDependList, removeNull } from '../../utils';
+import { writePath } from '../../../manager/filesystem';
 
 export const PrefabHandler: AssetHandler = {
     // Handler 的名字，用于指定 Handler as 等
@@ -71,7 +72,7 @@ export const PrefabHandler: AssetHandler = {
             if (dirty) {
                 try {
                     const serializeJSON = JSON.stringify(source, undefined, 2);
-                    await writeFile(asset.source, serializeJSON);
+                    await writePath(asset.source, serializeJSON);
                 } catch (error) {
                     // 有可能只读，只读的话就不管源文件了
                 }

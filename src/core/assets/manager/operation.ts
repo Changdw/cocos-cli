@@ -3,7 +3,7 @@
  */
 
 import { refresh, reimport, queryUrl, Asset } from '@cocos/asset-db';
-import { copy, move, remove, existsSync } from 'fs-extra';
+import { copy as fsCopy, move, remove, existsSync } from 'fs-extra';
 import { isAbsolute, dirname, join, relative, extname } from 'path';
 import { IMoveOptions } from '../@types/private';
 import { IAsset, CreateAssetOptions, IExportOptions, IExportData, CreateAssetByTypeOptions, ICreateMenuInfo } from '../@types/protected';
@@ -12,7 +12,7 @@ import assetConfig from '../asset-config';
 import { url2path, ensureOutputData, url2uuid } from '../utils';
 import assetDBManager from './asset-db';
 import assetHandlerManager from './asset-handler';
-import { moveAssetSource, removeAssetSource, renamePath } from './filesystem';
+import { copyPath, moveAssetSource, removeAssetSource, renamePath } from './filesystem';
 import i18n from '../../base/i18n';
 import assetQuery from './query';
 import utils from '../../base/utils';
@@ -208,7 +208,7 @@ class AssetOperation extends EventEmitter {
         if (target.startsWith('db://')) {
             target = url2path(target);
         }
-        await copy(source, target, options);
+        await copyPath(source, target, options);
         await this.refreshAsset(target);
         const assetInfo = assetQuery.queryAssetInfo(target);
         if (!assetInfo) {
@@ -277,11 +277,11 @@ class AssetOperation extends EventEmitter {
     async outputExportData(handler: string, src: IExportData, dest: IExportData) {
         const res = await assetHandlerManager.outputExportData(handler, src, dest);
         if (!res) {
-            await copy(src.import.path, dest.import.path);
+            await fsCopy(src.import.path, dest.import.path);
             if (src.native && dest.native) {
                 const nativeSrc: string[] = Object.values(src.native);
                 const nativeDest: string[] = Object.values(dest.native);
-                await Promise.all(nativeSrc.map((path, i) => copy(path, nativeDest[i])));
+                await Promise.all(nativeSrc.map((path, i) => fsCopy(path, nativeDest[i])));
             }
         }
     }

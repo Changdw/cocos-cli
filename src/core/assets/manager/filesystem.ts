@@ -1,7 +1,7 @@
 'use strict';
 
-import type { IAssetFileSystemProvider, IAssetRenameOptions } from '@cocos/asset-db/libs/filesystem';
-import { ensureDir, existsSync, move, remove } from 'fs-extra';
+import type { IAssetFileSystemProvider, IAssetRenameOptions, IAssetWriteFileOptions } from '@cocos/asset-db/libs/filesystem';
+import { copy as fsCopy, ensureDir, existsSync, move, outputFile, readFile as fsReadFile, remove } from 'fs-extra';
 import { dirname, join, relative } from 'path';
 import type { IMoveOptions } from '../@types/private';
 import type { DeleteAssetOptions } from '../@types/public';
@@ -9,6 +9,17 @@ import assetConfig from '../asset-config';
 import Utils from '../../base/utils';
 
 const localFileSystemProvider: IAssetFileSystemProvider = {
+    async readFile(path: string, encoding?: BufferEncoding): Promise<Buffer | string> {
+        if (encoding) {
+            return await fsReadFile(path, encoding);
+        }
+
+        return await fsReadFile(path);
+    },
+    async writeFile(path: string, content: Buffer | string | Uint8Array, _options?: IAssetWriteFileOptions): Promise<void> {
+        await ensureDir(dirname(path));
+        await outputFile(path, content as any);
+    },
     async createDirectory(path: string): Promise<void> {
         await ensureDir(path);
     },
@@ -22,6 +33,14 @@ const localFileSystemProvider: IAssetFileSystemProvider = {
     },
     async rename(oldPath: string, newPath: string, options?: IAssetRenameOptions): Promise<void> {
         await move(oldPath, newPath, { overwrite: !!options?.overwrite });
+    },
+    async copy(sourcePath: string, destinationPath: string, options?: IAssetRenameOptions): Promise<void> {
+        if (options?.overwrite === undefined) {
+            await fsCopy(sourcePath, destinationPath);
+            return;
+        }
+
+        await fsCopy(sourcePath, destinationPath, { overwrite: options.overwrite });
     },
 };
 
@@ -66,13 +85,16 @@ export function resetFileSystemProvider(): void {
     provider = mergeFileSystemProvider();
 }
 
-async function ensureParentDirectory(path: string): Promise<void> {
-    const dir = dirname(path);
-    if (existsSync(dir)) {
-        return;
-    }
+export async function readPath(path: string, encoding?: BufferEncoding): Promise<Buffer | string> {
+    return await Promise.resolve(provider.readFile!(path, encoding));
+}
 
-    await Promise.resolve(provider.createDirectory!(dir));
+export async function writePath(path: string, content: Buffer | string | Uint8Array, options?: IAssetWriteFileOptions): Promise<void> {
+    await Promise.resolve(provider.writeFile!(path, content, options));
+}
+
+export async function createDirectoryPath(path: string): Promise<void> {
+    await Promise.resolve(provider.createDirectory!(path));
 }
 
 async function deletePath(path: string, options: DeleteAssetOptions = {}): Promise<void> {
@@ -80,8 +102,11 @@ async function deletePath(path: string, options: DeleteAssetOptions = {}): Promi
 }
 
 export async function renamePath(oldPath: string, newPath: string, options?: IAssetRenameOptions): Promise<void> {
-    await ensureParentDirectory(newPath);
     await Promise.resolve(provider.rename!(oldPath, newPath, options));
+}
+
+export async function copyPath(sourcePath: string, destinationPath: string, options?: IAssetRenameOptions): Promise<void> {
+    await Promise.resolve(provider.copy!(sourcePath, destinationPath, options));
 }
 
 export async function removeAssetSource(file: string, options: DeleteAssetOptions = {}): Promise<boolean> {
@@ -135,11 +160,9 @@ export async function moveAssetSource(source: string, target: string, options?: 
             await deletePath(tempMetaPath, { useTrash: false });
         }
 
-        await ensureParentDirectory(tempMetaPath);
         await renamePath(source + '.meta', tempMetaPath, { overwrite: true });
         await renamePath(source, tempPath, { overwrite: true });
 
-        await ensureParentDirectory(target + '.meta');
         await renamePath(tempMetaPath, target + '.meta', { overwrite: true });
         await renamePath(tempPath, target, renameOptions);
     } catch (error) {

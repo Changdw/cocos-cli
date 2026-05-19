@@ -1,5 +1,6 @@
 import { Asset } from '@cocos/asset-db';
 import fs from 'fs-extra';
+import { writePath } from '../../../manager/filesystem';
 
 type TypedObjectVisitor = (serialized: any) => void;
 
@@ -156,7 +157,7 @@ export const migrationHook = {
         if (num > 0) {
             // 请勿使用 writeJson，因为这个接口会在末尾增加空行
             const json = JSON.stringify(swap.json, null, 2);
-            await fs.writeFile(asset.source, json);
+            await writePath(asset.source, json);
         }
         delete swap.json;
     },
