@@ -100,6 +100,7 @@ describe('engine settings template', () => {
         const settings = createDefaultEngineSettings(TestGlobalEnv.engineRoot);
         const defaultConfig = settings.modules.configs.defaultConfig;
 
+        expect(settings.modules.globalConfigKey).toBe('defaultConfig');
         expect(defaultConfig.cache).toEqual(expectedDefaults.cache);
         expect(defaultConfig.flags).toEqual(expectedDefaults.flags);
         expect(defaultConfig.includeModules).toEqual(expectedDefaults.includeModules);
