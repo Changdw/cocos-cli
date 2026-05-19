@@ -1,7 +1,7 @@
 import bundledRenderConfig from './features/render-config.json';
 import { getEngineRenderConfig } from './dynamic-metadata';
 import type { IEngineModuleConfig } from './@types/config';
-import type { ICroppingConfig, IDisplayModuleCache, IFeatureItem, IFlags, IModuleItem, ModuleRenderConfig } from './@types/modules';
+import type { ICroppingConfig, IFeatureItem, IFlags, IModuleItem, ModuleRenderConfig } from './@types/modules';
 
 export const DEFAULT_ENGINE_MODULE_CONFIG_KEY = 'defaultConfig';
 export const DEFAULT_ENGINE_MODULE_CONFIG_NAME = '\u9ed8\u8ba4\u914d\u7f6e';
@@ -52,42 +52,24 @@ function assignFlagDefaults(target: IFlags, flagDefaults?: IFlags) {
 }
 
 function buildDefaultModuleConfig(renderConfig: ModuleRenderConfig): {
-    cache: Record<string, IDisplayModuleCache>;
     flags: IFlags;
     includeModules: string[];
 } {
-    const cache: Record<string, IDisplayModuleCache> = {};
     const flags: IFlags = {};
     const includeModules: string[] = [];
 
     for (const [featureKey, moduleItem] of Object.entries(renderConfig.features)) {
         if (isFeatureGroup(moduleItem)) {
-            let selectedOption: string | undefined;
-
             for (const [optionKey, optionItem] of Object.entries(moduleItem.options)) {
                 const flagDefaults = collectFlagDefaults(optionItem);
                 const enabled = Boolean(optionItem.default);
 
                 if (enabled) {
                     includeModules.push(optionKey);
-                    selectedOption ??= optionKey;
                 }
 
                 assignFlagDefaults(flags, flagDefaults);
-                cache[optionKey] = flagDefaults ? {
-                    _value: enabled,
-                    _flags: { ...flagDefaults },
-                } : {
-                    _value: enabled,
-                };
             }
-
-            cache[featureKey] = selectedOption ? {
-                _value: true,
-                _option: selectedOption,
-            } : {
-                _value: false,
-            };
             continue;
         }
 
@@ -99,16 +81,9 @@ function buildDefaultModuleConfig(renderConfig: ModuleRenderConfig): {
         }
 
         assignFlagDefaults(flags, flagDefaults);
-        cache[featureKey] = flagDefaults ? {
-            _value: enabled,
-            _flags: { ...flagDefaults },
-        } : {
-            _value: enabled,
-        };
     }
 
     return {
-        cache,
         flags,
         includeModules,
     };
@@ -131,7 +106,6 @@ export function createDefaultEngineModuleSettings(engineRoot: string): IEngineMo
         configs: {
             [DEFAULT_ENGINE_MODULE_CONFIG_KEY]: {
                 name: DEFAULT_ENGINE_MODULE_CONFIG_NAME,
-                cache: moduleDefaults.cache,
                 flags: moduleDefaults.flags,
                 includeModules: moduleDefaults.includeModules,
                 noDeprecatedFeatures: {
