@@ -4,14 +4,13 @@ import lodash from 'lodash';
 import ts from 'typescript';
 import i18n from '../base/i18n';
 import type { ICocosConfigurationPropertySchemaInput } from '../configuration/script/metadata';
-import { objectSchema } from '../configuration/script/metadata';
+import { objectSchema, translateMetadataText } from '../configuration/script/metadata';
 import type { IEngineConfig } from './@types/config';
 import type { IFeatureItem, IModuleItem, ModuleRenderConfig } from './@types/modules';
 
 type Primitive = string | number | boolean;
 type FlagValue = boolean | number;
 type LocalizationValue = Record<string, unknown>;
-
 export interface IEngineDynamicMetadataSchemas {
     includeModules: ICocosConfigurationPropertySchemaInput;
     flagProperties: Record<string, ICocosConfigurationPropertySchemaInput>;
@@ -75,8 +74,7 @@ export function getEngineDynamicConfigContribution(options: IEngineDynamicConfig
     try {
         const locale = i18n._lang ?? 'zh';
         const renderConfig = getEngineRenderConfig(options.engineRoot);
-        const localization = loadLocalization(options.engineRoot, locale);
-        const features = collectFeatureDescriptors(renderConfig, localization);
+        const features = collectFeatureDescriptors(renderConfig);
         const macros = collectMacroDescriptors(options.engineRoot, locale);
         const flagDescriptors = collectFlagDescriptors(features);
         const flagProperties = buildFlagProperties(flagDescriptors);
@@ -125,20 +123,19 @@ function loadCommonJsModuleFresh(filePath: string): unknown {
 }
 
 function collectFeatureDescriptors(
-    renderConfig: ModuleRenderConfig,
-    localization?: LocalizationValue
+    renderConfig: ModuleRenderConfig
 ): IFeatureDescriptor[] {
     const descriptors: IFeatureDescriptor[] = [];
 
     for (const [featureKey, moduleItem] of Object.entries(renderConfig.features)) {
         if (isFeatureGroup(moduleItem)) {
             for (const [optionKey, optionItem] of Object.entries(moduleItem.options)) {
-                descriptors.push(createFeatureDescriptor(optionKey, optionItem, localization));
+                descriptors.push(createFeatureDescriptor(optionKey, optionItem));
             }
             continue;
         }
 
-        descriptors.push(createFeatureDescriptor(featureKey, moduleItem, localization));
+        descriptors.push(createFeatureDescriptor(featureKey, moduleItem));
     }
 
     return descriptors;
@@ -150,23 +147,22 @@ function isFeatureGroup(moduleItem: IModuleItem): moduleItem is Extract<IModuleI
 
 function createFeatureDescriptor(
     featureKey: string,
-    featureItem: IFeatureItem,
-    localization?: LocalizationValue
+    featureItem: IFeatureItem
 ): IFeatureDescriptor {
     const flags: IFlagDescriptor[] = [];
     for (const [flagKey, flagItem] of Object.entries(featureItem.flags ?? {})) {
         flags.push({
             key: flagKey,
-            label: resolveLocalizationText(flagItem.label, localization, lodash.startCase(flagKey)) ?? lodash.startCase(flagKey),
-            description: resolveLocalizationText(flagItem.description, localization),
+            label: resolveLocalizationText(flagItem.label, undefined, lodash.startCase(flagKey)) ?? lodash.startCase(flagKey),
+            description: resolveLocalizationText(flagItem.description, undefined),
             default: normalizeFlagValue(flagItem.default),
         });
     }
 
     return {
         id: featureKey,
-        label: resolveLocalizationText(featureItem.label, localization, lodash.startCase(featureKey)) ?? lodash.startCase(featureKey),
-        description: resolveLocalizationText(featureItem.description, localization),
+        label: resolveLocalizationText(featureItem.label, undefined, lodash.startCase(featureKey)) ?? lodash.startCase(featureKey),
+        description: resolveLocalizationText(featureItem.description, undefined),
         default: Boolean(featureItem.default),
         flags,
     };
@@ -211,9 +207,9 @@ function resolveLocalizationText(
         return resolved;
     }
 
-    const translatedByI18n = i18n.transI18nName(value);
-    if (translatedByI18n && translatedByI18n !== value) {
-        return translatedByI18n;
+    const translated = translateMetadataText(value);
+    if (translated && translated !== key) {
+        return translated;
     }
 
     return fallback;

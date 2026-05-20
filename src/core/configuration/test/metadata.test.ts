@@ -176,6 +176,8 @@ describe('configuration metadata', () => {
         const scriptNode = findNode(afterRegister, 'script');
 
         expect(findProperty(importNode, 'import.restoreAssetDBFromCache').type).toBe('boolean');
+        expect(findProperty(importNode, 'import.fbx.material.smart').type).toBe('boolean');
+        expect(importNode.properties['import.fbx']).toBeUndefined();
         expect(findProperty(scriptNode, 'script.useDefineForClassFields').type).toBe('boolean');
     });
 
@@ -185,7 +187,14 @@ describe('configuration metadata', () => {
         await runtime.Engine.init(TestGlobalEnv.engineRoot);
         await runtime.assetConfig.init();
 
+        const nodes = await runtime.getMetadata();
+        const importNode = findNode(nodes, 'import');
+
         await expect(runtime.assetConfig.getProject<string[]>('globList', 'default')).resolves.toEqual([]);
+        await expect(runtime.assetConfig.getProject<string>('createTemplateRoot', 'default')).resolves.toEqual('.creator/templates');
+        await expect(runtime.assetConfig.getProject<boolean>('fbx.material.smart', 'default')).resolves.toEqual(false);
+        expect(findProperty(importNode, 'import.createTemplateRoot').default).toBe('.creator/templates');
+        expect(findProperty(importNode, 'import.fbx.material.smart').default).toBe(false);
     });
 
     it('should preserve readable localized titles and descriptions in registered metadata', async () => {
@@ -240,32 +249,26 @@ describe('configuration metadata', () => {
         expect(findProperty(findNode(enNodes, 'import'), 'import.globList').description).toBe('Asset import glob matching rules');
     });
 
-    it('should localize fallback engine metadata using the current language', () => {
-        const runtime = jest.requireActual('../../base/i18n') as typeof import('../../base/i18n');
-        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
-        try {
-            runtime.default.setLanguage('en');
-            const { getEngineDynamicConfigContribution } = jest.requireActual('../../engine/dynamic-metadata') as typeof import('../../engine/dynamic-metadata');
-            const { translateMetadataText } = jest.requireActual('../script/metadata') as typeof import('../script/metadata');
-            const contribution = getEngineDynamicConfigContribution({
-                engineRoot: '__missing_engine_root__',
+    it('should localize dynamic engine feature metadata only after Engine.init registers engine i18n', async () => {
+        const runtime = await loadFreshRuntime();
+        runtime.i18n.setLanguage('en');
+        const { getEngineDynamicConfigContribution } = jest.requireActual('../../engine/dynamic-metadata') as typeof import('../../engine/dynamic-metadata');
+        const getIncludeModuleDescriptions = () => (
+            ((getEngineDynamicConfigContribution({
+                engineRoot: TestGlobalEnv.engineRoot,
                 fallbackConfig: {
                     includeModules: ['2d'],
                     flags: { LOAD_SPINE_MANUALLY: false },
                     macroConfig: { ENABLE_TILEDMAP_CULLING: true },
                 },
-            });
-            const schemas = contribution.metadata;
+            }).metadata.includeModules.items as any)?.enumDescriptions ?? []) as string[]
+        );
 
-            expect(schemas.includeModules.title).toBe('i18n:configuration.engine.dynamic.includeModules.title');
-            expect(schemas.includeModules.description).toBe('i18n:configuration.engine.dynamic.includeModules.description');
-            expect(Array.isArray(schemas.includeModules.default)).toBe(true);
-            expect((schemas.includeModules.items as any)?.title).toBe('i18n:configuration.engine.dynamic.includeModules.itemTitle');
-            expect(translateMetadataText(schemas.includeModules.title)).toBe('Included Modules');
-            expect(translateMetadataText(schemas.includeModules.description)).toBe('Feature modules included in the engine');
-            expect(translateMetadataText((schemas.includeModules.items as any)?.title)).toBe('Module');
-        } finally {
-            warnSpy.mockRestore();
-        }
+        expect(getIncludeModuleDescriptions()).not.toContain('Core - Cocos Creator core functionalities.');
+
+        await runtime.project.open(TestGlobalEnv.projectRoot);
+        await runtime.Engine.init(TestGlobalEnv.engineRoot);
+
+        expect(getIncludeModuleDescriptions()).toContain('Core - Cocos Creator core functionalities.');
     });
 });
