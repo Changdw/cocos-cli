@@ -93,6 +93,7 @@ describe('configuration metadata', () => {
         expect(configsProperty.type).toBe('object');
         expect(configsProperty.default).toEqual({
             defaultConfig: {
+                name: '默认配置',
                 includeModules: runtime.Engine.getConfig(true).includeModules,
                 flags: runtime.Engine.getConfig(true).flags,
                 noDeprecatedFeatures: {
@@ -102,6 +103,7 @@ describe('configuration metadata', () => {
             },
         });
         expect(configsProperty).not.toHaveProperty('scope');
+        expect(configItemSchema?.properties?.name?.type).toBe('string');
         expect(configItemSchema?.properties?.includeModules?.type).toBe('array');
         expect(configItemSchema?.properties?.flags?.type).toBe('object');
         expect(configItemSchema?.properties?.noDeprecatedFeatures?.type).toBe('object');

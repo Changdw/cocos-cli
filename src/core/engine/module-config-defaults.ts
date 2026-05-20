@@ -1,6 +1,6 @@
 import bundledRenderConfig from './features/render-config.json';
 import { getEngineRenderConfig } from './dynamic-metadata';
-import type { IEngineModuleConfig } from './@types/config';
+import type { IEngineModuleProjectConfig } from './@types/config';
 import type { ICroppingConfig, IFeatureItem, IFlags, IModuleItem, ModuleRenderConfig } from './@types/modules';
 
 export const DEFAULT_ENGINE_MODULE_CONFIG_KEY = 'defaultConfig';
@@ -17,7 +17,7 @@ export interface IEngineModuleSettingsDefaults {
 
 export interface IEngineModuleProjectDefaults {
     globalConfigKey: string;
-    configs: Record<string, IEngineModuleConfig>;
+    configs: Record<string, IEngineModuleProjectConfig>;
 }
 
 function isFeatureGroup(moduleItem: IModuleItem): moduleItem is Extract<IModuleItem, { options: Record<string, IFeatureItem> }> {
@@ -125,10 +125,11 @@ export function createDefaultEngineModuleProjectDefaults(engineRoot: string): IE
             Object.entries(settingsDefaults.configs).map(([key, value]) => [
                 key,
                 {
+                    name: value.name,
                     includeModules: [...value.includeModules],
                     flags: value.flags ? { ...value.flags } : undefined,
                     noDeprecatedFeatures: value.noDeprecatedFeatures ? { ...value.noDeprecatedFeatures } : undefined,
-                } satisfies IEngineModuleConfig,
+                } satisfies IEngineModuleProjectConfig,
             ])
         ),
     };

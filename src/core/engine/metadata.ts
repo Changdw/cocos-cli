@@ -169,6 +169,10 @@ export function createEngineMetadataNodes(options: IEngineMetadataOptions): ICoc
                 default: moduleProjectDefaults.configs,
                 title: 'i18n:configuration.engine.projectConfig.configs.title',
                 additionalProperties: objectSchema({
+                    name: {
+                        type: 'string',
+                        title: 'i18n:builder.options.name',
+                    },
                     includeModules: dynamicMetadata.includeModules,
                     flags: dynamicMetadata.flagsObject,
                     noDeprecatedFeatures: objectSchema({
