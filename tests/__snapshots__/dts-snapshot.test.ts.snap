@@ -6272,8 +6272,11 @@ export declare interface IEngineModuleConfig {
     flags?: IFlags;
     noDeprecatedFeatures?: { value: boolean, version: string };
 }
+export declare interface IEngineModuleProjectConfig extends IEngineModuleConfig {
+    name: string;
+}
 export declare interface IEngineProjectConfig extends Exclude<IEngineConfig, 'includeModules' | 'flags' | 'noDeprecatedFeatures'> {
-    configs?: Record<string, IEngineModuleConfig>;
+    configs?: Record<string, IEngineModuleProjectConfig>;
     globalConfigKey?: string;
 }
 export declare interface IFeatureGroup extends BaseItem {
@@ -6736,6 +6739,7 @@ export declare namespace Engine {
         ISplashSetting,
         IDesignResolution,
         IEngineModuleConfig,
+        IEngineModuleProjectConfig,
         IEngineConfig,
         IEngineProjectConfig,
         IInitEngineInfo,
@@ -7240,6 +7244,9 @@ export declare interface IEngineModuleConfig {
     flags?: IFlags;
     noDeprecatedFeatures?: { value: boolean, version: string };
 }
+export declare interface IEngineModuleProjectConfig extends IEngineModuleConfig {
+    name: string;
+}
 export declare interface IEngineOptions {
     root: string;
     distRoot: string;
@@ -7247,7 +7254,7 @@ export declare interface IEngineOptions {
     features: string[];
 }
 export declare interface IEngineProjectConfig extends Exclude<IEngineConfig, 'includeModules' | 'flags' | 'noDeprecatedFeatures'> {
-    configs?: Record<string, IEngineModuleConfig>;
+    configs?: Record<string, IEngineModuleProjectConfig>;
     globalConfigKey?: string;
 }
 export declare interface IEngineService extends IServiceEvents {
