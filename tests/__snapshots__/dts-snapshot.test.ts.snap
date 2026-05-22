@@ -740,6 +740,8 @@ export { }
 exports[`DTS API compatibility builder.d.ts should match snapshot 1`] = `
 "import EventEmitter from 'events';
 import { EventEmitter as EventEmitter_2 } from 'stream';
+import { IAssetDeleteOptions } from './filesystem';
+import { IAssetWriteFileOptions } from './filesystem';
 import type { PluginItem } from '@babel/core';
 import { SpriteFrame } from 'cc';
 export declare interface AcornNode {
@@ -829,7 +831,7 @@ export declare class Asset extends VirtualAsset {
     basename: string;
     constructor(source: string, meta: Meta, assetDB: AssetDB);
     updateUrl(): void;
-    save(): boolean;
+    save(): Promise<boolean>;
     isDirectory(): boolean;
 }
 export declare const ASSET_HANDLER_TYPES: string[];
@@ -1297,6 +1299,10 @@ export declare class BundleManager extends BuildTaskBase implements IBundleManag
     runBuildTask(handle: Function, increment: number): Promise<void>;
 }
 export declare type BundlePlatformType = 'native' | 'miniGame' | 'web';
+export declare interface BundleQueryConfig {
+    displayName: string;
+    platformConfigs: Record<string, PlatformBundleConfig>;
+}
 export declare interface BundleRenderConfig {
     platformTypeInfo: PlatformTypeInfo;
     platformConfigs: Record<string, PlatformBundleConfig>;
@@ -1665,6 +1671,7 @@ export declare interface GetManualChunkApi {
 }
 export declare type GetModuleInfo = (moduleId: string) => ModuleInfo | null;
 export declare function getPreviewSettings<P extends Platform>(options?: IBuildTaskOption<P>): Promise<IPreviewSettingsResult>;
+export declare function getRegisteredPlatforms(): Promise<string[]>;
 export declare type GlobalsOption = { [name: string]: string } | ((name: string) => string);
 export declare interface GltfAnimationAssetUserData {
     gltfIndex: number;
@@ -3483,9 +3490,9 @@ export declare class MetaManager {
     constructor(customConsole: CustomConsole);
     destroy(): void;
     read(path: string): boolean | undefined;
-    write(path: any): false | undefined;
-    remove(path: string): void;
-    get(path: string): MetaInfo;
+    write(path: string, options?: IAssetWriteFileOptions): Promise<false | undefined>;
+    remove(path: string, options?: IAssetDeleteOptions): Promise<void>;
+    get(path: string): Promise<MetaInfo>;
     move(pathA: string, pathB: string): void;
 }
 export declare enum MinigamePlatform {
@@ -3893,6 +3900,11 @@ export declare interface PlatformPackageOptionMap {
 export declare interface PlatformPackageOptions {
     [packageName: string]: Record<string, any>;
 }
+export declare interface PlatformTextureCompressConfig {
+    platformName: string;
+    platformType: ITextureCompressPlatform;
+    support: ISupportFormat;
+}
 export declare type PlatformType = Uppercase<keyof typeof WebPlatform | keyof typeof MinigamePlatform | keyof typeof NativePlatform> | 'HTML5' | 'NATIVE' | 'NODEJS' | 'INVALID_PLATFORM';
 export declare type PlatformType_2 = StatsQuery.ConstantManager.PlatformType;
 export declare interface PlatformTypeInfo {
@@ -3988,6 +4000,9 @@ export declare class PluginManager extends EventEmitter {
         native: string[];
         config: Record<string, IPlatformConfig>;
     };
+    getRegisteredPlatforms(): string[];
+    queryBundleConfig(): Record<string, BundleQueryConfig>;
+    queryTextureCompressConfig(): Record<string, TextureCompressRenderConfig>;
     getBuildStageWithHookTasks(platform: Platform | string, taskName: string): IBuildStageItem | null;
     getBuildStageConfigByPlatform(platform: Platform): Record<string, any> | null;
     private sortPkgNameWidthPriority;
@@ -4048,7 +4063,9 @@ export declare interface PreviewPackResult {
 }
 export declare type PureModulesOption = boolean | string[] | IsPureModule;
 export declare function queryBuildConfig(): Promise<BuildConfiguration>;
+export declare function queryBundleConfig(): Promise<Record<string, BundleQueryConfig>>;
 export declare function queryDefaultBuildConfigByPlatform(platform: Platform): Promise<IBuildTaskOption<string>>;
+export declare function queryTextureCompressConfig(): Promise<Record<string, TextureCompressRenderConfig>>;
 export declare type RenderChunkHook = (
 	this: PluginContext,
 	code: string,
@@ -4736,6 +4753,10 @@ export declare class TextureCompress_2 extends EventEmitter_2 {
     private customCompressImage;
     compressImageByConfig(optionItem: ICompressConfig): Promise<void>;
 }
+export declare interface TextureCompressRenderConfig {
+    displayName: string;
+    platformConfigs: Record<string, PlatformTextureCompressConfig>;
+}
 export declare interface TextureCubeAssetUserData extends TextureBaseAssetUserData {
     imageDatabaseUri?: string;
     isRGBE: boolean;
@@ -4869,7 +4890,7 @@ export declare class VirtualAsset {
     saveToLibrary(extOrFile: string, buffer: Buffer | string): Promise<void>;
     copyToLibrary(extOrFile: string, target: string): Promise<void>;
     deleteFromLibrary(extOrFile: string): Promise<false | undefined>;
-    existsInLibrary(extOrFile: string): boolean;
+    existsInLibrary(extOrFile: string): Promise<boolean>;
     isDirectory(): boolean;
     createSubAsset(name: string, importer: string, options?: {
         displayName?: string;
@@ -6205,6 +6226,7 @@ export declare interface Features {
 }
 export declare function getConfig(useDefault?: boolean): Promise<IEngineConfig>;
 export declare function getInfo(): Promise<EngineInfo>;
+export declare function getRenderConfig(): Promise<ModuleRenderConfig>;
 export declare interface IChunkContent {
     skeleton: null | string;
     clips: string[];
@@ -6214,7 +6236,6 @@ export declare interface ICollisionMatrix {
 }
 export declare type ICroppingConfig = {
     name: string;
-    cache: Record<string, IDisplayModuleCache>,
     flags: IFlags_2,
     includeModules: string[],
     noDeprecatedFeatures: ICroppingConfigDeprecatedFeature;
@@ -6270,8 +6291,11 @@ export declare interface IEngineModuleConfig {
     flags?: IFlags;
     noDeprecatedFeatures?: { value: boolean, version: string };
 }
+export declare interface IEngineModuleProjectConfig extends IEngineModuleConfig {
+    name: string;
+}
 export declare interface IEngineProjectConfig extends Exclude<IEngineConfig, 'includeModules' | 'flags' | 'noDeprecatedFeatures'> {
-    configs?: Record<string, IEngineModuleConfig>;
+    configs?: Record<string, IEngineModuleProjectConfig>;
     globalConfigKey?: string;
 }
 export declare interface IFeatureGroup extends BaseItem {
@@ -6715,6 +6739,7 @@ export declare namespace Engine {
         init_4 as init,
         getInfo,
         getConfig,
+        getRenderConfig,
         initEngine,
         startEngineCompilation,
         queryLayerBuiltin,
@@ -6733,6 +6758,7 @@ export declare namespace Engine {
         ISplashSetting,
         IDesignResolution,
         IEngineModuleConfig,
+        IEngineModuleProjectConfig,
         IEngineConfig,
         IEngineProjectConfig,
         IInitEngineInfo,
@@ -6822,6 +6848,7 @@ export declare function getInfo(): Promise<EngineInfo>;
 export declare function getInfo_2(): Promise<ProjectInfo>;
 export declare function getMetadata(): Promise<ICocosConfigurationNode[]>;
 export declare function getProgrammingFacet(): Promise<ProgrammingFacet>;
+export declare function getRenderConfig(): Promise<ModuleRenderConfig>;
 export declare function getStatus(): {
     registered: boolean;
     url?: string;
@@ -7161,7 +7188,6 @@ export declare interface ICreatePrefabFromNodeParams {
 export declare type ICreateType = typeof CREATE_TYPES[number];
 export declare type ICroppingConfig = {
     name: string;
-    cache: Record<string, IDisplayModuleCache>,
     flags: IFlags_2,
     includeModules: string[],
     noDeprecatedFeatures: ICroppingConfigDeprecatedFeature;
@@ -7237,6 +7263,9 @@ export declare interface IEngineModuleConfig {
     flags?: IFlags;
     noDeprecatedFeatures?: { value: boolean, version: string };
 }
+export declare interface IEngineModuleProjectConfig extends IEngineModuleConfig {
+    name: string;
+}
 export declare interface IEngineOptions {
     root: string;
     distRoot: string;
@@ -7244,7 +7273,7 @@ export declare interface IEngineOptions {
     features: string[];
 }
 export declare interface IEngineProjectConfig extends Exclude<IEngineConfig, 'includeModules' | 'flags' | 'noDeprecatedFeatures'> {
-    configs?: Record<string, IEngineModuleConfig>;
+    configs?: Record<string, IEngineModuleProjectConfig>;
     globalConfigKey?: string;
 }
 export declare interface IEngineService extends IServiceEvents {

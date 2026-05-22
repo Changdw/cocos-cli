@@ -5,6 +5,7 @@ import { configurationRegistry, ConfigurationScope, IBaseConfiguration } from '.
 import project from '../project';
 import { Engine } from '../engine';
 import { createImportMetadataNodes } from './metadata';
+import { DEFAULT_CREATE_TEMPLATE_ROOT, resolveImportTemplateRoot } from './import-config-defaults';
 
 export interface AssetDBConfig {
     restoreAssetDBFromCache: boolean;
@@ -75,7 +76,7 @@ class AssetConfig {
             defaults: {
                 restoreAssetDBFromCache: this._assetConfig.restoreAssetDBFromCache,
                 globList: this._assetConfig.globList ?? [],
-                createTemplateRoot: join(this._assetConfig.root, '.creator/templates'),
+                createTemplateRoot: DEFAULT_CREATE_TEMPLATE_ROOT,
             },
             nodes: () => createImportMetadataNodes(),
         });
@@ -86,6 +87,7 @@ class AssetConfig {
         const enginePath = Engine.getInfo().typescript.path;
         this._assetConfig.libraryRoot = this._assetConfig.libraryRoot || join(this._assetConfig.root, 'library');
         this._assetConfig.tempRoot = join(this._assetConfig.root, 'temp/cli/asset-db');
+        await this.syncRuntimeConfigFromConfiguration();
         this._assetConfig.assetDBList = [{
             name: 'assets',
             target: join(this._assetConfig.root, 'assets'),
@@ -141,6 +143,16 @@ class AssetConfig {
 
     setProject(path: string, value: any, scope?: ConfigurationScope) {
         return this._configInstance.set(path, value, scope);
+    }
+
+    private async syncRuntimeConfigFromConfiguration() {
+        const importConfig = await this._configInstance.get<Partial<Pick<AssetDBConfig, 'restoreAssetDBFromCache' | 'globList' | 'createTemplateRoot'>>>();
+        this._assetConfig.restoreAssetDBFromCache = importConfig.restoreAssetDBFromCache ?? false;
+        this._assetConfig.globList = importConfig.globList ?? [];
+        this._assetConfig.createTemplateRoot = resolveImportTemplateRoot(
+            this._assetConfig.root,
+            importConfig.createTemplateRoot ?? DEFAULT_CREATE_TEMPLATE_ROOT
+        );
     }
 }
 

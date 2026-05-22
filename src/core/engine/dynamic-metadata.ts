@@ -4,14 +4,13 @@ import lodash from 'lodash';
 import ts from 'typescript';
 import i18n from '../base/i18n';
 import type { ICocosConfigurationPropertySchemaInput } from '../configuration/script/metadata';
-import { objectSchema } from '../configuration/script/metadata';
+import { objectSchema, translateMetadataText } from '../configuration/script/metadata';
 import type { IEngineConfig } from './@types/config';
 import type { IFeatureItem, IModuleItem, ModuleRenderConfig } from './@types/modules';
 
 type Primitive = string | number | boolean;
 type FlagValue = boolean | number;
 type LocalizationValue = Record<string, unknown>;
-
 export interface IEngineDynamicMetadataSchemas {
     includeModules: ICocosConfigurationPropertySchemaInput;
     flagProperties: Record<string, ICocosConfigurationPropertySchemaInput>;
@@ -64,12 +63,18 @@ export function getEngineRenderConfig(engineRoot: string): ModuleRenderConfig {
     return JSON.parse(readUtf8File(renderConfigPath)) as ModuleRenderConfig;
 }
 
+export function getLocalizedEngineRenderConfig(engineRoot: string): ModuleRenderConfig {
+    const locale = i18n._lang ?? 'zh';
+    const renderConfig = getEngineRenderConfig(engineRoot);
+    const localization = loadLocalization(engineRoot, locale);
+    return localizeRenderConfig(renderConfig, localization);
+}
+
 export function getEngineDynamicConfigContribution(options: IEngineDynamicConfigOptions): IEngineDynamicConfigContribution {
     try {
         const locale = i18n._lang ?? 'zh';
         const renderConfig = getEngineRenderConfig(options.engineRoot);
-        const localization = loadLocalization(options.engineRoot, locale);
-        const features = collectFeatureDescriptors(renderConfig, localization);
+        const features = collectFeatureDescriptors(renderConfig);
         const macros = collectMacroDescriptors(options.engineRoot, locale);
         const flagDescriptors = collectFlagDescriptors(features);
         const flagProperties = buildFlagProperties(flagDescriptors);
@@ -118,20 +123,19 @@ function loadCommonJsModuleFresh(filePath: string): unknown {
 }
 
 function collectFeatureDescriptors(
-    renderConfig: ModuleRenderConfig,
-    localization?: LocalizationValue
+    renderConfig: ModuleRenderConfig
 ): IFeatureDescriptor[] {
     const descriptors: IFeatureDescriptor[] = [];
 
     for (const [featureKey, moduleItem] of Object.entries(renderConfig.features)) {
         if (isFeatureGroup(moduleItem)) {
             for (const [optionKey, optionItem] of Object.entries(moduleItem.options)) {
-                descriptors.push(createFeatureDescriptor(optionKey, optionItem, localization));
+                descriptors.push(createFeatureDescriptor(optionKey, optionItem));
             }
             continue;
         }
 
-        descriptors.push(createFeatureDescriptor(featureKey, moduleItem, localization));
+        descriptors.push(createFeatureDescriptor(featureKey, moduleItem));
     }
 
     return descriptors;
@@ -143,23 +147,22 @@ function isFeatureGroup(moduleItem: IModuleItem): moduleItem is Extract<IModuleI
 
 function createFeatureDescriptor(
     featureKey: string,
-    featureItem: IFeatureItem,
-    localization?: LocalizationValue
+    featureItem: IFeatureItem
 ): IFeatureDescriptor {
     const flags: IFlagDescriptor[] = [];
     for (const [flagKey, flagItem] of Object.entries(featureItem.flags ?? {})) {
         flags.push({
             key: flagKey,
-            label: resolveLocalizationText(flagItem.label, localization, lodash.startCase(flagKey)) ?? lodash.startCase(flagKey),
-            description: resolveLocalizationText(flagItem.description, localization),
+            label: resolveLocalizationText(flagItem.label, undefined, lodash.startCase(flagKey)) ?? lodash.startCase(flagKey),
+            description: resolveLocalizationText(flagItem.description, undefined),
             default: normalizeFlagValue(flagItem.default),
         });
     }
 
     return {
         id: featureKey,
-        label: resolveLocalizationText(featureItem.label, localization, lodash.startCase(featureKey)) ?? lodash.startCase(featureKey),
-        description: resolveLocalizationText(featureItem.description, localization),
+        label: resolveLocalizationText(featureItem.label, undefined, lodash.startCase(featureKey)) ?? lodash.startCase(featureKey),
+        description: resolveLocalizationText(featureItem.description, undefined),
         default: Boolean(featureItem.default),
         flags,
     };
@@ -200,7 +203,53 @@ function resolveLocalizationText(
     const key = value.slice('i18n:'.length);
     const resolved = getByPath(localization, key)
         ?? getByPath(localization, key.split('.').slice(1).join('.'));
-    return typeof resolved === 'string' ? resolved : fallback;
+    if (typeof resolved === 'string') {
+        return resolved;
+    }
+
+    const translated = translateMetadataText(value);
+    if (translated && translated !== key) {
+        return translated;
+    }
+
+    return fallback;
+}
+
+function localizeRenderConfig(
+    renderConfig: ModuleRenderConfig,
+    localization?: LocalizationValue
+): ModuleRenderConfig {
+    return translateRenderConfigValue(renderConfig, localization);
+}
+
+function translateRenderConfigValue<T>(value: T, localization?: LocalizationValue): T {
+    if (Array.isArray(value)) {
+        return value.map((item) => translateRenderConfigValue(item, localization)) as T;
+    }
+
+    if (value && typeof value === 'object') {
+        return Object.fromEntries(
+            Object.entries(value as Record<string, unknown>).map(([key, childValue]) => [
+                key,
+                translateRenderConfigValue(childValue, localization),
+            ])
+        ) as T;
+    }
+
+    if (typeof value === 'string') {
+        return translateRenderConfigText(value, localization) as T;
+    }
+
+    return value;
+}
+
+function translateRenderConfigText(value: string, localization?: LocalizationValue): string {
+    if (!value.startsWith('i18n:')) {
+        return value;
+    }
+
+    return resolveLocalizationText(value, localization, value.slice('i18n:'.length))
+        ?? value.slice('i18n:'.length);
 }
 
 function getByPath(target: unknown, keyPath: string): unknown {

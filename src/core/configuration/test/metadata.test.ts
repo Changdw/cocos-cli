@@ -71,7 +71,7 @@ describe('configuration metadata', () => {
         await expect(getMetadata()).resolves.toEqual([]);
     });
 
-    it('should expose engine metadata from the registered engine module using direct config keys', async () => {
+    it('should expose engine module metadata using config profile defaults', async () => {
         const runtime = await loadFreshRuntime();
         await runtime.project.open(TestGlobalEnv.projectRoot);
         await runtime.Engine.init(TestGlobalEnv.engineRoot);
@@ -79,15 +79,34 @@ describe('configuration metadata', () => {
         const nodes = await runtime.getMetadata();
         const engineModuleNode = findNode(nodes, 'engine.moduleConfig');
         const engineMacroNode = findNode(nodes, 'engine.macroConfig');
-        const includeModulesProperty = findProperty(engineModuleNode, 'engine.includeModules');
-        const physXFlagProperty = findProperty(engineModuleNode, 'engine.flags.LOAD_PHYSX_MANUALLY');
+        const globalConfigKeyProperty = findProperty(engineModuleNode, 'engine.globalConfigKey');
+        const configsProperty = findProperty(engineModuleNode, 'engine.configs');
         const macroProperty = findProperty(engineMacroNode, 'engine.macroConfig.ENABLE_TILEDMAP_CULLING');
+        const configItemSchema = configsProperty.additionalProperties as ICocosConfigurationPropertySchema | undefined;
 
-        expect(includeModulesProperty.type).toBe('array');
-        expect(includeModulesProperty.default).toEqual(runtime.Engine.getConfig(true).includeModules);
-        expect(includeModulesProperty).not.toHaveProperty('scope');
-        expect(physXFlagProperty.type).toBe('boolean');
-        expect(physXFlagProperty).not.toHaveProperty('scope');
+        expect(engineModuleNode.properties['engine.includeModules']).toBeUndefined();
+        expect(engineModuleNode.properties['engine.flags.LOAD_PHYSX_MANUALLY']).toBeUndefined();
+        expect(engineModuleNode.properties['engine.noDeprecatedFeatures']).toBeUndefined();
+        expect(globalConfigKeyProperty.type).toBe('string');
+        expect(globalConfigKeyProperty.default).toBe('defaultConfig');
+        expect(globalConfigKeyProperty).not.toHaveProperty('scope');
+        expect(configsProperty.type).toBe('object');
+        expect(configsProperty.default).toEqual({
+            defaultConfig: {
+                name: '默认配置',
+                includeModules: runtime.Engine.getConfig(true).includeModules,
+                flags: runtime.Engine.getConfig(true).flags,
+                noDeprecatedFeatures: {
+                    value: false,
+                    version: '',
+                },
+            },
+        });
+        expect(configsProperty).not.toHaveProperty('scope');
+        expect(configItemSchema?.properties?.name?.type).toBe('string');
+        expect(configItemSchema?.properties?.includeModules?.type).toBe('array');
+        expect(configItemSchema?.properties?.flags?.type).toBe('object');
+        expect(configItemSchema?.properties?.noDeprecatedFeatures?.type).toBe('object');
         expect(macroProperty.type).toBe('boolean');
         expect(macroProperty).not.toHaveProperty('scope');
         expect(engineMacroNode.properties['engine.macroConfig']).toBeUndefined();
@@ -157,6 +176,8 @@ describe('configuration metadata', () => {
         const scriptNode = findNode(afterRegister, 'script');
 
         expect(findProperty(importNode, 'import.restoreAssetDBFromCache').type).toBe('boolean');
+        expect(findProperty(importNode, 'import.fbx.material.smart').type).toBe('boolean');
+        expect(importNode.properties['import.fbx']).toBeUndefined();
         expect(findProperty(scriptNode, 'script.useDefineForClassFields').type).toBe('boolean');
     });
 
@@ -166,7 +187,14 @@ describe('configuration metadata', () => {
         await runtime.Engine.init(TestGlobalEnv.engineRoot);
         await runtime.assetConfig.init();
 
+        const nodes = await runtime.getMetadata();
+        const importNode = findNode(nodes, 'import');
+
         await expect(runtime.assetConfig.getProject<string[]>('globList', 'default')).resolves.toEqual([]);
+        await expect(runtime.assetConfig.getProject<string>('createTemplateRoot', 'default')).resolves.toEqual('.creator/templates');
+        await expect(runtime.assetConfig.getProject<boolean>('fbx.material.smart', 'default')).resolves.toEqual(false);
+        expect(findProperty(importNode, 'import.createTemplateRoot').default).toBe('.creator/templates');
+        expect(findProperty(importNode, 'import.fbx.material.smart').default).toBe(false);
     });
 
     it('should preserve readable localized titles and descriptions in registered metadata', async () => {
@@ -221,32 +249,26 @@ describe('configuration metadata', () => {
         expect(findProperty(findNode(enNodes, 'import'), 'import.globList').description).toBe('Asset import glob matching rules');
     });
 
-    it('should localize fallback engine metadata using the current language', () => {
-        const runtime = jest.requireActual('../../base/i18n') as typeof import('../../base/i18n');
-        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
-        try {
-            runtime.default.setLanguage('en');
-            const { getEngineDynamicConfigContribution } = jest.requireActual('../../engine/dynamic-metadata') as typeof import('../../engine/dynamic-metadata');
-            const { translateMetadataText } = jest.requireActual('../script/metadata') as typeof import('../script/metadata');
-            const contribution = getEngineDynamicConfigContribution({
-                engineRoot: '__missing_engine_root__',
+    it('should localize dynamic engine feature metadata only after Engine.init registers engine i18n', async () => {
+        const runtime = await loadFreshRuntime();
+        runtime.i18n.setLanguage('en');
+        const { getEngineDynamicConfigContribution } = jest.requireActual('../../engine/dynamic-metadata') as typeof import('../../engine/dynamic-metadata');
+        const getIncludeModuleDescriptions = () => (
+            ((getEngineDynamicConfigContribution({
+                engineRoot: TestGlobalEnv.engineRoot,
                 fallbackConfig: {
                     includeModules: ['2d'],
                     flags: { LOAD_SPINE_MANUALLY: false },
                     macroConfig: { ENABLE_TILEDMAP_CULLING: true },
                 },
-            });
-            const schemas = contribution.metadata;
+            }).metadata.includeModules.items as any)?.enumDescriptions ?? []) as string[]
+        );
 
-            expect(schemas.includeModules.title).toBe('i18n:configuration.engine.dynamic.includeModules.title');
-            expect(schemas.includeModules.description).toBe('i18n:configuration.engine.dynamic.includeModules.description');
-            expect(Array.isArray(schemas.includeModules.default)).toBe(true);
-            expect((schemas.includeModules.items as any)?.title).toBe('i18n:configuration.engine.dynamic.includeModules.itemTitle');
-            expect(translateMetadataText(schemas.includeModules.title)).toBe('Included Modules');
-            expect(translateMetadataText(schemas.includeModules.description)).toBe('Feature modules included in the engine');
-            expect(translateMetadataText((schemas.includeModules.items as any)?.title)).toBe('Module');
-        } finally {
-            warnSpy.mockRestore();
-        }
+        expect(getIncludeModuleDescriptions()).not.toContain('Core - Cocos Creator core functionalities.');
+
+        await runtime.project.open(TestGlobalEnv.projectRoot);
+        await runtime.Engine.init(TestGlobalEnv.engineRoot);
+
+        expect(getIncludeModuleDescriptions()).toContain('Core - Cocos Creator core functionalities.');
     });
 });

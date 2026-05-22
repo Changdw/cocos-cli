@@ -89,7 +89,7 @@ class AssetHandlerManager {
     async init() {
         const { assetHandlerInfos } = await import('../../assets/asset-handler/config');
         this.register('cocos-cli', assetHandlerInfos, true);
-        AssetHandlerManager.createTemplateRoot = await assetConfig.getProject('createTemplateRoot');
+        AssetHandlerManager.createTemplateRoot = assetConfig.data.createTemplateRoot;
         const { compileEffect, startAutoGenEffectBin, getEffectBinPath } = await import('../asset-handler');
         this.compileEffect = compileEffect;
         this.startAutoGenEffectBin = startAutoGenEffectBin;
@@ -104,6 +104,21 @@ class AssetHandlerManager {
             console.debug(`lazy register asset handler ${info.name}`);
             return this.activateRegister(info);
         }));
+    }
+
+    private async ensureHandler(importer: string) {
+        let handler = this.name2handler[importer];
+        if (handler) {
+            return handler;
+        }
+
+        const registerInfo = this.name2registerInfo[importer];
+        if (!registerInfo) {
+            return undefined;
+        }
+
+        await this.activateRegister(registerInfo);
+        return this.name2handler[importer];
     }
 
     private async activateRegister(registerInfos: HandlerInfo) {
@@ -285,7 +300,11 @@ class AssetHandlerManager {
      */
     async getCreateMap(): Promise<ICreateMenuInfo[]> {
         const result: Omit<ICreateMenuInfo, 'create'>[] = [];
-        for (const importer of Object.keys(this.name2handler)) {
+        const importers = Array.from(new Set([
+            ...Object.keys(this.name2registerInfo),
+            ...Object.keys(this.name2handler),
+        ]));
+        for (const importer of importers) {
             const createMenu = await this.getCreateMenuByName(importer);
             result.push(...createMenu);
         }
@@ -298,7 +317,7 @@ class AssetHandlerManager {
      * @returns 
      */
     async getCreateMenuByName(importer: string): Promise<ICreateMenuInfo[]> {
-        const handler = this.name2handler[importer];
+        const handler = await this.ensureHandler(importer);
         if (!handler || !handler.createInfo || !handler.createInfo.generateMenuInfo) {
             return [];
         }

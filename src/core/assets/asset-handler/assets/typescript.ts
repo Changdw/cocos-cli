@@ -38,7 +38,7 @@ export const TypeScriptHandler: AssetHandler = {
                     name: 'default',
                 },
             ];
-            const templateDir = join(assetConfig.data.root, '.creator/asset-template/typescript');
+            const templateDir = join(assetConfig.data.createTemplateRoot, TypeScriptHandler.name);
             // TODO 文件夹初始化应该在点击查看脚本模板时处理
             // ensureDirSync(templateDir);
 

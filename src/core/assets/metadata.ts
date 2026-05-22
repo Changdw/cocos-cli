@@ -1,5 +1,6 @@
 import type { ICocosConfigurationNode } from '../configuration/script/metadata';
 import { createNode, objectSchema } from '../configuration/script/metadata';
+import { DEFAULT_CREATE_TEMPLATE_ROOT } from './import-config-defaults';
 
 export function createImportMetadataNodes(): ICocosConfigurationNode[] {
     return [
@@ -18,7 +19,7 @@ export function createImportMetadataNodes(): ICocosConfigurationNode[] {
             },
             'import.createTemplateRoot': {
                 type: 'string',
-                default: '',
+                default: DEFAULT_CREATE_TEMPLATE_ROOT,
                 title: 'i18n:configuration.import.createTemplateRoot.title',
             },
             'import.userDataTemplate': objectSchema(undefined, {
@@ -26,28 +27,11 @@ export function createImportMetadataNodes(): ICocosConfigurationNode[] {
                 description: 'i18n:configuration.import.userDataTemplate.description',
                 additionalProperties: true,
             }),
-            'import.fbx': objectSchema({
-                legacyFbxImporter: objectSchema({
-                    visible: {
-                        type: 'boolean',
-                        default: true,
-                        title: 'i18n:configuration.import.fbx.legacyFbxImporter.visible.title',
-                    },
-                }, {
-                    title: 'i18n:configuration.import.fbx.legacyFbxImporter.title',
-                }),
-                material: objectSchema({
-                    smart: {
-                        type: 'boolean',
-                        default: false,
-                        title: 'i18n:configuration.import.fbx.material.smart.title',
-                    },
-                }, {
-                    title: 'i18n:configuration.import.fbx.material.title',
-                }),
-            }, {
-                title: 'i18n:configuration.import.fbx.title',
-            }),
+            'import.fbx.material.smart': {
+                type: 'boolean',
+                default: false,
+                title: 'i18n:configuration.import.fbx.material.smart.title',
+            },
         }, 10),
     ];
 }
