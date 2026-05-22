@@ -166,7 +166,7 @@ export declare interface CreateAssetOptions {
     userData?: Record<string, any>;
     customOptions?: Record<string, any>;
 }
-export declare function deleteAsset(dbPath: string): Promise<IAssetInfo | null>;
+export declare function deleteAsset(dbPath: string, options?: DeleteAssetOptions): Promise<IAssetInfo | null>;
 export declare interface DeleteAssetOptions {
     useTrash?: boolean;
 }
@@ -670,6 +670,7 @@ export declare interface SerializedAssetFinder {
     materials?: Array<string | null>;
     scenes?: Array<string | null>;
 }
+export declare function setFileSystemProvider(provider: IAssetFileSystemProvider): void;
 export declare interface SimplifyOptions {
     targetRatio?: number;
     enableSmartLink?: boolean;
@@ -6565,6 +6566,7 @@ export declare interface AssetOperationOption {
 export declare namespace Assets {
     export {
         init,
+        setFileSystemProvider,
         start,
         onReady,
         onDBReady,
@@ -6768,7 +6770,7 @@ export declare interface CreateAssetOptions {
     userData?: Record<string, any>;
     customOptions?: Record<string, any>;
 }
-export declare function deleteAsset(dbPath: string): Promise<IAssetInfo | null>;
+export declare function deleteAsset(dbPath: string, options?: DeleteAssetOptions): Promise<IAssetInfo | null>;
 export declare interface DeleteAssetOptions {
     useTrash?: boolean;
 }
@@ -8357,6 +8359,7 @@ export declare namespace Server {
     }
 }
 export declare function set<T>(key: string, value: T, scope?: ConfigurationScope): Promise<boolean>;
+export declare function setFileSystemProvider(provider: IAssetFileSystemProvider): void;
 export declare interface SharedSettings {
     useDefineForClassFields: boolean;
     allowDeclareFields: boolean;
