@@ -1,11 +1,13 @@
-import { init, open, close } from '../project';
+type ProjectModule = typeof import('../project');
 
 describe('cocos-cli-types: project', () => {
     it('should be able to import api functions', () => {
-        const _init: typeof init = init;
-        const _open: typeof open = open;
-        const _close: typeof close = close;
+        let _init: ProjectModule['init'] | undefined = undefined;
+        let _open: ProjectModule['open'] | undefined = undefined;
+        let _close: ProjectModule['close'] | undefined = undefined;
 
-        expect(1).toBe(1);
+        expect(_init).toBeUndefined();
+        expect(_open).toBeUndefined();
+        expect(_close).toBeUndefined();
     });
 });

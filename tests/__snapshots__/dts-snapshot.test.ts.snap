@@ -166,7 +166,10 @@ export declare interface CreateAssetOptions {
     userData?: Record<string, any>;
     customOptions?: Record<string, any>;
 }
-export declare function deleteAsset(dbPath: string): Promise<IAssetInfo | null>;
+export declare function deleteAsset(dbPath: string, options?: DeleteAssetOptions): Promise<IAssetInfo | null>;
+export declare interface DeleteAssetOptions {
+    useTrash?: boolean;
+}
 export declare interface DirectoryAssetUserData {
     isBundle?: boolean;
     bundleConfigID?: string;
@@ -300,6 +303,18 @@ export declare interface IAssetDBInfo extends AssetDBOptions_2 {
     visible: boolean;
     preImportExtList: string[];
 }
+export declare interface IAssetDeleteOptions extends IAssetOperationOptionsBase {
+    recursive?: boolean;
+    useTrash?: boolean;
+}
+export declare interface IAssetFileSystemProvider {
+    readFile?(path: string, encoding?: BufferEncoding): Promise<Buffer | string> | Buffer | string;
+    writeFile?(path: string, content: Buffer | string | Uint8Array, options?: IAssetWriteFileOptions): Promise<void> | void;
+    createDirectory?(path: string): Promise<void> | void;
+    delete?(path: string, options?: IAssetDeleteOptions): Promise<void> | void;
+    rename?(oldPath: string, newPath: string, options?: IAssetRenameOptions): Promise<void> | void;
+    copy?(sourcePath: string, destinationPath: string, options?: IAssetRenameOptions): Promise<void> | void;
+}
 export declare interface IAssetInfo {
     name: string; 
     source: string; 
@@ -346,6 +361,22 @@ export declare interface IAssetMeta<T extends ISupportCreateType | 'unknown' = '
     id?: string;
     name?: string;
 }
+export declare interface IAssetOperationContext {
+    opId: string;
+    kind: IAssetOperationKind;
+    origin: IAssetOperationOrigin;
+    source: string;
+    paths: string[];
+    timestamp: number;
+}
+export declare type IAssetOperationKind = 'write' | 'rename' | 'move' | 'copy' | 'delete';
+export declare interface IAssetOperationOptionsBase {
+    context?: IAssetOperationContext;
+}
+export declare type IAssetOperationOrigin = 'direct-op' | 'watcher';
+export declare interface IAssetRenameOptions extends IAssetOperationOptionsBase {
+    overwrite?: boolean;
+}
 export declare type IAssetType =
 | ISupportCreateCCType
 | 'cc.Asset'               
@@ -371,6 +402,10 @@ export declare type IAssetType =
 | 'dragonBones.DragonBonesAtlasAsset' 
 | 'RenderStage'            
 | 'RenderFlow';
+export declare interface IAssetWriteFileOptions extends IAssetOperationOptionsBase {
+    create?: boolean;
+    overwrite?: boolean;
+}
 export declare interface ICreateMenuInfo {
     label: string;
     name: string;
@@ -634,6 +669,7 @@ export declare interface SerializedAssetFinder {
     materials?: Array<string | null>;
     scenes?: Array<string | null>;
 }
+export declare function setFileSystemProvider(provider: IAssetFileSystemProvider): void;
 export declare interface SimplifyOptions {
     targetRatio?: number;
     enableSmartLink?: boolean;
@@ -6529,6 +6565,7 @@ export declare interface AssetOperationOption {
 export declare namespace Assets {
     export {
         init,
+        setFileSystemProvider,
         start,
         onReady,
         onDBReady,
@@ -6570,9 +6607,17 @@ export declare namespace Assets {
         QueryAssetType,
         FilterPluginOptions,
         IPluginScriptInfo,
+        IAssetDeleteOptions,
+        IAssetFileSystemProvider,
+        IAssetOperationContext,
+        IAssetOperationKind,
+        IAssetOperationOrigin,
+        IAssetRenameOptions,
+        IAssetWriteFileOptions,
         IAssetMeta,
         IAssetInfo,
         AssetOperationOption,
+        DeleteAssetOptions,
         AssetInfo,
         IRedirectInfo,
         QueryAssetsOption,
@@ -6723,7 +6768,10 @@ export declare interface CreateAssetOptions {
     userData?: Record<string, any>;
     customOptions?: Record<string, any>;
 }
-export declare function deleteAsset(dbPath: string): Promise<IAssetInfo | null>;
+export declare function deleteAsset(dbPath: string, options?: DeleteAssetOptions): Promise<IAssetInfo | null>;
+export declare interface DeleteAssetOptions {
+    useTrash?: boolean;
+}
 export declare interface DirectoryAssetUserData {
     isBundle?: boolean;
     bundleConfigID?: string;
@@ -6967,6 +7015,18 @@ export declare interface IAssetDBInfo extends AssetDBOptions {
     visible: boolean;
     preImportExtList: string[];
 }
+export declare interface IAssetDeleteOptions extends IAssetOperationOptionsBase {
+    recursive?: boolean;
+    useTrash?: boolean;
+}
+export declare interface IAssetFileSystemProvider {
+    readFile?(path: string, encoding?: BufferEncoding): Promise<Buffer | string> | Buffer | string;
+    writeFile?(path: string, content: Buffer | string | Uint8Array, options?: IAssetWriteFileOptions): Promise<void> | void;
+    createDirectory?(path: string): Promise<void> | void;
+    delete?(path: string, options?: IAssetDeleteOptions): Promise<void> | void;
+    rename?(oldPath: string, newPath: string, options?: IAssetRenameOptions): Promise<void> | void;
+    copy?(sourcePath: string, destinationPath: string, options?: IAssetRenameOptions): Promise<void> | void;
+}
 export declare interface IAssetInfo {
     name: string; 
     source: string; 
@@ -7013,6 +7073,22 @@ export declare interface IAssetMeta<T extends ISupportCreateType | 'unknown' = '
     id?: string;
     name?: string;
 }
+export declare interface IAssetOperationContext {
+    opId: string;
+    kind: IAssetOperationKind;
+    origin: IAssetOperationOrigin;
+    source: string;
+    paths: string[];
+    timestamp: number;
+}
+export declare type IAssetOperationKind = 'write' | 'rename' | 'move' | 'copy' | 'delete';
+export declare interface IAssetOperationOptionsBase {
+    context?: IAssetOperationContext;
+}
+export declare type IAssetOperationOrigin = 'direct-op' | 'watcher';
+export declare interface IAssetRenameOptions extends IAssetOperationOptionsBase {
+    overwrite?: boolean;
+}
 export declare interface IAssetService extends IServiceEvents {
     assetChanged(uuid: string): Promise<void>;
     assetDeleted(uuid: string): Promise<void>;
@@ -7042,6 +7118,10 @@ export declare type IAssetType =
 | 'dragonBones.DragonBonesAtlasAsset' 
 | 'RenderStage'            
 | 'RenderFlow';
+export declare interface IAssetWriteFileOptions extends IAssetOperationOptionsBase {
+    create?: boolean;
+    overwrite?: boolean;
+}
 export declare interface IBaseConfiguration extends EventEmitterMethods {
     moduleName: string;
     getDefaultConfig(): Record<string, any> | undefined;
@@ -8276,6 +8356,7 @@ export declare namespace Server {
     }
 }
 export declare function set<T>(key: string, value: T, scope?: ConfigurationScope): Promise<boolean>;
+export declare function setFileSystemProvider(provider: IAssetFileSystemProvider): void;
 export declare interface SharedSettings {
     useDefineForClassFields: boolean;
     allowDeclareFields: boolean;

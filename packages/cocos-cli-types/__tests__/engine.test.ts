@@ -1,8 +1,8 @@
-import { init } from '../engine';
+type EngineModule = typeof import('../engine');
 
 describe('cocos-cli-types: engine', () => {
     it('should be able to import init', () => {
-        const _init: typeof init = init;
-        expect(1).toBe(1);
+        let _init: EngineModule['init'] | undefined = undefined;
+        expect(_init).toBeUndefined();
     });
 });

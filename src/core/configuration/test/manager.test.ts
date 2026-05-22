@@ -362,6 +362,39 @@ describe('ConfigurationManager', () => {
             expect(ConfigurationManager.VERSION).toBe('1.0.0');
             expect(ConfigurationManager.name).toBe('cocos.config.json');
         });
+
+        it('should serialize concurrent saves for the same config file', async () => {
+            manager['projectConfig'] = { version: '1.0.0', test: 'value' };
+            mockFse.writeJSON.mockClear();
+
+            let activeWrites = 0;
+            let maxConcurrentWrites = 0;
+            let releaseWrite: (() => void) | undefined;
+            const writeGate = new Promise<void>((resolve) => {
+                releaseWrite = resolve;
+            });
+
+            mockFse.writeJSON.mockImplementation(async () => {
+                activeWrites++;
+                maxConcurrentWrites = Math.max(maxConcurrentWrites, activeWrites);
+                await writeGate;
+                activeWrites--;
+            });
+
+            const firstSave = manager['save']();
+            const secondSave = manager['save']();
+
+            await new Promise((resolve) => setImmediate(resolve));
+
+            expect(mockFse.writeJSON).toHaveBeenCalledTimes(1);
+
+            releaseWrite?.();
+
+            await Promise.all([firstSave, secondSave]);
+
+            expect(mockFse.writeJSON).toHaveBeenCalledTimes(2);
+            expect(maxConcurrentWrites).toBe(1);
+        });
     });
 
     describe('Edge cases and error handling', () => {
