@@ -1,5 +1,5 @@
 import { Importer as AssetDBImporter, Asset, setDefaultUserData, get } from '@cocos/asset-db';
-import { copy, ensureDir, existsSync, outputFile, outputJSON } from 'fs-extra';
+import { existsSync, outputJSON } from 'fs-extra';
 import { basename, extname, isAbsolute, join } from 'path';
 import { url2path } from '../utils';
 import lodash from 'lodash';
@@ -10,6 +10,7 @@ import { IAsset, IExportData } from '../@types/protected/asset';
 import { AssetHandler, CustomHandler, CustomAssetHandler, ICreateMenuInfo, CreateAssetOptions, IExportOptions, IAssetConfig, ImporterHook, ThumbnailInfo, ThumbnailSize } from '../@types/protected/asset-handler';
 import type { AssetHandlerInfo } from '../asset-handler/config';
 import assetConfig from '../asset-config';
+import { copyPath, createDirectoryPath, writePath } from './filesystem';
 import eol from 'eol';
 
 interface HandlerInfo extends AssetHandlerInfo {
@@ -382,8 +383,8 @@ class AssetHandlerManager {
             return false;
         }
         const assetTemplateDir = getUserTemplateDir(importer);
-        await ensureDir(assetTemplateDir);
-        await copy(templatePath, target);
+        await createDirectoryPath(assetTemplateDir);
+        await copyPath(templatePath, target);
         return true;
     }
 
@@ -414,13 +415,13 @@ class AssetHandlerManager {
             if (options.template) {
                 const path = url2path(options.template);
                 if (existsSync(path)) {
-                    await copy(path, options.target, { overwrite: options.overwrite });
+                    await copyPath(path, options.target, { overwrite: options.overwrite });
                     await afterCreateAsset(options.target, options);
                     return options.target;
                 }
             }
             // content 不存在，新建一个文件夹
-            await ensureDir(options.target);
+            await createDirectoryPath(options.target);
         } else {
             if (typeof options.content === 'object') {
                 options.content = JSON.stringify(options.content, null, 4);
@@ -430,7 +431,7 @@ class AssetHandlerManager {
                 options.content = eol.auto(options.content);
             }
             // 部分自定义创建资源没有模板，内容为空，只需要一个空文件即可完成创建
-            await outputFile(options.target, options.content, 'utf8');
+            await writePath(options.target, options.content);
         }
         await afterCreateAsset(options.target, options);
         return options.target;
@@ -458,7 +459,7 @@ class AssetHandlerManager {
         if (typeof content === 'string' && asset.meta.importer === 'text') {
             content = eol.auto(content);
         }
-        await outputFile(asset.source, content);
+        await writePath(asset.source, content);
         return true;
     }
 
@@ -738,9 +739,7 @@ async function afterCreateAsset(paths: string | string[], options: CreateAssetOp
             if (options.uuid) {
                 meta.uuid = options.uuid;
             }
-            await outputJSON(join(file + '.meta'), meta, {
-                spaces: 4,
-            });
+            await writePath(file + '.meta', JSON.stringify(meta, null, 4));
         }
     }
 }

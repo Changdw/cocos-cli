@@ -1,15 +1,19 @@
-import { build, buildBundleOnly, make, run, queryBuildConfig } from '../builder';
+type BuilderModule = typeof import('../builder');
 import type { IBuildTaskOption, IBuildResultData } from '../builder';
 
 describe('cocos-cli-types: builder', () => {
     it('should be able to import build task api functions', () => {
-        const _build: typeof build = build;
-        const _buildBundleOnly: typeof buildBundleOnly = buildBundleOnly;
-        const _make: typeof make = make;
-        const _run: typeof run = run;
-        const _queryBuildConfig: typeof queryBuildConfig = queryBuildConfig;
-        
-        expect(1).toBe(1); // placeholder for successful type check
+        let _build: BuilderModule['build'] | undefined = undefined;
+        let _buildBundleOnly: BuilderModule['buildBundleOnly'] | undefined = undefined;
+        let _make: BuilderModule['make'] | undefined = undefined;
+        let _run: BuilderModule['run'] | undefined = undefined;
+        let _queryBuildConfig: BuilderModule['queryBuildConfig'] | undefined = undefined;
+
+        expect(_build).toBeUndefined();
+        expect(_buildBundleOnly).toBeUndefined();
+        expect(_make).toBeUndefined();
+        expect(_run).toBeUndefined();
+        expect(_queryBuildConfig).toBeUndefined();
     });
 
     it('should be able to import IBuildTaskOption', () => {

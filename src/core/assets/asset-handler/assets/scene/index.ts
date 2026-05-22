@@ -1,11 +1,12 @@
 'use strict';
 
 import { Asset } from '@cocos/asset-db';
-import { readJSON, writeFile } from 'fs-extra';
+import { readJSON } from 'fs-extra';
 import { extname, basename, join } from 'path';
 
 import { getDependList, removeNull } from '../../utils';
 import { AssetHandler, ICreateMenuInfo } from '../../../@types/protected';
+import { writePath } from '../../../manager/filesystem';
 
 export const version = '1.1.50';
 export const versionCode = 2;
@@ -70,7 +71,7 @@ export const SceneHandler: AssetHandler = {
             // 同步到存档文件
             if (dirty) {
                 const content = JSON.stringify(source, undefined, 2);
-                await writeFile(asset.source, content);
+                await writePath(asset.source, content);
             }
 
             const serializeJSON = JSON.stringify(source, undefined, 2);

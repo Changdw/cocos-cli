@@ -74,6 +74,7 @@ export class ConfigurationManager extends EventEmitter implements IConfiguration
     private projectPath: string = '';
     private configPath: string = '';
     private projectConfig: IConfiguration = {};
+    private saveQueue: Promise<void> = Promise.resolve();
 
     private _version: string = '0.0.0';
     get version(): string {
@@ -312,20 +313,27 @@ export class ConfigurationManager extends EventEmitter implements IConfiguration
         if (!force && !Object.keys(this.projectConfig).length) {
             return;
         }
-        try {
-            this.version = ConfigurationManager.VERSION;
-            // 确保目录存在
-            await fse.ensureDir(path.dirname(this.configPath));
-            this.projectConfig.version = this.version;
-            this.projectConfig.$schema = ConfigurationManager.relativeSchemaPath;
-            // 保存配置文件
-            await fse.writeJSON(this.configPath, this.projectConfig, { spaces: 4 });
-            this.emit(MessageType.Save, this.projectConfig);
-            newConsole.debug(`[Configuration] 已保存项目配置: ${this.configPath}`);
-        } catch (error) {
-            newConsole.error(`[Configuration] 保存项目配置失败: ${this.configPath} - ${error}`);
-            throw error;
-        }
+        const nextSave = this.saveQueue
+            .catch(() => undefined)
+            .then(async () => {
+                try {
+                    this.version = ConfigurationManager.VERSION;
+                    // 确保目录存在
+                    await fse.ensureDir(path.dirname(this.configPath));
+                    this.projectConfig.version = this.version;
+                    this.projectConfig.$schema = ConfigurationManager.relativeSchemaPath;
+                    // 保存配置文件
+                    await fse.writeJSON(this.configPath, this.projectConfig, { spaces: 4 });
+                    this.emit(MessageType.Save, this.projectConfig);
+                    newConsole.debug(`[Configuration] 已保存项目配置: ${this.configPath}`);
+                } catch (error) {
+                    newConsole.error(`[Configuration] 保存项目配置失败: ${this.configPath} - ${error}`);
+                    throw error;
+                }
+            });
+
+        this.saveQueue = nextSave;
+        return nextSave;
     }
 
     public async getConfigPath(): Promise<string> {

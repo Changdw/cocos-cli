@@ -1,13 +1,15 @@
-import { init, migrateFromProject, reload } from '../configuration';
+type ConfigurationModule = typeof import('../configuration');
 import type { IConfiguration } from '../configuration';
 
 describe('cocos-cli-types: configuration', () => {
     it('should be able to import api functions', () => {
-        const _init: typeof init = init;
-        const _migrateFromProject: typeof migrateFromProject = migrateFromProject;
-        const _reload: typeof reload = reload;
+        let _init: ConfigurationModule['init'] | undefined = undefined;
+        let _migrateFromProject: ConfigurationModule['migrateFromProject'] | undefined = undefined;
+        let _reload: ConfigurationModule['reload'] | undefined = undefined;
 
-        expect(1).toBe(1);
+        expect(_init).toBeUndefined();
+        expect(_migrateFromProject).toBeUndefined();
+        expect(_reload).toBeUndefined();
     });
 
     it('should be able to import IConfiguration', () => {

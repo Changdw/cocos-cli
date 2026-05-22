@@ -2,6 +2,7 @@
 
 import { AssetDBRegisterInfo, IAsset, IAssetDBInfo, IAssetInfo, QueryAssetsOption } from '../@types/private';
 import * as assetdb from '@cocos/asset-db';
+import type { IAssetFileSystemProvider } from '@cocos/asset-db/libs/filesystem';
 import EventEmitter from 'events';
 import { ensureDirSync, existsSync } from 'fs-extra';
 import { extname, join, relative } from 'path';
@@ -9,6 +10,7 @@ import { newConsole } from '../../base/console';
 import { decidePromiseState, PROMISE_STATE } from '../utils';
 import pluginManager from './plugin';
 import assetHandlerManager from './asset-handler';
+import { setFileSystemProvider as setCLIFileSystemProvider } from './filesystem';
 import i18n from '../../base/i18n';
 import Utils from '../../base/utils';
 import assetConfig from '../asset-config';
@@ -49,6 +51,11 @@ interface IWaitingTaskInfo {
 class AssetDBManager extends EventEmitter {
     public assetDBMap: Record<string, assetdb.AssetDB> = {};
     public globalInternalLibrary = false;
+
+    public setFileSystemProvider(provider: IAssetFileSystemProvider) {
+        setCLIFileSystemProvider(provider);
+        assetdb.setFileSystemProvider(provider);
+    }
 
     private hasPause = false;
     private startPause = false;

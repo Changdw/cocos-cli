@@ -15,7 +15,7 @@ const config: Config.InitialOptions = {
         'src/core/**/*.{ts,tsx}',
         '!src/core/**/*.d.ts',
     ],
-    moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'd.ts'],
+    moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
     testTimeout: 100000,
     verbose: true,
     // 失败测试汇总选项

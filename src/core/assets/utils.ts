@@ -1,13 +1,15 @@
 'use strict';
 
 import { Asset, VirtualAsset, queryUUID, Utils as dbUtils, queryAsset as dbQueryAsset, queryPath } from '@cocos/asset-db/index';
-import { isAbsolute, join, relative, resolve } from 'path';
-import { existsSync, move, readFile, readJSON, remove } from 'fs-extra';
+import { extname, isAbsolute, join, relative, resolve } from 'path';
+import { readFile, readJSON } from 'fs-extra';
 import type { Asset as CCAsset, Details } from 'cc';
 import type { CCON } from 'cc/editor/serialization';
 import i18n from '../base/i18n';
 import Utils from '../base/utils';
 import { IAsset, IExportData, ISerializedOptions, SerializedAsset } from './@types/private';
+import { DeleteAssetOptions } from './@types/public';
+import { removeAssetSource } from './manager/filesystem';
 import { MissingClass } from '../engine/editor-extends/missing-reporter/missing-class-reporter';
 
 export function url2path(url: string) {
@@ -145,28 +147,8 @@ export function decidePromiseState(promise: Promise<any>) {
  * 删除文件
  * @param file
  */
-export async function removeFile(file: string): Promise<boolean> {
-    if (!existsSync(file)) {
-        return true;
-    }
-
-    try {
-        await Utils.File.trashItem(file);
-    } catch (error) {
-        console.error(error);
-        throw new Error(`asset db removeFile ${file} fail!`);
-    }
-
-    // 这个 try 是容错，目的是吐掉报错，报错的原因是重复操作了，db 在刷新的时候也会处理主文件配套的 meta 文件
-    try {
-        const metaFile = file + '.meta';
-        if (existsSync(metaFile)) {
-            await Utils.File.trashItem(metaFile);
-        }
-    } catch (error) {
-        // do nothing
-    }
-    return true;
+export async function removeFile(file: string, options: DeleteAssetOptions = {}): Promise<boolean> {
+    return await removeAssetSource(file, options);
 }
 
 

@@ -166,7 +166,7 @@ export declare interface CreateAssetOptions {
     userData?: Record<string, any>;
     customOptions?: Record<string, any>;
 }
-export declare function deleteAsset(dbPath: string): Promise<IAssetInfo | null>;
+export declare function deleteAsset(dbPath: string, options?: DeleteAssetOptions): Promise<IAssetInfo | null>;
 export declare interface DeleteAssetOptions {
     useTrash?: boolean;
 }
@@ -658,7 +658,6 @@ export declare interface RtSpriteFrameAssetUserData {
     height?: number;
 }
 export declare function saveAsset(pathOrUrlOrUUID: string, data: string | Buffer): Promise<IAssetInfo>;
-export declare function saveAssetMeta(uuid: string, meta: IAssetMeta): Promise<void>;
 export declare interface ScriptModuleUserData {
     isPlugin: false;
 }
@@ -670,6 +669,7 @@ export declare interface SerializedAssetFinder {
     materials?: Array<string | null>;
     scenes?: Array<string | null>;
 }
+export declare function setFileSystemProvider(provider: IAssetFileSystemProvider): void;
 export declare interface SimplifyOptions {
     targetRatio?: number;
     enableSmartLink?: boolean;
@@ -6565,6 +6565,7 @@ export declare interface AssetOperationOption {
 export declare namespace Assets {
     export {
         init,
+        setFileSystemProvider,
         start,
         onReady,
         onDBReady,
@@ -6573,7 +6574,6 @@ export declare namespace Assets {
         refresh,
         queryAssetInfo,
         queryAssetMeta,
-        saveAssetMeta,
         queryCreateMap,
         queryAssetInfos,
         queryAssetDBInfos,
@@ -6768,7 +6768,7 @@ export declare interface CreateAssetOptions {
     userData?: Record<string, any>;
     customOptions?: Record<string, any>;
 }
-export declare function deleteAsset(dbPath: string): Promise<IAssetInfo | null>;
+export declare function deleteAsset(dbPath: string, options?: DeleteAssetOptions): Promise<IAssetInfo | null>;
 export declare interface DeleteAssetOptions {
     useTrash?: boolean;
 }
@@ -8314,7 +8314,6 @@ export declare interface RtSpriteFrameAssetUserData {
 }
 export declare function save(force?: boolean): Promise<void>;
 export declare function saveAsset(pathOrUrlOrUUID: string, data: string | Buffer): Promise<IAssetInfo>;
-export declare function saveAssetMeta(uuid: string, meta: IAssetMeta): Promise<void>;
 export declare namespace Scene {
     export {
         init_6 as init,
@@ -8357,6 +8356,7 @@ export declare namespace Server {
     }
 }
 export declare function set<T>(key: string, value: T, scope?: ConfigurationScope): Promise<boolean>;
+export declare function setFileSystemProvider(provider: IAssetFileSystemProvider): void;
 export declare interface SharedSettings {
     useDefineForClassFields: boolean;
     allowDeclareFields: boolean;
