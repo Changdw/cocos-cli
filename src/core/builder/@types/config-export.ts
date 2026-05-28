@@ -1,4 +1,13 @@
-import { IBuildCommonOptions, WebMobileBuildOptions, IBuildCacheUseConfig, OverwriteProjectSettings, IBundleOptions, UserCompressConfig, WebDesktopBuildOptions } from './public';
+import { IBuildCommonOptions, WebMobileBuildOptions, IBuildCacheUseConfig, OverwriteProjectSettings, UserCompressConfig, WebDesktopBuildOptions } from './public';
+import { CustomBundleConfig } from './protected/bundle-config';
+
+export interface CustomBundleConfigMap {
+    [bundleName: string]: CustomBundleConfig;
+}
+
+export interface BuildBundleConfiguration {
+    custom: CustomBundleConfigMap;
+}
 
 export interface BuildConfiguration {
     common: IBuildCommonOptions;
@@ -7,8 +16,6 @@ export interface BuildConfiguration {
         'web-mobile'?: WebMobileBuildOptions & OverwriteProjectSettings;
     };
     useCacheConfig?: IBuildCacheUseConfig;
-    bundleConfig: {
-        custom: Record<string, IBundleOptions>;
-    };
+    bundleConfig: BuildBundleConfiguration;
     textureCompressConfig: UserCompressConfig;
 }
