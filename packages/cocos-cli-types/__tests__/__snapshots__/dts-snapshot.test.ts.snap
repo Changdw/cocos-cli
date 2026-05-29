@@ -1037,6 +1037,9 @@ export declare interface BitmapFontAssetUserData {
 }
 export declare type BreakType = 'cancel' | 'crashed' | 'refreshed' | 'interrupted' | '';
 export declare function build<P extends Platform>(platform: P, options?: IBuildCommandOption): Promise<IBuildResultData>;
+export declare interface BuildBundleConfiguration {
+    custom: CustomBundleConfigMap;
+}
 export declare function buildBundleOnly(bundleOptions: IBundleBuildOptions): Promise<IBuildResultData>;
 export declare interface BuildCheckResult {
     error: string;
@@ -1050,9 +1053,7 @@ export declare interface BuildConfiguration {
         'web-mobile'?: WebMobileBuildOptions & OverwriteProjectSettings;
     };
     useCacheConfig?: IBuildCacheUseConfig;
-    bundleConfig: {
-        custom: Record<string, IBundleOptions>;
-    };
+    bundleConfig: BuildBundleConfiguration;
     textureCompressConfig: UserCompressConfig;
 }
 export declare class BuilderAssetCache implements BuilderCache {
@@ -1265,6 +1266,9 @@ export declare interface BundleConfigItem {
     isRemote?: boolean;
     compressionType: BundleCompressionType;
 }
+export declare interface BundleConfigItemMap {
+    [platform: string]: BundleConfigItem;
+}
 export declare type BundleConfigProperty = 'compressionType' | 'isRemote';
 export declare interface BundleFilterConfig {
     range: 'include' | 'exclude';
@@ -1464,8 +1468,11 @@ export declare interface CustomBundleConfigItem {
         compressionType: BundleCompressionType;
         isRemote?: boolean;
     };
-    overwriteSettings?: Record<string, BundleConfigItem>;
+    overwriteSettings?: BundleConfigItemMap;
     configMode?: 'auto' | 'fallback' | 'overwrite';
+}
+export declare interface CustomBundleConfigMap {
+    [bundleName: string]: CustomBundleConfig;
 }
 export declare class CustomConsole {
     constructor(level?: LogLevel);
