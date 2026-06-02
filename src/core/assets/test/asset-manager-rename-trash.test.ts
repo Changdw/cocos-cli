@@ -23,24 +23,23 @@ import assetManager from '../manager/asset';
 import assetDBManager from '../manager/asset-db';
 import { resetFileSystemProvider as resetCLIFileSystemProvider } from '../manager/filesystem';
 
-describe('assetManager.renameAsset terrain library deletion', () => {
+describe('assetManager.renameAsset internal library deletion', () => {
     const PATH = {
         ROOT: path.join(__dirname, 'asset-manager-rename-trash'),
         TARGET: path.join(__dirname, 'asset-manager-rename-trash/target'),
         LIBRARY: path.join(__dirname, 'asset-manager-rename-trash/library'),
         TEMP: path.join(__dirname, 'asset-manager-rename-trash/temp'),
-        SOURCE: path.join(__dirname, 'asset-manager-rename-trash/target/terrain.terrain'),
-        RENAMED: path.join(__dirname, 'asset-manager-rename-trash/target/terrain-renamed.terrain'),
+        SOURCE: path.join(__dirname, 'asset-manager-rename-trash/target/prefab.prefab'),
+        RENAMED: path.join(__dirname, 'asset-manager-rename-trash/target/prefab-renamed.prefab'),
     };
 
-    class TerrainLikeImporter extends assetdb.Importer {
+    class PrefabLikeImporter extends assetdb.Importer {
         get name() {
-            return 'terrain';
+            return 'prefab';
         }
 
         async import(asset: assetdb.Asset) {
-            await asset.copyToLibrary('.bin', asset.source);
-            await asset.saveToLibrary('.json', '{"type":"terrain"}');
+            await asset.saveToLibrary('.json', '{"type":"prefab"}');
             return true;
         }
     }
@@ -102,7 +101,7 @@ describe('assetManager.renameAsset terrain library deletion', () => {
 
     async function startTestDB() {
         const db = createDB();
-        db.importerManager.add(TerrainLikeImporter, ['.terrain']);
+        db.importerManager.add(PrefabLikeImporter, ['.prefab']);
 
         assetDBManager.assetDBMap.assets = db;
         assetDBManager.assetDBInfo.assets = {
@@ -138,18 +137,18 @@ describe('assetManager.renameAsset terrain library deletion', () => {
         await fse.remove(PATH.ROOT);
     });
 
-    it('should not send terrain library bin/json to provider trash branch when renaming through assetManager.renameAsset', async () => {
+    it('should not send prefab library json to provider trash branch when renaming through assetManager.renameAsset', async () => {
         const libraryTrashCalls: string[] = [];
 
         assetDBManager.setFileSystemProvider(createPinkLikeProvider(libraryTrashCalls));
         await fse.ensureDir(PATH.TARGET);
-        await fse.outputFile(PATH.SOURCE, 'terrain source');
+        await fse.outputFile(PATH.SOURCE, '[{"__type__":"cc.Prefab"}]');
 
         await startTestDB();
 
         const importedAsset = assetManager.queryAsset(PATH.SOURCE);
         expect(importedAsset).toBeTruthy();
-        expect(importedAsset!.meta.files).toEqual(expect.arrayContaining(['.bin', '.json']));
+        expect(importedAsset!.meta.files).toEqual(expect.arrayContaining(['.json']));
 
         libraryTrashCalls.length = 0;
 
