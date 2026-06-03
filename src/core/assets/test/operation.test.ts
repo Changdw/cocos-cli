@@ -526,6 +526,22 @@ describe('测试 db 的操作接口', function () {
             const content = readFileSync(assetInfo!.file, 'utf8');
             expect(content).toEqual('console.log("Hello, World!");');
         });
+
+        it('创建 texture-cube 时生成 .cubemap 文件而不是目录', async () => {
+            const assetInfo = await assetManager.createAssetByType(
+                'texture-cube' as any,
+                databasePath,
+                'texture-cube-file-check',
+                { overwrite: true }
+            );
+
+            expect(assetInfo).not.toBeNull();
+            expect(assetInfo!.type).toEqual('cc.TextureCube');
+            expect(assetInfo!.isDirectory).toBe(false);
+            expect(assetInfo!.file.endsWith('.cubemap')).toBe(true);
+            expect(statSync(assetInfo!.file).isFile()).toBe(true);
+            expect(statSync(assetInfo!.file).isDirectory()).toBe(false);
+        });
     });
 
     describe('concurrent-create-asset', () => {

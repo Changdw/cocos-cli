@@ -16,6 +16,7 @@ export const CREATE_ASSET_TYPE_TEST_CASES = [
     { type: 'scene', ext: 'scene', ccType: 'cc.SceneAsset', description: 'quality 场景', templateName: 'quality' },
     { type: 'prefab', ext: 'prefab', ccType: 'cc.Prefab', description: '预制体' },
     { type: 'material', ext: 'mtl', ccType: 'cc.Material', description: '材质' },
+    { type: 'texture-cube', ext: 'cubemap', ccType: 'cc.TextureCube', description: '立方体贴图' },
     { type: 'terrain', ext: 'terrain', ccType: 'cc.TerrainAsset', description: '地形' },
     { type: 'physics-material', ext: 'pmtl', ccType: 'cc.PhysicsMaterial', description: '物理材质' },
     { type: 'label-atlas', ext: 'labelatlas', ccType: 'cc.LabelAtlas', description: '标签图集' },

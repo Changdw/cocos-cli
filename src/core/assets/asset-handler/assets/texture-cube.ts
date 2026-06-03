@@ -26,7 +26,7 @@ export const TextureCubeHandler: AssetHandler = {
                 {
                     label: 'i18n:ENGINE.assets.newCubeMap',
                     fullFileName: 'cubemap.cubemap',
-                    content: '',
+                    template: 'db://internal/default_file_content/texture-cube/default.cubemap',
                     name: 'default',
                 },
             ];

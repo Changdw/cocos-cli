@@ -69,7 +69,7 @@ export const SUPPORT_CREATE_TYPES = [
     'scene',                   // 场景
     'prefab',                  // 预制体
     'material',                // 材质
-    // 'texture-cube',            // 立方体贴图
+    'texture-cube',            // 立方体贴图
     'terrain',                 // 地形
     'physics-material',        // 物理材质
     'label-atlas',             // 标签图集
