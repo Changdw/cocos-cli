@@ -77,7 +77,7 @@ import {
 } from './schema';
 import { z } from 'zod';
 import { description, param, result, title, tool } from '../decorator/decorator.js';
-import { COMMON_STATUS, CommonResultType, HttpStatusCode } from '../base/schema-base';
+import { COMMON_STATUS, CommonResultType, getCommonErrorStatus, HttpStatusCode } from '../base/schema-base';
 import { assetDBManager, assetManager } from '../../core/assets';
 import { IAssetInfo } from '../../core/assets/@types/public';
 import { SchemaUrlOrPath, SchemaUrlOrUUID, SchemaUUIDOrPath } from '../base/schema-identifier';
@@ -126,7 +126,7 @@ export class AssetsApi {
         try {
             await assetManager.refreshAsset(dir);
         } catch (e) {
-            ret.code = COMMON_STATUS.FAIL;
+            ret.code = getCommonErrorStatus(e);
             console.error('refresh dir fail:', e);
             ret.reason = e instanceof Error ? e.message : String(e);
         }
@@ -154,11 +154,11 @@ export class AssetsApi {
         try {
             ret.data = await assetManager.queryAssetInfo(urlOrUUIDOrPath, dataKeys as (keyof IAssetInfo)[] | undefined);
             if (!ret.data) {
-                ret.code = COMMON_STATUS.FAIL;
+                ret.code = COMMON_STATUS.NOT_FOUND;
                 ret.reason = `❌Asset can not be found: ${urlOrUUIDOrPath}. Please refresh asset db and try again.`;
             }
         } catch (e) {
-            ret.code = COMMON_STATUS.FAIL;
+            ret.code = getCommonErrorStatus(e);
             console.error('query asset info fail:', e instanceof Error ? e.message : String(e));
             ret.reason = e instanceof Error ? e.message : String(e);
         }
@@ -183,11 +183,11 @@ export class AssetsApi {
         try {
             ret.data = await assetManager.queryAssetMeta(urlOrUUIDOrPath);
             if (!ret.data) {
-                ret.code = COMMON_STATUS.FAIL;
+                ret.code = COMMON_STATUS.NOT_FOUND;
                 ret.reason = `Asset not found: ${urlOrUUIDOrPath}`;
             }
         } catch (e) {
-            ret.code = COMMON_STATUS.FAIL;
+            ret.code = getCommonErrorStatus(e);
             console.error('query asset meta fail:', e instanceof Error ? e.message : String(e));
             ret.reason = e instanceof Error ? e.message : String(e);
         }
@@ -316,9 +316,9 @@ export class AssetsApi {
         try {
             ret.data = await assetManager.createAsset(options);
         } catch (e) {
-            ret.code = COMMON_STATUS.FAIL;
+            ret.code = getCommonErrorStatus(e);
             console.error(e);
-            ret.reason = e instanceof Error ? e.message + e.stack : String(e);
+            ret.reason = e instanceof Error ? e.message : String(e);
         }
         return ret;
     }
@@ -344,7 +344,7 @@ export class AssetsApi {
         try {
             ret.data = await assetManager.importAsset(source, target, options);
         } catch (e) {
-            ret.code = COMMON_STATUS.FAIL;
+            ret.code = getCommonErrorStatus(e);
             console.error('import asset fail:', e instanceof Error ? e.message : String(e));
             ret.reason = e instanceof Error ? e.message : String(e);
         }
@@ -672,11 +672,11 @@ export class AssetsApi {
             if (asset) {
                 ret.data = await assetManager.queryAssetUserDataConfig(asset);
             } else {
-                ret.code = COMMON_STATUS.FAIL;
+                ret.code = COMMON_STATUS.NOT_FOUND;
                 ret.reason = `❌Asset can not be found: ${urlOrUuidOrPath}`;
             }
         } catch (e) {
-            ret.code = COMMON_STATUS.FAIL;
+            ret.code = getCommonErrorStatus(e);
             console.error('query asset user data config fail:', e instanceof Error ? e.message : String(e));
             ret.reason = e instanceof Error ? e.message : String(e);
         }
@@ -705,11 +705,11 @@ export class AssetsApi {
         try {
             ret.data = await assetManager.updateUserData(urlOrUuidOrPath, path, value);
             if (!ret.data) {
-                ret.code = COMMON_STATUS.FAIL;
+                ret.code = COMMON_STATUS.NOT_FOUND;
                 ret.reason = `❌Asset can not be found: ${urlOrUuidOrPath}. Please refresh asset db and try again.`;
             }
         } catch (e) {
-            ret.code = COMMON_STATUS.FAIL;
+            ret.code = getCommonErrorStatus(e);
             console.error('update asset user data fail:', e instanceof Error ? e.message : String(e));
             ret.reason = e instanceof Error ? e.message : String(e);
         }

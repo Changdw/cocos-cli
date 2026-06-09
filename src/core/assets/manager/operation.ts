@@ -9,7 +9,7 @@ import { IMoveOptions } from '../@types/private';
 import { IAsset, CreateAssetOptions, IExportOptions, IExportData, CreateAssetByTypeOptions, ICreateMenuInfo } from '../@types/protected';
 import { AssetOperationOption, AssetUserDataMap, DeleteAssetOptions, IAssetInfo, IAssetMeta, ISupportCreateType } from '../@types/public';
 import assetConfig from '../asset-config';
-import { url2path, ensureOutputData, url2uuid } from '../utils';
+import { url2path, ensureOutputData, url2uuid, pathToDbUrlIfAssetDBPath, dirnameForDbUrlOrPath } from '../utils';
 import assetDBManager from './asset-db';
 import assetHandlerManager from './asset-handler';
 import { copyPath, moveAssetSource, removeAssetSource, renamePath } from './filesystem';
@@ -205,12 +205,14 @@ class AssetOperation extends EventEmitter {
      * @param options 
      */
     async importAsset(source: string, target: string, options?: AssetOperationOption): Promise<IAssetInfo[]> {
-        if (target.startsWith('db://')) {
-            target = url2path(target);
+        const targetPath = target.startsWith('db://') ? url2path(target) : target;
+        const assetTarget = this._pathToDbUrlIfInsideAssetDB(target);
+
+        if (!this._isSameFilesystemPath(source, targetPath)) {
+            await copyPath(source, targetPath, options);
         }
-        await copyPath(source, target, options);
-        await this.refreshAsset(target);
-        const assetInfo = assetQuery.queryAssetInfo(target);
+        await this.refreshAsset(assetTarget);
+        const assetInfo = assetQuery.queryAssetInfo(assetTarget);
         if (!assetInfo) {
             return [];
         }
@@ -297,18 +299,43 @@ class AssetOperation extends EventEmitter {
     }
 
     private async _refreshAsset(pathOrUrlOrUUID: string, autoRefreshDir = true): Promise<number> {
-        const result = await refresh(pathOrUrlOrUUID);
+        const refreshTarget = this._pathToDbUrlIfInsideAssetDB(pathOrUrlOrUUID);
+        const refreshDir = this._dirnameForRefresh(refreshTarget);
+        const result = await refresh(refreshTarget);
         if (result === undefined) {
             throw new Error(`can not find asset ${pathOrUrlOrUUID}`);
         }
         if (autoRefreshDir) {
             // HACK 某些情况下导入原始资源后，文件夹的 mtime 会发生变化，导致资源量大的情况下下次获得焦点自动刷新时会有第二次的文件夹大批量刷新
             // 用进入队列的方式才能保障 pause 等机制不会被影响
-            await assetDBManager.addTask(assetDBManager.autoRefreshAssetLazy.bind(assetDBManager), [dirname(pathOrUrlOrUUID)]);
+            await assetDBManager.addTask(assetDBManager.autoRefreshAssetLazy.bind(assetDBManager), [refreshDir]);
         }
         // this.autoRefreshAssetLazy(dirname(pathOrUrlOrUUID));
-        console.debug(`refresh asset ${dirname(pathOrUrlOrUUID)} success`);
+        console.debug(`refresh asset ${refreshDir} success`);
         return result;
+    }
+
+    private _pathToDbUrlIfInsideAssetDB(pathOrUrlOrUUID: string) {
+        return pathToDbUrlIfAssetDBPath(pathOrUrlOrUUID, assetDBManager.assetDBInfo);
+    }
+
+    private _isSameFilesystemPath(source: string, target: string) {
+        if (!isAbsolute(source) || !isAbsolute(target)) {
+            return source === target;
+        }
+
+        let normalizedSource = utils.Path.normalize(source);
+        let normalizedTarget = utils.Path.normalize(target);
+        if (process.platform === 'win32') {
+            normalizedSource = normalizedSource.toLowerCase();
+            normalizedTarget = normalizedTarget.toLowerCase();
+        }
+
+        return normalizedSource === normalizedTarget;
+    }
+
+    private _dirnameForRefresh(pathOrUrlOrUUID: string) {
+        return dirnameForDbUrlOrPath(pathOrUrlOrUUID);
     }
 
     /**

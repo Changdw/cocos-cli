@@ -3,7 +3,7 @@ import { isAbsolute, basename, extname } from 'path';
 import { QueryAssetType, IAsset } from '../@types/protected';
 import { AssetHandlerType, IAssetInfo, IAssetMeta, QueryAssetsOption } from '../@types/public';
 import { FilterPluginOptions, IPluginScriptInfo } from '../../scripting/interface';
-import { url2uuid, libArr2Obj, getExtendsFromCCType, url2path } from '../utils';
+import { url2uuid, libArr2Obj, getExtendsFromCCType, url2path, pathToDbUrlIfAssetDBPath } from '../utils';
 import assetDBManager from './asset-db';
 import assetHandlerManager from './asset-handler';
 import script from '../../scripting';
@@ -141,6 +141,7 @@ class AssetQueryManager {
         if (!urlOrUUIDOrPath || typeof urlOrUUIDOrPath !== 'string') {
             throw new Error('parameter error');
         }
+        urlOrUUIDOrPath = pathToDbUrlIfAssetDBPath(urlOrUUIDOrPath, assetDBManager.assetDBInfo);
         let uuid = '';
 
         if (urlOrUUIDOrPath.startsWith('db://')) {
@@ -649,6 +650,7 @@ class AssetQueryManager {
         if (!urlOrPath || typeof urlOrPath !== 'string') {
             return null;
         }
+        urlOrPath = pathToDbUrlIfAssetDBPath(urlOrPath, assetDBManager.assetDBInfo);
 
         if (urlOrPath.startsWith('db://')) {
             const name = urlOrPath.substr(5);
