@@ -11,6 +11,7 @@ const NodeMgr = EditorExtends.Node;
 
 import get from 'lodash/get';
 import set from 'lodash/set';
+import findLast from 'lodash/findLast';
 import { isEditorNode, getNodeName, setLayer } from './node-utils';
 import { prefabUtils } from '../prefab/utils';
 import { ServiceEvents } from '../core/global-events';
@@ -43,6 +44,7 @@ import { type IScene } from '../../../common/editor/scene';
 
 import { loadAny } from './node-create';
 import compMgr from '../component/index';
+import { Rpc } from '../../rpc';
 
 const creatableAssetTypes = [
     'cc.AnimationClip',
@@ -86,6 +88,7 @@ export class NodeManager {
     _onAnchorChanged?: (...args: any[]) => void;
     _onParentChanged?: (...args: any[]) => void;
     _onLightProbeChanged?: (...args: any[]) => void;
+    private _sceneRoot: Node | null = null;
 
     emit<K extends keyof INodeEvents>(event: K, ...args: INodeEvents[K]): void;
     emit(event: string, ...args: any[]): void;
@@ -109,6 +112,8 @@ export class NodeManager {
             return;
         }
 
+        this._sceneRoot = scene as Node;
+        this.registerEventListeners(this._sceneRoot);
         const nodeMap = NodeMgr.getNodesInScene();
 
         // 场景载入后要将现有节点监听所需事件
@@ -189,8 +194,12 @@ export class NodeManager {
         // 遍历事件映射表，统一注册事件
         Object.entries(this.NodeHandlers).forEach(([eventType, handlerName]) => {
             const boundHandler = (this as any)[handlerName].bind(this, node);
+            const key = `${eventType}_${node.uuid}`;
+            if (this.nodeHandlers.has(key)) {
+                return;
+            }
             node.on(eventType, boundHandler, this);
-            this.nodeHandlers.set(`${eventType}_${node.uuid}`, boundHandler);
+            this.nodeHandlers.set(key, boundHandler);
         });
     }
 
@@ -262,10 +271,15 @@ export class NodeManager {
             return;
         }
 
+        const childAdded = child.parent === parent;
+        if (childAdded) {
+            NodeMgr.updateNodeParent(child.uuid, parent.uuid);
+        }
+
         this.emit('node:change', parent, { type: NodeEventType.CHILD_CHANGED });
 
-        // 自身 parent = null 为删除，最后会有 deleted 消息，所以不需要再发 changed 消息
-        if (child.parent) {
+        // 只有挂入新父节点后，子节点路径索引才稳定；移出旧父节点时只通知旧父节点 children 变化。
+        if (childAdded) {
             this.emit('node:change', child, { type: NodeEventType.PARENT_CHANGED });
         }
     }
@@ -282,6 +296,10 @@ export class NodeManager {
      * 清空当前管理的节点
      */
     clear() {
+        if (this._sceneRoot) {
+            this.unregisterEventListeners(this._sceneRoot);
+            this._sceneRoot = null;
+        }
         const nodeMap = NodeMgr.getNodes();
         Object.keys(nodeMap).forEach((key) => {
             this.unregisterEventListeners(nodeMap[key]);
@@ -386,73 +404,77 @@ export class NodeManager {
         return dumpUtil.dumpNode(node);
     }
 
-    // /**
-    //  * 查询当前场景的节点树信息
-    //  * @param uuid asset uuid
-    //  */
-    // queryNodesByAssetUuid(uuid: string) {
-    //     if (!uuid) {
-    //         return [];
-    //     }
+    /**
+     * 查询当前场景的节点树信息
+     * @param uuid asset uuid
+     */
+    queryNodesByAssetUuid(uuid: string) {
+        if (!uuid) {
+            return [];
+        }
 
-    //     return NodeMgr.getNodesByAsset(uuid);
-    // }
+        return NodeMgr.getNodesByAsset(uuid);
+    }
 
-    // /**
-    //  * 获取丢失资源的节点
-    //  * @returns uuids[] 节点数组
-    //  */
-    // async queryNodesMissAsset() {
-    //     const nodesUuid: string[] = [];
+    /**
+     * 获取丢失资源的节点
+     * @returns uuids[] 节点数组
+     */
+    async queryNodesMissAsset() {
+        const scene = director.getScene();
+        if (!scene?.children?.length) return [];
 
-    //     // 搜集 MissingScript
-    //     const missScripts: { nodeUuid: string, scriptUuid: string }[] = [];
-    //     EditorExtends.walkProperties(
-    //         director.getScene()?.children,
-    //         (obj: any, key: any, value: any, parsedObjects: any) => {
-    //             // 搜集资源丢失的节点
-    //             if (value._uuid) {
-    //                 const isAssetMiss = !(cc.assetManager.assets.get(value._uuid) || cc.assetManager.assets.get(Editor.Utils.UUID.compressUUID(value._uuid, true)));
-    //                 if (isAssetMiss) {
-    //                     const node = findLast(parsedObjects, (item: any) => item instanceof cc.Node);
-    //                     if (node && !nodesUuid.includes(node.uuid)) {
-    //                         nodesUuid.push(node.uuid);
-    //                     }
-    //                 }
-    //             }
-    //             // 搜集 MissingScript（脚本丢失或者是编译不通过的脚本）
-    //             if (value instanceof MissingScript) {
-    //                 // @ts-ignore __type__: 存储编译不通过或丢失的脚本 id
-    //                 const id = value._$erialized?.__type__;
-    //                 missScripts.push({
-    //                     nodeUuid: value.node.uuid,
-    //                     scriptUuid: EditorExtends.UuidUtils.decompressUuid(id),
-    //                 });
-    //             }
-    //         },
-    //         {
-    //             dontSkipNull: false,
-    //             ignoreSubPrefabHelper: true,
-    //         },
-    //     );
+        const nodesUuid = new Set<string>();
+        const missScripts: { nodeUuid: string, scriptUuid: string }[] = [];
 
-    //     // 检测 MissingScript 的脚本是否真的丢失
-    //     const existingScriptResult = await Editor.Message.request('asset-db', 'batch-message-handler', missScripts.map((item: { nodeUuid: string, scriptUuid: string }) => {
-    //         return {
-    //             name: 'query-asset-info',
-    //             args: [item.scriptUuid],
-    //         };
-    //     }));
-    //     const existingScriptUUIDs = existingScriptResult.map((info: IAssetInfo | null) => info && info.uuid);
-    //     missScripts.forEach((item: { nodeUuid: string, scriptUuid: string }) => {
-    //         if (!existingScriptUUIDs.includes(item.scriptUuid) &&
-    //             !nodesUuid.includes(item.nodeUuid)) {
-    //             nodesUuid.push(item.nodeUuid);
-    //         }
-    //     });
+        EditorExtends.walkProperties(
+            scene.children,
+            (obj: any, key: any, value: any, parsedObjects: any) => {
+                // 处理资源丢失
+                if (value?._uuid) {
+                    const compressed = EditorExtends.UuidUtils.compressUUID(value._uuid, true);
+                    const assetExists = cc.assetManager.assets.get(value._uuid) ||
+                        cc.assetManager.assets.get(compressed);
+                    if (!assetExists) {
+                        const node = findLast(parsedObjects, (item: any) => item instanceof cc.Node);
+                        if (node) nodesUuid.add(node.uuid);
+                    }
+                }
 
-    //     return nodesUuid;
-    // }
+                // 处理 MissingScript
+                if (value instanceof MissingScript) {
+                    // @ts-ignore __type__: 存储编译不通过或丢失的脚本 id
+                    const scriptId = value._$erialized?.__type__;
+                    if (scriptId) {
+                        missScripts.push({
+                            nodeUuid: value.node.uuid,
+                            scriptUuid: EditorExtends.UuidUtils.decompressUUID(scriptId),
+                        });
+                    }
+                }
+            },
+            { dontSkipNull: false, ignoreSubPrefabHelper: true }
+        );
+
+        // 批量查询并添加真正丢失的脚本节点
+        if (missScripts.length) {
+            const existingScripts = new Set(
+                (await Promise.all(missScripts.map(({ scriptUuid }) =>
+                    Rpc.getInstance().request('assetManager', 'queryAssetInfo', [scriptUuid])
+                )))
+                    .map((info: any | null) => info?.uuid)
+                    .filter(Boolean)
+            );
+
+            for (const { nodeUuid, scriptUuid } of missScripts) {
+                if (!existingScripts.has(scriptUuid)) {
+                    nodesUuid.add(nodeUuid);
+                }
+            }
+        }
+
+        return Array.from(nodesUuid);
+    }
 
     /**
      * 预览设置属性后的效果，不进入undo堆栈
@@ -944,25 +966,40 @@ export class NodeManager {
             uuids = [uuids];
         }
 
-        uuids = uuids.filter((uuid: string) => {
-            const node = this.query(uuid);
-            if (!node || !node.parent) {
-                return false;
-            }
-            return true;
-        });
         let parentNode: Node | null;
         if (parent) {
             parentNode = this.query(parent);
         }
         parentNode ||= director.getScene();
 
-        for (const uuid of uuids) {
-            const node = this.query(uuid);
-            node?.setParent(parentNode, keepWorldTransform);
+        if (!parentNode) {
+            return [];
         }
 
-        return uuids;
+        const movedUuids: string[] = [];
+        for (const uuid of uuids) {
+            const node = this.query(uuid);
+            if (!node || !node.parent) {
+                continue;
+            }
+
+            const oldParent = node.parent;
+            const parentChanged = oldParent !== parentNode;
+
+            if (oldParent) {
+                this.emit('node:before-change', oldParent);
+            }
+            if (parentChanged) {
+                this.emit('node:before-change', parentNode);
+            }
+            this.emit('node:before-change', node);
+
+            node.setParent(parentNode, keepWorldTransform);
+
+            movedUuids.push(uuid);
+        }
+
+        return movedUuids;
     }
 
     /**
@@ -1454,7 +1491,7 @@ export class NodeManager {
                 console.error(error);
             }
 
-            this.emit('node:change', node);
+            this.emit('node:change', node, { type: NodeOperationType.SET_PROPERTY, propPath: 'locked' });
 
             // 处理内循环的情况
             if (loop === true && node.children && node.children.length > 0) {
