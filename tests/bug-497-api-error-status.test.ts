@@ -2,6 +2,7 @@ const mockQueryAssetInfo = jest.fn();
 const mockQueryAssetMeta = jest.fn();
 const mockRefreshAsset = jest.fn();
 const mockCreateAsset = jest.fn();
+const mockCreateAssetByType = jest.fn();
 const mockImportAsset = jest.fn();
 const mockQueryLinesInFile = jest.fn();
 const mockNodeQuery = jest.fn();
@@ -23,6 +24,7 @@ jest.mock('../src/core/assets', () => ({
         queryAssetMeta: (...args: unknown[]) => mockQueryAssetMeta(...args),
         refreshAsset: (...args: unknown[]) => mockRefreshAsset(...args),
         createAsset: (...args: unknown[]) => mockCreateAsset(...args),
+        createAssetByType: (...args: unknown[]) => mockCreateAssetByType(...args),
         importAsset: (...args: unknown[]) => mockImportAsset(...args),
     },
 }));
@@ -71,6 +73,7 @@ describe('Bug #497 common API error status codes', () => {
         mockQueryAssetMeta.mockReset();
         mockRefreshAsset.mockReset();
         mockCreateAsset.mockReset();
+        mockCreateAssetByType.mockReset();
         mockImportAsset.mockReset();
         mockQueryLinesInFile.mockReset();
         mockNodeQuery.mockReset();
@@ -143,6 +146,17 @@ describe('Bug #497 common API error status codes', () => {
         expect(result.code).toBe(HTTP_STATUS.BAD_REQUEST);
         expect(result.data).toBeNull();
         expect(result.reason).toContain('Invalid URL');
+    });
+
+    it('returns 400 when createAssetByType receives an invalid target URL', async () => {
+        mockCreateAssetByType.mockRejectedValue(new Error('Invalid URL: input URL must be a string and start with db:// \n  url:'));
+
+        const result = await new AssetsApi().createAssetByType('typescript', 'assets/Script', 'Food');
+
+        expect(result.code).toBe(HTTP_STATUS.BAD_REQUEST);
+        expect(result.data).toBeNull();
+        expect(result.reason).toContain('Invalid URL');
+        expect(result.reason).not.toContain('Error: Invalid URL');
     });
 
     it('returns 404 when importing from a missing asset path', async () => {

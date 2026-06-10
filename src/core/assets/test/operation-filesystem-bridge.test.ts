@@ -9,8 +9,11 @@ const mockQueryAsset = jest.fn();
 const mockQueryAssetInfo = jest.fn();
 const mockQueryAssetInfos = jest.fn();
 const mockQueryUrl = jest.fn();
+const mockAssetQueryUrl = jest.fn();
 const mockRefresh = jest.fn(async (_pathOrUrlOrUUID: string) => 0);
 const mockAddTask = jest.fn(async (func: Function, args: any[]) => await func(...args));
+const mockGetCreateMenuByName = jest.fn();
+const mockCreateAssetByHandler = jest.fn();
 const { dirname, join } = require('path') as typeof import('path');
 
 jest.mock('fs-extra', () => ({
@@ -29,12 +32,23 @@ jest.mock('@cocos/asset-db', () => ({
 }));
 
 jest.mock('../utils', () => ({
-    url2path: jest.fn((value) => value),
+    url2path: jest.fn((value) => {
+        if (value === 'db://assets') {
+            return 'D:/project/assets';
+        }
+        if (value.startsWith('db://assets/')) {
+            return `D:/project/assets/${value.slice('db://assets/'.length)}`;
+        }
+        return value;
+    }),
     ensureOutputData: jest.fn(),
     url2uuid: jest.fn((value) => value),
     pathToDbUrlIfAssetDBPath: jest.fn((value: string, assetDBInfo: Record<string, { name: string; target: string }>) => {
         if (!value || value.startsWith('db://')) {
             return value;
+        }
+        if (value.startsWith('assets/') || value === 'assets') {
+            return value === 'assets' ? 'db://assets' : `db://assets/${value.slice('assets/'.length)}`;
         }
         if (value === 'D:/project/assets/resources/Image' || value === 'assets/resources/Image') {
             return 'db://assets/resources/Image';
@@ -74,7 +88,10 @@ jest.mock('../manager/asset-db', () => ({
 
 jest.mock('../manager/asset-handler', () => ({
     __esModule: true,
-    default: {},
+    default: {
+        getCreateMenuByName: (...args: any[]) => mockGetCreateMenuByName(...args),
+        createAsset: (...args: any[]) => mockCreateAssetByHandler(...args),
+    },
 }));
 
 jest.mock('../asset-config', () => ({
@@ -92,7 +109,7 @@ jest.mock('../manager/query', () => ({
     default: {
         queryAsset: (...args: any[]) => mockQueryAsset(...args),
         encodeAsset: jest.fn((asset) => ({ source: asset.source })),
-        queryUrl: jest.fn(),
+        queryUrl: (...args: any[]) => mockAssetQueryUrl(...args),
         queryAssetInfo: (...args: any[]) => mockQueryAssetInfo(...args),
         queryAssetInfos: (...args: any[]) => mockQueryAssetInfos(...args),
     },
@@ -131,6 +148,16 @@ describe('asset operation filesystem bridge', () => {
         jest.clearAllMocks();
         const assetDBManager = require('../manager/asset-db').default as typeof import('../manager/asset-db').default;
         Object.keys(assetDBManager.assetDBInfo).forEach((key) => delete assetDBManager.assetDBInfo[key]);
+        mockAssetQueryUrl.mockImplementation((value: string) => {
+            const normalized = value.replace(/\\/g, '/');
+            if (normalized.startsWith('D:/project/assets/')) {
+                return `db://assets/${normalized.slice('D:/project/assets/'.length)}`;
+            }
+            if (normalized === 'D:/project/assets') {
+                return 'db://assets';
+            }
+            return '';
+        });
     });
 
     afterEach(() => {
@@ -271,5 +298,56 @@ describe('asset operation filesystem bridge', () => {
         expect(mockRefresh).toHaveBeenCalledWith('db://assets/resources/Image/snake_head.png');
         expect(mockQueryAssetInfo).toHaveBeenCalledWith('db://assets/resources/Image/snake_head.png');
         expect(result).toEqual([assetInfo]);
+    });
+
+    it('createAssetByType should resolve a database-name relative directory before creating', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        setAssetDBInfo();
+        mockGetCreateMenuByName.mockResolvedValue([{
+            name: 'default',
+            label: 'TypeScript',
+            fullFileName: 'NewComponent.ts',
+            handler: 'typescript',
+            template: 'typescript-template',
+        }]);
+        const target = join('D:/project/assets/Script', 'Food.ts');
+        mockCreateAssetByHandler.mockResolvedValue(target);
+        mockQueryAsset.mockReturnValue({
+            source: target,
+            imported: true,
+            invalid: false,
+        });
+
+        await assetOperation.createAssetByType('typescript', 'assets/Script', 'Food');
+
+        expect(mockCreateAssetByHandler).toHaveBeenCalledWith(expect.objectContaining({
+            handler: 'typescript',
+            target,
+            template: 'typescript-template',
+        }));
+    });
+
+    it('createAssetByType should not duplicate the extension when baseName already includes it', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        setAssetDBInfo();
+        mockGetCreateMenuByName.mockResolvedValue([{
+            name: 'default',
+            label: 'TypeScript',
+            fullFileName: 'NewComponent.ts',
+            handler: 'typescript',
+        }]);
+        const target = join('D:/project/assets/Script', 'Food.ts');
+        mockCreateAssetByHandler.mockResolvedValue(target);
+        mockQueryAsset.mockReturnValue({
+            source: target,
+            imported: true,
+            invalid: false,
+        });
+
+        await assetOperation.createAssetByType('typescript', 'assets/Script', 'Food.ts');
+
+        expect(mockCreateAssetByHandler).toHaveBeenCalledWith(expect.objectContaining({
+            target,
+        }));
     });
 });

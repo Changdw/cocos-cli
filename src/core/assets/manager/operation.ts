@@ -174,10 +174,7 @@ class AssetOperation extends EventEmitter {
         if (!createMenus.length) {
             throw new Error(`Can not support create type: ${type}`);
         }
-        let dir = dirOrUrl;
-        if (dirOrUrl.startsWith('db://')) {
-            dir = url2path(dirOrUrl);
-        }
+        const dir = this._resolveCreateAssetDir(dirOrUrl);
         let createInfo: undefined | ICreateMenuInfo = createMenus[0];
         if (createMenus.length > 1 && options?.templateName) {
             createInfo = createMenus.find((menu) => menu.name === options.templateName);
@@ -186,7 +183,8 @@ class AssetOperation extends EventEmitter {
             }
         }
         const extName = extname(createInfo.fullFileName);
-        const target = join(dir, baseName + extName);
+        const fileName = extName && baseName.endsWith(extName) ? baseName : baseName + extName;
+        const target = join(dir, fileName);
 
         return await this.createAsset({
             handler: createInfo.handler,
@@ -196,6 +194,14 @@ class AssetOperation extends EventEmitter {
             template: createInfo.template,
             content: options?.content,
         });
+    }
+
+    private _resolveCreateAssetDir(dirOrUrl: string) {
+        const normalizedDirOrUrl = this._pathToDbUrlIfInsideAssetDB(dirOrUrl);
+        if (normalizedDirOrUrl.startsWith('db://')) {
+            return url2path(normalizedDirOrUrl);
+        }
+        return normalizedDirOrUrl;
     }
 
     /**
