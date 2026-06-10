@@ -158,7 +158,8 @@ export const SchemaCreateAssetOptions = z.object({
 export const SchemaSourcePath = z.string().min(1).describe('Source file path, location of asset file to import'); // 源文件路径，要导入的资源文件位置
 
 // Asset save related // 资源保存相关
-export const SchemaAssetData = z.string().min(1).describe('Asset data to save, can be string or Buffer'); // 要保存的资源数据，可以是字符串或 Buffer
+export const SchemaSaveAssetPath = SchemaUrlOrUUIDOrPath.describe('Required existing asset URL, UUID, or file path to save. This must refer to an asset that already exists in the asset database.'); // 保存已有资源时使用的 URL、UUID 或文件路径
+export const SchemaAssetData = z.string().min(1).describe('Required complete file content to save. Do not omit this field, pass an empty string, or pass partial/truncated script content.'); // 要保存的完整资源数据
 
 // Return value Schema // 返回值 Schema
 export const SchemaAssetInfoResult = SchemaAssetInfo.nullable().describe('Asset detailed information object, including name, type, path, UUID, etc.'); // 资源详细信息对象，包含名称、类型、路径、UUID 等字段
@@ -213,6 +214,7 @@ export type TDirOrDbPath = z.infer<typeof SchemaDirOrDbPath>;
 export type TBaseName = z.infer<typeof SchemaBaseName>;
 export type TDbDirResult = z.infer<typeof SchemaDbDirResult>;
 export type TUrlOrUUIDOrPath = z.infer<typeof SchemaUrlOrUUIDOrPath>;
+export type TSaveAssetPath = z.infer<typeof SchemaSaveAssetPath>;
 export type TUUIDOrPath = z.infer<typeof SchemaUUIDOrPath>;
 export type TUrlOrUUID = z.infer<typeof SchemaUrlOrUUID>;
 export type TUrlOrPath = z.infer<typeof SchemaUrlOrPath>;
