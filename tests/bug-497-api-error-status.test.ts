@@ -4,6 +4,7 @@ const mockRefreshAsset = jest.fn();
 const mockCreateAsset = jest.fn();
 const mockCreateAssetByType = jest.fn();
 const mockImportAsset = jest.fn();
+const mockSaveAsset = jest.fn();
 const mockQueryLinesInFile = jest.fn();
 const mockNodeQuery = jest.fn();
 const mockNodeDelete = jest.fn();
@@ -26,6 +27,7 @@ jest.mock('../src/core/assets', () => ({
         createAsset: (...args: unknown[]) => mockCreateAsset(...args),
         createAssetByType: (...args: unknown[]) => mockCreateAssetByType(...args),
         importAsset: (...args: unknown[]) => mockImportAsset(...args),
+        saveAsset: (...args: unknown[]) => mockSaveAsset(...args),
     },
 }));
 
@@ -75,6 +77,7 @@ describe('Bug #497 common API error status codes', () => {
         mockCreateAsset.mockReset();
         mockCreateAssetByType.mockReset();
         mockImportAsset.mockReset();
+        mockSaveAsset.mockReset();
         mockQueryLinesInFile.mockReset();
         mockNodeQuery.mockReset();
         mockNodeDelete.mockReset();
@@ -170,6 +173,23 @@ describe('Bug #497 common API error status codes', () => {
         expect(result.code).toBe(HTTP_STATUS.NOT_FOUND);
         expect(result.data).toEqual([]);
         expect(result.reason).toContain('can not find asset');
+    });
+
+    it('returns 404 when saving a missing existing asset', async () => {
+        mockSaveAsset.mockRejectedValue(new Error('Failed to save asset: cannot find asset e:\\pink\\test12\\assets\\scripts\\Board.ts.tmp'));
+
+        const result = await new AssetsApi().saveAsset(
+            'e:\\pink\\test12\\assets\\scripts\\Board.ts.tmp',
+            '// temp file for fix'
+        );
+
+        expect(mockSaveAsset).toHaveBeenCalledWith(
+            'e:\\pink\\test12\\assets\\scripts\\Board.ts.tmp',
+            '// temp file for fix'
+        );
+        expect(result.code).toBe(HTTP_STATUS.NOT_FOUND);
+        expect(result.data).toBeNull();
+        expect(result.reason).toContain('cannot find asset');
     });
 
     it('returns 404 when queried file does not exist', async () => {

@@ -26,6 +26,7 @@ describe('assets-save-asset tool guidance', () => {
         expect(description).toContain('pathOrUrlOrUUID');
         expect(description).toContain('data');
         expect(description).toContain('complete file content');
+        expect(description).toContain('temporary files');
     });
 
     it('describes save parameters as required existing asset content', () => {
