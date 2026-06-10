@@ -14,6 +14,7 @@ const mockRefresh = jest.fn(async (_pathOrUrlOrUUID: string) => 0);
 const mockAddTask = jest.fn(async (func: Function, args: any[]) => await func(...args));
 const mockGetCreateMenuByName = jest.fn();
 const mockCreateAssetByHandler = jest.fn();
+const mockSaveAssetByHandler = jest.fn();
 const { dirname, join } = require('path') as typeof import('path');
 
 jest.mock('fs-extra', () => ({
@@ -91,6 +92,7 @@ jest.mock('../manager/asset-handler', () => ({
     default: {
         getCreateMenuByName: (...args: any[]) => mockGetCreateMenuByName(...args),
         createAsset: (...args: any[]) => mockCreateAssetByHandler(...args),
+        saveAsset: (...args: any[]) => mockSaveAssetByHandler(...args),
     },
 }));
 
@@ -349,5 +351,62 @@ describe('asset operation filesystem bridge', () => {
         expect(mockCreateAssetByHandler).toHaveBeenCalledWith(expect.objectContaining({
             target,
         }));
+    });
+
+    it('saveAsset should reject incomplete TypeScript content before writing', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const reimport = jest.fn();
+        const asset = {
+            source: 'D:/project/assets/scripts/Board.ts',
+            uuid: 'script-uuid',
+            imported: true,
+            invalid: false,
+            meta: {
+                importer: 'typescript',
+            },
+            _assetDB: {
+                options: {
+                    readonly: false,
+                },
+                reimport,
+            },
+        };
+        mockQueryAsset.mockReturnValue(asset);
+
+        await expect(assetOperation.saveAsset(
+            'db://assets/scripts/Board.ts',
+            "import { _decorator } from 'cc';\nexport class Board {\n"
+        )).rejects.toThrow('Invalid script content');
+
+        expect(mockSaveAssetByHandler).not.toHaveBeenCalled();
+        expect(reimport).not.toHaveBeenCalled();
+    });
+
+    it('saveAsset should keep valid TypeScript content writable', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const reimport = jest.fn();
+        const asset = {
+            source: 'D:/project/assets/scripts/Board.ts',
+            uuid: 'script-uuid',
+            imported: true,
+            invalid: false,
+            meta: {
+                importer: 'typescript',
+            },
+            _assetDB: {
+                options: {
+                    readonly: false,
+                },
+                reimport,
+            },
+        };
+        const content = "import { _decorator } from 'cc';\nexport class Board {}\n";
+        mockQueryAsset.mockReturnValue(asset);
+        mockSaveAssetByHandler.mockResolvedValue(true);
+
+        await assetOperation.saveAsset('db://assets/scripts/Board.ts', content);
+
+        expect(mockSaveAssetByHandler).toHaveBeenCalledWith(asset, content);
+        expect(reimport).toHaveBeenCalledWith('script-uuid');
     });
 });
