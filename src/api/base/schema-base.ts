@@ -74,7 +74,7 @@ export function getCommonErrorStatus(error: unknown): CommonStatus {
         return COMMON_STATUS.NOT_FOUND;
     }
 
-    if (/parameter error|filename cannot be empty|invalid url|unsafe file path|extension mismatch|cannot resolve/i.test(message)) {
+    if (/parameter error|filename cannot be empty|invalid url|invalid .*content|unsafe file path|extension mismatch|cannot resolve/i.test(message)) {
         return COMMON_STATUS.BAD_REQUEST;
     }
 

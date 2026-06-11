@@ -27,6 +27,7 @@ describe('assets-save-asset tool guidance', () => {
         expect(description).toContain('data');
         expect(description).toContain('complete file content');
         expect(description).toContain('temporary files');
+        expect(description).toContain('scene and prefab');
     });
 
     it('describes save parameters as required existing asset content', () => {

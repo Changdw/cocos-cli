@@ -385,7 +385,7 @@ export class AssetsApi {
      */
     @tool('assets-save-asset')
     @title('Save Asset Data') // 保存资源数据
-    @description('Save complete content to an existing asset file. Required arguments: pathOrUrlOrUUID (existing asset URL, UUID, or file path) and data (complete file content). Do not call this tool with empty arguments. This tool does not create new assets or temporary files; create the asset first with assets-create-asset-by-type or assets-create-asset, then call save. For scripts, pass complete syntactically valid content.')
+    @description('Save complete content to an existing asset file. Required arguments: pathOrUrlOrUUID (existing asset URL, UUID, or file path) and data (complete file content). Do not call this tool with empty arguments. This tool does not create new assets or temporary files; create the asset first with assets-create-asset-by-type or assets-create-asset, then call save. For scripts, pass complete syntactically valid content. For scene and prefab assets, pass complete valid Cocos serialized JSON; prefer scene-* tools and scene-save for scene graph edits.')
     @result(SchemaSaveAssetResult)
     async saveAsset(
         @param(SchemaSaveAssetPath) pathOrUrlOrUUID: TSaveAssetPath,

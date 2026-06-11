@@ -409,4 +409,123 @@ describe('asset operation filesystem bridge', () => {
         expect(mockSaveAssetByHandler).toHaveBeenCalledWith(asset, content);
         expect(reimport).toHaveBeenCalledWith('script-uuid');
     });
+
+    it('saveAsset should reject invalid scene JSON before writing', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const reimport = jest.fn();
+        const asset = {
+            source: 'D:/project/assets/scenes/GameScene.scene',
+            uuid: 'scene-uuid',
+            imported: true,
+            invalid: false,
+            meta: {
+                importer: 'scene',
+            },
+            _assetDB: {
+                options: {
+                    readonly: false,
+                },
+                reimport,
+            },
+        };
+        mockQueryAsset.mockReturnValue(asset);
+
+        await expect(assetOperation.saveAsset(
+            'db://assets/scenes/GameScene.scene',
+            'test content'
+        )).rejects.toThrow('Invalid scene/prefab asset content');
+
+        expect(mockSaveAssetByHandler).not.toHaveBeenCalled();
+        expect(reimport).not.toHaveBeenCalled();
+    });
+
+    it('saveAsset should reject incomplete prefab JSON before writing', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const reimport = jest.fn();
+        const asset = {
+            source: 'D:/project/assets/prefabs/Hero.prefab',
+            uuid: 'prefab-uuid',
+            imported: true,
+            invalid: false,
+            meta: {
+                importer: 'prefab',
+            },
+            _assetDB: {
+                options: {
+                    readonly: false,
+                },
+                reimport,
+            },
+        };
+        mockQueryAsset.mockReturnValue(asset);
+
+        await expect(assetOperation.saveAsset(
+            'db://assets/prefabs/Hero.prefab',
+            '[{"__type__":"cc.Prefab"'
+        )).rejects.toThrow('Invalid scene/prefab asset content');
+
+        expect(mockSaveAssetByHandler).not.toHaveBeenCalled();
+        expect(reimport).not.toHaveBeenCalled();
+    });
+
+    it('saveAsset should keep valid scene and prefab JSON writable', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const reimport = jest.fn();
+        const sceneAsset = {
+            source: 'D:/project/assets/scenes/GameScene.scene',
+            uuid: 'scene-uuid',
+            imported: true,
+            invalid: false,
+            meta: {
+                importer: 'scene',
+            },
+            _assetDB: {
+                options: {
+                    readonly: false,
+                },
+                reimport,
+            },
+        };
+        const sceneContent = JSON.stringify([
+            { __type__: 'cc.SceneAsset', _name: 'GameScene', scene: { __id__: 1 } },
+            { __type__: 'cc.Scene', _name: 'GameScene', _id: 'scene-uuid' },
+        ]);
+        mockQueryAsset.mockReturnValue(sceneAsset);
+        mockSaveAssetByHandler.mockResolvedValue(true);
+
+        await assetOperation.saveAsset('db://assets/scenes/GameScene.scene', sceneContent);
+
+        expect(mockSaveAssetByHandler).toHaveBeenCalledWith(sceneAsset, sceneContent);
+        expect(reimport).toHaveBeenCalledWith('scene-uuid');
+
+        jest.clearAllMocks();
+
+        const prefabReimport = jest.fn();
+        const prefabAsset = {
+            source: 'D:/project/assets/prefabs/Hero.prefab',
+            uuid: 'prefab-uuid',
+            imported: true,
+            invalid: false,
+            meta: {
+                importer: 'prefab',
+            },
+            _assetDB: {
+                options: {
+                    readonly: false,
+                },
+                reimport: prefabReimport,
+            },
+        };
+        const prefabContent = JSON.stringify([
+            { __type__: 'cc.Prefab', _name: 'Hero', data: { __id__: 1 } },
+            { __type__: 'cc.Node', _name: 'Hero' },
+        ]);
+        mockQueryAsset.mockReturnValue(prefabAsset);
+        mockSaveAssetByHandler.mockResolvedValue(true);
+
+        await assetOperation.saveAsset('db://assets/prefabs/Hero.prefab', prefabContent);
+
+        expect(mockSaveAssetByHandler).toHaveBeenCalledWith(prefabAsset, prefabContent);
+        expect(prefabReimport).toHaveBeenCalledWith('prefab-uuid');
+    });
 });

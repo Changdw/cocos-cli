@@ -93,6 +93,7 @@ describe('Bug #497 common API error status codes', () => {
         expect(getCommonErrorStatus(new Error('ENOENT: no such file or directory'))).toBe(COMMON_STATUS.NOT_FOUND);
         expect(getCommonErrorStatus(new Error('Asset can not be found: db://assets/missing.scene'))).toBe(COMMON_STATUS.NOT_FOUND);
         expect(getCommonErrorStatus(new Error('can not find asset d:\\cocos\\program\\snake2\\assets\\resources\\Image'))).toBe(COMMON_STATUS.NOT_FOUND);
+        expect(getCommonErrorStatus(new Error('Invalid scene/prefab asset content: invalid JSON'))).toBe(COMMON_STATUS.BAD_REQUEST);
         expect(getCommonErrorStatus(new Error('Filename cannot be empty.'))).toBe(COMMON_STATUS.BAD_REQUEST);
         expect(getCommonErrorStatus(new Error('parameter error'))).toBe(COMMON_STATUS.BAD_REQUEST);
         expect(getCommonErrorStatus(new Error('unexpected internal crash'))).toBe(COMMON_STATUS.FAIL);
@@ -190,6 +191,19 @@ describe('Bug #497 common API error status codes', () => {
         expect(result.code).toBe(HTTP_STATUS.NOT_FOUND);
         expect(result.data).toBeNull();
         expect(result.reason).toContain('cannot find asset');
+    });
+
+    it('returns 400 when saving invalid scene or prefab content', async () => {
+        mockSaveAsset.mockRejectedValue(new Error('Invalid scene/prefab asset content: invalid JSON: Unexpected token'));
+
+        const result = await new AssetsApi().saveAsset(
+            'db://assets/scenes/GameScene.scene',
+            'test content'
+        );
+
+        expect(result.code).toBe(HTTP_STATUS.BAD_REQUEST);
+        expect(result.data).toBeNull();
+        expect(result.reason).toContain('Invalid scene/prefab asset content');
     });
 
     it('returns 404 when queried file does not exist', async () => {
