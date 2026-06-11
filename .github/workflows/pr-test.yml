@@ -17,7 +17,8 @@ jobs:
     
     strategy:
       matrix:
-        os: [windows-latest, macos-latest]
+        # Windows native build still uses the bundled CMake 3.24.3 and VS2022 generator.
+        os: [windows-2022, macos-latest]
 
     runs-on: ${{matrix.os}}
 
