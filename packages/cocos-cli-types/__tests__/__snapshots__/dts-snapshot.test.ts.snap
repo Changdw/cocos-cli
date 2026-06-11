@@ -857,6 +857,7 @@ export declare interface appTemplateData {
 }
 export declare type ArrayItem = {
     label: string;
+    labelI18nKey?: string;
     value: string;
 };
 export declare class Asset extends VirtualAsset {
@@ -1042,9 +1043,10 @@ export declare interface BuildBundleConfiguration {
 }
 export declare function buildBundleOnly(bundleOptions: IBundleBuildOptions): Promise<IBuildResultData>;
 export declare interface BuildCheckResult {
-    error: string;
-    newValue: any;
-    level: IConsoleType;
+    valid: boolean;
+    level?: 'error' | 'warn';
+    message?: string;
+    fixedValue?: unknown;
 }
 export declare interface BuildConfiguration {
     common: IBuildCommonOptions;
@@ -1232,6 +1234,7 @@ export declare interface BuildTemplateConfig {
         destUrl: string;
     }[];
     displayName?: string;
+    displayNameI18nKey?: string;
     version: string;
     dirname?: string;
 }
@@ -1352,6 +1355,8 @@ export declare interface BundleRenderConfig {
 }
 export declare type CCEnvConstants = ConstantManager.CCEnvConstants;
 export declare type ChangeEvent = 'create' | 'update' | 'delete';
+export declare function checkBuildOption(platform: string, key: string, value: unknown, options: IBuildTaskOption): Promise<BuildCheckResult>;
+export declare function checkBuildOptions(platform: string, options: IBuildTaskOption): Promise<Record<string, BuildCheckResult>>;
 export declare interface ChokidarOptions {
     	alwaysStat?: boolean;
     	atomic?: boolean | number;
@@ -1581,6 +1586,7 @@ export declare interface EngineInfo {
 }
 export declare type EnumItem = string | {
     label: string;
+    labelI18nKey?: string;
     value: string | number;
 };
 export declare function executeBuildStageTask(taskId: string, stageName: string, options: IBuildStageOptions): Promise<IBuildResultData>;
@@ -1714,6 +1720,7 @@ export declare interface GetManualChunkApi {
     	getModuleInfo: GetModuleInfo;
 }
 export declare type GetModuleInfo = (moduleId: string) => ModuleInfo | null;
+export declare function getPlatformBuildSchema(platform: Platform | string): Promise<PlatformBuildSchema>;
 export declare function getPreviewSettings<P extends Platform>(options?: IBuildTaskOption<P>): Promise<IPreviewSettingsResult>;
 export declare function getRegisteredPlatforms(): Promise<string[]>;
 export declare type GlobalsOption = { [name: string]: string } | ((name: string) => string);
@@ -2196,7 +2203,9 @@ export declare type IBuildStageHooks = (root: string, options: IBuildOptionBase)
 export declare interface IBuildStageItem {
     name: string;
     displayName?: string;
+    displayNameI18nKey?: string;
     description?: string;
+    descriptionI18nKey?: string;
     hidden?: boolean;
     parallelism?: 'none' | 'all' | 'other';
     hook: string;
@@ -2441,6 +2450,22 @@ export declare interface ICMakeConfig {
     [propName: string]: any;
     USE_SERVER_MODE: string;
 }
+export declare interface ICocosConfigurationPropertySchema {
+    type: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'enum';
+    default?: unknown;
+    title?: string;
+    description?: string;
+    enum?: Array<string | number | boolean>;
+    enumDescriptions?: string[];
+    minimum?: number;
+    maximum?: number;
+    step?: number;
+    order?: number;
+    properties?: Record<string, ICocosConfigurationPropertySchema>;
+    items?: ICocosConfigurationPropertySchema | ICocosConfigurationPropertySchema[];
+    additionalProperties?: boolean | ICocosConfigurationPropertySchema;
+    required?: string[];
+}
 export declare interface ICollisionMatrix {
     [x: string]: number;
 }
@@ -2501,7 +2526,9 @@ export declare interface IConfigItemArray extends IConfigItemBase {
 export declare interface IConfigItemBase {
     key?: string;
     label?: string;
+    labelI18nKey?: string;
     description?: string;
+    descriptionI18nKey?: string;
     default?: any;
 }
 export declare interface IConfigItemBoolean extends IConfigItemBase {
@@ -2713,6 +2740,7 @@ export declare interface IInternalBuildOptions extends IInternalBundleBuildOptio
 export declare interface IInternalBuildPluginConfig extends IBuildPluginConfig {
     doc?: string;
     displayName?: string;
+    displayNameI18nKey?: string;
     hooks?: string;
     priority?: number;
     options?: IDisplayOptions;
@@ -3073,7 +3101,11 @@ export declare interface IPlatformConfig {
     type: IPlatformType;
     platformType: StatsQuery.ConstantManager.PlatformType;
     name: string;
+    nameI18nKey?: string;
+    doc?: string;
+    pluginPath?: string;
     createTemplateLabel: string;
+    createTemplateLabelI18nKey?: string;
 }
 export declare interface IPlatformInfo {
     label: string;
@@ -3083,6 +3115,7 @@ export declare interface IPlatformRegisterInfo {
     config: IPlatformBuildPluginConfig;
     platform: string;
     path: string;
+    conifgPath: string;
     hooks?: string;
     pkgName?: string;
     type: 'register';
@@ -3924,6 +3957,10 @@ export declare interface ParticleAssetUserData {
 }
 export declare type Physics = 'cannon' | 'ammo' | 'builtin';
 export declare type Platform = InternalPlatform | string;
+export declare interface PlatformBuildSchema {
+    common: Record<string, ICocosConfigurationPropertySchema>;
+    platformOptions: Record<string, ICocosConfigurationPropertySchema>;
+}
 export declare interface PlatformBundleConfig {
     platformName: string;
     platformType: BundlePlatformType;
@@ -3932,6 +3969,16 @@ export declare interface PlatformBundleConfig {
 export declare interface PlatformCompressConfig {
     platformType: ITextureCompressPlatform;
     support: ISupportFormat;
+}
+export declare interface PlatformConfigItem {
+    platform: string;
+    displayName: string;
+    platformType: StatsQuery.ConstantManager.PlatformType;
+    isNative: boolean;
+    doc?: string;
+    pluginPath: string;
+    createTemplateLabel?: string;
+    supportTextureCompress: boolean;
 }
 export declare interface PlatformPackageOptionMap {
     'web-desktop': webDesktopOptions;
@@ -4030,25 +4077,34 @@ export declare class PluginManager extends EventEmitter {
     private registerPlatform;
     private internalRegister;
     _registerI18n(registerInfo: IBuilderRegisterInfo): void;
+    private translateConfigItemDisplayFields;
+    private translateConfigItemsDisplayFields;
+    private translateConfigDisplayFields;
+    refreshDisplayI18nFields(): void;
     getCommonOptionConfigs(platform: Platform): Record<string, IBuilderConfigItem>;
     getCommonOptionConfigByKey(key: keyof IBuildTaskOption, options: IBuildTaskOption): IBuilderConfigItem | null;
     getPackageOptionConfigByKey(key: string, pkgName: string, options: IBuildTaskOption): IBuilderConfigItem | null;
     getOptionConfigByKey(key: keyof IBuildTaskOption, options: IBuildTaskOption): IBuilderConfigItem | null;
+    private hasFixedValue;
+    private getFixedValue;
     checkOptions(options: MakeRequired<IBuildCommandOption, 'platform' | 'mainBundleCompressionType'>): Promise<undefined | IBuildTaskOption>;
     checkCommonOptions(options: IBuildTaskOption): Promise<Record<string, BuildCheckResult>>;
     checkCommonOptionByKey(key: keyof IBuildTaskOption, value: any, options: IBuildTaskOption): Promise<BuildCheckResult>;
+    private createVerifyOptions;
+    private checkPlatformOptionByKey;
+    checkBuildOption(platform: string, key: string, value: unknown, options: IBuildTaskOption): Promise<BuildCheckResult>;
+    checkBuildOptions(platform: string, options: IBuildTaskOption): Promise<Record<string, BuildCheckResult>>;
     private checkPluginOptions;
     shouldGenerateOptions(platform: Platform | string): boolean;
     getOptionsByPlatform<P extends Platform | string>(platform: P): Promise<IBuildTaskOption>;
     getTexturePlatformConfigs(): Record<string, ITextureCompressConfig>;
-    queryPlatformConfig(): {
-        platform: string;
-        displayName: string;
-        platformType: PlatformType;
-        isNative: boolean;
-        createTemplateLabel: string;
-        supportTextureCompress: boolean;
-    }[];
+    private cloneDisplayOptions;
+    private cloneConfigItem;
+    private applySupportedCompressionTypes;
+    private collectPlatformConfigItems;
+    private toRenderSchema;
+    getPlatformBuildSchema(platform: Platform | string): PlatformBuildSchema;
+    queryPlatformConfig(): PlatformConfigItem[];
     getRegisteredPlatforms(): string[];
     queryBundleConfig(): Record<string, BundleQueryConfig>;
     queryTextureCompressConfig(): TextureCompressFullRenderConfig;
@@ -4059,7 +4115,7 @@ export declare class PluginManager extends EventEmitter {
     getBuildTemplateConfig(platform: string): BuildTemplateConfig;
     getAssetHandlers(type: ICustomAssetHandlerType): {
         pkgNameOrder: string[];
-        handles: Record<string, Function>;
+        handles: Record<string, (...args: unknown[]) => unknown>;
     };
 }
 export declare const pluginManager: PluginManager;
@@ -4116,7 +4172,9 @@ export declare function queryAutoAtlasFileCache(pacUuid: string): Promise<Previe
 export declare function queryBuildConfig(): Promise<BuildConfiguration>;
 export declare function queryBundleConfig(): Promise<Record<string, BundleQueryConfig>>;
 export declare function queryDefaultBuildConfigByPlatform(platform: Platform): Promise<IBuildTaskOption<string>>;
+export declare function queryPlatformConfig(): Promise<PlatformConfigItem[]>;
 export declare function queryTextureCompressConfig(): Promise<TextureCompressFullRenderConfig>;
+export declare function refreshDisplayI18nFields(): Promise<void>;
 export declare type RenderChunkHook = (
 	this: PluginContext,
 	code: string,
@@ -6361,7 +6419,7 @@ export declare interface ICocosConfigurationNode {
     properties: Record<string, ICocosConfigurationPropertySchema>;
 }
 export declare interface ICocosConfigurationPropertySchema {
-    type: 'string' | 'number' | 'boolean' | 'object' | 'array';
+    type: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'enum';
     default?: unknown;
     title?: string;
     description?: string;
@@ -7400,7 +7458,7 @@ export declare interface ICocosConfigurationNode {
     properties: Record<string, ICocosConfigurationPropertySchema>;
 }
 export declare interface ICocosConfigurationPropertySchema {
-    type: 'string' | 'number' | 'boolean' | 'object' | 'array';
+    type: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'enum';
     default?: unknown;
     title?: string;
     description?: string;
