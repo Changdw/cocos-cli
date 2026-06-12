@@ -78,7 +78,7 @@ export function getCommonErrorStatus(error: unknown): CommonStatus {
         return COMMON_STATUS.NOT_FOUND;
     }
 
-    if (/parameter error|filename cannot be empty|invalid url|invalid .*content|unsafe file path|extension mismatch|cannot resolve|already exists/i.test(message)) {
+    if (/parameter error|filename cannot be empty|invalid url|invalid .*content|unsafe file path|extension mismatch|cannot resolve|already exists|multiple \(\d+\) occurrences found|no replacement was performed|did not appear verbatim|file is not changed/i.test(message)) {
         return COMMON_STATUS.BAD_REQUEST;
     }
 
