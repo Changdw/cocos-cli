@@ -2,6 +2,7 @@ export {};
 
 const mockQueryUUID = jest.fn();
 const mockQueryAsset = jest.fn();
+const mockQueryPath = jest.fn();
 
 jest.mock('@cocos/asset-db', () => ({
     queryUUID: (...args: any[]) => mockQueryUUID(...args),
@@ -10,7 +11,7 @@ jest.mock('@cocos/asset-db', () => ({
     AssetDB: class {},
     Asset: class {},
     forEach: jest.fn(),
-    queryPath: jest.fn(),
+    queryPath: (...args: any[]) => mockQueryPath(...args),
     queryUrl: jest.fn(),
 }));
 
@@ -20,7 +21,7 @@ jest.mock('@cocos/asset-db/index', () => ({
     Utils: {
         nameToId: (value: string) => value,
     },
-    queryPath: jest.fn(),
+    queryPath: (...args: any[]) => mockQueryPath(...args),
     Asset: class {},
     VirtualAsset: class {},
 }));
@@ -80,7 +81,7 @@ jest.mock('../../base/i18n', () => ({
 
 describe('asset query path normalization', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        jest.resetAllMocks();
     });
 
     afterEach(() => {
@@ -105,5 +106,22 @@ describe('asset query path normalization', () => {
         expect(mockQueryUUID).toHaveBeenCalledWith('db://assets/resources/Image/snake_head.png');
         expect(queryByUUID).toHaveBeenCalledWith('snake-head-uuid', undefined);
         expect(result).toBe(assetInfo);
+    });
+
+    it('queryPath should normalize a database-name relative asset path', () => {
+        const assetQuery = require('../manager/query').default as typeof import('../manager/query').default;
+
+        mockQueryUUID.mockReturnValue('gem-red-uuid');
+        mockQueryAsset.mockReturnValue({
+            uuid: 'gem-red-uuid',
+            isDirectory: () => false,
+        });
+        mockQueryPath.mockReturnValue('D:/project/assets/resources/Image/gem_red.png');
+
+        const result = assetQuery.queryPath('assets/resources/Image/gem_red.png');
+
+        expect(mockQueryUUID).toHaveBeenCalledWith('db://assets/resources/Image/gem_red.png');
+        expect(mockQueryPath).toHaveBeenCalledWith('gem-red-uuid');
+        expect(result).toBe('D:/project/assets/resources/Image/gem_red.png');
     });
 });

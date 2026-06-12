@@ -438,9 +438,9 @@ export class AssetsApi {
      */
     @tool('assets-query-path')
     @title('Query Asset File Path') // 查询资源文件路径
-    @description('Query the actual path of an asset in the file system based on its URL or UUID. Returns an absolute path string.') // 根据资源的 URL 或 UUID 查询资源在文件系统中的实际路径。返回绝对路径字符串。
+    @description('Query the actual path of an asset in the file system based on its URL, UUID, or asset-db relative path such as assets/resources/Image/a.png. Returns an absolute path string.') // 根据资源的 URL、UUID 或 asset-db 相对路径查询资源在文件系统中的实际路径。返回绝对路径字符串。
     @result(SchemaPathResult)
-    async queryPath(@param(SchemaUrlOrUUID) urlOrUuid: TUrlOrUUID): Promise<CommonResultType<TPathResult>> {
+    async queryPath(@param(SchemaUrlOrUUIDOrPath) urlOrUuid: TUrlOrUUIDOrPath): Promise<CommonResultType<TPathResult>> {
         const code: HttpStatusCode = COMMON_STATUS.SUCCESS;
         const ret: CommonResultType<TPathResult> = {
             code: code,
@@ -449,8 +449,13 @@ export class AssetsApi {
 
         try {
             ret.data = assetManager.queryPath(urlOrUuid);
+            if (!ret.data) {
+                ret.code = COMMON_STATUS.NOT_FOUND;
+                ret.data = null;
+                ret.reason = `Asset path can not be found: ${urlOrUuid}. Please refresh asset db and try again.`;
+            }
         } catch (e) {
-            ret.code = COMMON_STATUS.FAIL;
+            ret.code = getCommonErrorStatus(e);
             console.error('query path fail:', e instanceof Error ? e.message : String(e));
             ret.reason = e instanceof Error ? e.message : String(e);
         }

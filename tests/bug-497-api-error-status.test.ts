@@ -5,6 +5,7 @@ const mockCreateAsset = jest.fn();
 const mockCreateAssetByType = jest.fn();
 const mockImportAsset = jest.fn();
 const mockSaveAsset = jest.fn();
+const mockQueryPath = jest.fn();
 const mockQueryLinesInFile = jest.fn();
 const mockNodeQuery = jest.fn();
 const mockNodeDelete = jest.fn();
@@ -28,6 +29,7 @@ jest.mock('../src/core/assets', () => ({
         createAssetByType: (...args: unknown[]) => mockCreateAssetByType(...args),
         importAsset: (...args: unknown[]) => mockImportAsset(...args),
         saveAsset: (...args: unknown[]) => mockSaveAsset(...args),
+        queryPath: (...args: unknown[]) => mockQueryPath(...args),
     },
 }));
 
@@ -78,6 +80,7 @@ describe('Bug #497 common API error status codes', () => {
         mockCreateAssetByType.mockReset();
         mockImportAsset.mockReset();
         mockSaveAsset.mockReset();
+        mockQueryPath.mockReset();
         mockQueryLinesInFile.mockReset();
         mockNodeQuery.mockReset();
         mockNodeDelete.mockReset();
@@ -96,6 +99,7 @@ describe('Bug #497 common API error status codes', () => {
         expect(getCommonErrorStatus(new Error('Invalid scene/prefab asset content: invalid JSON'))).toBe(COMMON_STATUS.BAD_REQUEST);
         expect(getCommonErrorStatus(new Error('Filename cannot be empty.'))).toBe(COMMON_STATUS.BAD_REQUEST);
         expect(getCommonErrorStatus(new Error('parameter error'))).toBe(COMMON_STATUS.BAD_REQUEST);
+        expect(getCommonErrorStatus(new Error('file GameManager.ts already exists, please use overwrite option'))).toBe(COMMON_STATUS.BAD_REQUEST);
         expect(getCommonErrorStatus(new Error('unexpected internal crash'))).toBe(COMMON_STATUS.FAIL);
     });
 
@@ -191,6 +195,28 @@ describe('Bug #497 common API error status codes', () => {
         expect(result.code).toBe(HTTP_STATUS.NOT_FOUND);
         expect(result.data).toBeNull();
         expect(result.reason).toContain('cannot find asset');
+    });
+
+    it('returns 400 when querying asset path with a parameter error', async () => {
+        mockQueryPath.mockImplementation(() => {
+            throw new Error('parameter error');
+        });
+
+        const result = await new AssetsApi().queryPath('bad');
+
+        expect(result.code).toBe(HTTP_STATUS.BAD_REQUEST);
+        expect(result.data).toBeNull();
+        expect(result.reason).toBe('parameter error');
+    });
+
+    it('returns 404 when querying asset path cannot resolve a path', async () => {
+        mockQueryPath.mockReturnValue('');
+
+        const result = await new AssetsApi().queryPath('assets/resources/Image/missing.png');
+
+        expect(result.code).toBe(HTTP_STATUS.NOT_FOUND);
+        expect(result.data).toBeNull();
+        expect(result.reason).toContain('Asset path can not be found');
     });
 
     it('returns 400 when saving invalid scene or prefab content', async () => {

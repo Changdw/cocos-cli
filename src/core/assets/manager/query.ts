@@ -725,6 +725,7 @@ class AssetQueryManager {
         if (!urlOrUuid || typeof urlOrUuid !== 'string') {
             return '';
         }
+        urlOrUuid = pathToDbUrlIfAssetDBPath(urlOrUuid, assetDBManager.assetDBInfo);
         if (urlOrUuid.startsWith('db://')) {
             const name = urlOrUuid.substr(5);
             if (assetDBManager.assetDBMap[name]) {
