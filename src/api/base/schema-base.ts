@@ -70,6 +70,10 @@ export function getCommonErrorStatus(error: unknown): CommonStatus {
         : '';
     const message = error instanceof Error ? error.message : String(error);
 
+    if (/resolve_error|_module_not_found|module not found/i.test(message)) {
+        return COMMON_STATUS.BAD_REQUEST;
+    }
+
     if (code === 'ENOENT' || /ENOENT|no such file or directory|not found|not exist|cannot find|can not find|can not be found/i.test(message)) {
         return COMMON_STATUS.NOT_FOUND;
     }

@@ -7,6 +7,7 @@ const mockImportAsset = jest.fn();
 const mockSaveAsset = jest.fn();
 const mockQueryPath = jest.fn();
 const mockQueryLinesInFile = jest.fn();
+const mockEraseLinesInRange = jest.fn();
 const mockNodeQuery = jest.fn();
 const mockNodeDelete = jest.fn();
 const mockComponentQuery = jest.fn();
@@ -35,7 +36,7 @@ jest.mock('../src/core/assets', () => ({
 
 jest.mock('../src/core/filesystem/file-edit', () => ({
     insertTextAtLine: jest.fn(),
-    eraseLinesInRange: jest.fn(),
+    eraseLinesInRange: (...args: unknown[]) => mockEraseLinesInRange(...args),
     replaceTextInFile: jest.fn(),
     queryLinesInFile: (...args: unknown[]) => mockQueryLinesInFile(...args),
 }));
@@ -82,6 +83,7 @@ describe('Bug #497 common API error status codes', () => {
         mockSaveAsset.mockReset();
         mockQueryPath.mockReset();
         mockQueryLinesInFile.mockReset();
+        mockEraseLinesInRange.mockReset();
         mockNodeQuery.mockReset();
         mockNodeDelete.mockReset();
         mockComponentQuery.mockReset();
@@ -101,6 +103,10 @@ describe('Bug #497 common API error status codes', () => {
         expect(getCommonErrorStatus(new Error('parameter error'))).toBe(COMMON_STATUS.BAD_REQUEST);
         expect(getCommonErrorStatus(new Error('file GameManager.ts already exists, please use overwrite option'))).toBe(COMMON_STATUS.BAD_REQUEST);
         expect(getCommonErrorStatus(new Error('unexpected internal crash'))).toBe(COMMON_STATUS.FAIL);
+    });
+
+    it('classifies script module resolution failures as bad requests', () => {
+        expect(getCommonErrorStatus(new Error('(i18n needed)resolve_error _module_not_found: {"specifier":"../core/GameEvent"}'))).toBe(COMMON_STATUS.BAD_REQUEST);
     });
 
     it('returns 404 when detailed asset info is not found', async () => {
@@ -258,6 +264,20 @@ describe('Bug #497 common API error status codes', () => {
 
         expect(result.code).toBe(HTTP_STATUS.BAD_REQUEST);
         expect(result.reason).toBe('Filename cannot be empty.');
+    });
+
+    it('returns 400 when deleting file text triggers a script module resolution failure', async () => {
+        mockEraseLinesInRange.mockRejectedValue(new Error('(i18n needed)resolve_error _module_not_found: {"specifier":"../core/GameEvent"}'));
+
+        const result = await new FileEditorApi().eraseLinesInRange({
+            dbURL: 'db://assets/scripts/board/BoardController.ts',
+            fileType: 'ts',
+            startLine: 1,
+            endLine: 2,
+        });
+
+        expect(result.code).toBe(HTTP_STATUS.BAD_REQUEST);
+        expect(result.reason).toContain('_module_not_found');
     });
 
     it('returns 404 when a queried node is not found', async () => {
