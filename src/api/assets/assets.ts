@@ -71,6 +71,12 @@ import {
     TUpdateAssetUserDataPath,
     TUpdateAssetUserDataValue,
     TUpdateAssetUserDataResult,
+    SchemaUpdateAssetMetaUserDataParentUuid,
+    SchemaUpdateAssetMetaUserDataSubMetaId,
+    SchemaUpdateAssetMetaUserDataOptions,
+    TUpdateAssetMetaUserDataParentUuid,
+    TUpdateAssetMetaUserDataSubMetaId,
+    TUpdateAssetMetaUserDataOptions,
     SchemaAssetConfigMapResult,
     TAssetConfigMapResult,
     TUUIDOrPath,
@@ -725,7 +731,42 @@ export class AssetsApi {
     }
 
     /**
-     * Query Asset Config Map // 查询资源配置映射表
+     * Update Asset Meta User Data
+     */
+    @tool('assets-update-asset-meta-user-data')
+    @title('Update Asset Meta User Data')
+    @description('Update only the userData field in an asset .meta file. Pass parentUuid and optional subMetaId; subMetaId targets parentUuid@subMetaId, while null or omitted subMetaId updates the parent asset. By default this only saves the .meta file. Set options.reimport to true when the imported library data must be regenerated.')
+    @result(SchemaUpdateAssetUserDataResult)
+    async updateAssetMetaUserData(
+        @param(SchemaUpdateAssetMetaUserDataParentUuid) parentUuid: TUpdateAssetMetaUserDataParentUuid,
+        @param(SchemaUpdateAssetMetaUserDataSubMetaId) subMetaId: TUpdateAssetMetaUserDataSubMetaId,
+        @param(SchemaUpdateAssetUserDataPath) path: TUpdateAssetUserDataPath,
+        @param(SchemaUpdateAssetUserDataValue) value: TUpdateAssetUserDataValue,
+        @param(SchemaUpdateAssetMetaUserDataOptions) options?: TUpdateAssetMetaUserDataOptions
+    ): Promise<CommonResultType<TUpdateAssetUserDataResult>> {
+        const ret: CommonResultType<TUpdateAssetUserDataResult> = {
+            code: COMMON_STATUS.SUCCESS,
+            data: null,
+        };
+
+        try {
+            ret.data = await assetManager.updateMetaUserData(parentUuid, subMetaId, path, value, options);
+            if (!ret.data) {
+                const uuid = subMetaId ? `${parentUuid}@${subMetaId}` : parentUuid;
+                ret.code = COMMON_STATUS.NOT_FOUND;
+                ret.reason = `Asset can not be found: ${uuid}. Please refresh asset db and try again.`;
+            }
+        } catch (e) {
+            ret.code = getCommonErrorStatus(e);
+            console.error('update asset meta user data fail:', e instanceof Error ? e.message : String(e));
+            ret.reason = e instanceof Error ? e.message : String(e);
+        }
+
+        return ret;
+    }
+
+    /**
+     * Query Asset Config Map
      */
     // @tool('assets-query-asset-config-map')
     @title('Query Asset Config Map') // 查询资源配置映射表

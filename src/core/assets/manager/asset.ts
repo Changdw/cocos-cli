@@ -45,6 +45,7 @@ class AssetManager extends EventEmitter {
     outputExportData = assetOperation.outputExportData.bind(assetOperation);
     createAssetByType = assetOperation.createAssetByType.bind(assetOperation);
     updateUserData = assetOperation.updateUserData.bind(assetOperation);
+    updateMetaUserData = assetOperation.updateMetaUserData.bind(assetOperation);
 
     // ----------- assetHandlerManager ------------
     queryAssetConfigMap = assetHandlerManager.queryAssetConfigMap.bind(assetHandlerManager);
@@ -350,6 +351,7 @@ export interface TypedAssetManager extends EventEmitter {
     outputExportData: typeof assetOperation.outputExportData;
     createAssetByType: typeof assetOperation.createAssetByType;
     updateUserData: typeof assetOperation.updateUserData;
+    updateMetaUserData: typeof assetOperation.updateMetaUserData;
 
     queryAssetConfigMap: typeof assetHandlerManager.queryAssetConfigMap;
     updateDefaultUserData: typeof assetHandlerManager.updateDefaultUserData;

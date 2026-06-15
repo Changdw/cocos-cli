@@ -7,7 +7,7 @@ import { copy as fsCopy, move, remove, existsSync } from 'fs-extra';
 import { isAbsolute, dirname, join, relative, extname } from 'path';
 import { IMoveOptions } from '../@types/private';
 import { IAsset, CreateAssetOptions, IExportOptions, IExportData, CreateAssetByTypeOptions, ICreateMenuInfo } from '../@types/protected';
-import { AssetOperationOption, AssetUserDataMap, DeleteAssetOptions, IAssetInfo, IAssetMeta, ISupportCreateType } from '../@types/public';
+import { AssetOperationOption, AssetUserDataMap, DeleteAssetOptions, IAssetInfo, IAssetMeta, ISupportCreateType, UpdateAssetMetaUserDataOptions } from '../@types/public';
 import assetConfig from '../asset-config';
 import { url2path, ensureOutputData, url2uuid, pathToDbUrlIfAssetDBPath, dirnameForDbUrlOrPath } from '../utils';
 import assetDBManager from './asset-db';
@@ -283,6 +283,28 @@ class AssetOperation extends EventEmitter {
         lodash.set(asset?.meta.userData, path, value);
         await asset.save();
         return asset?.meta.userData;
+    }
+
+    async updateMetaUserData<T extends keyof AssetUserDataMap = 'unknown'>(
+        parentUuid: string,
+        subMetaId: string | null | undefined,
+        path: string,
+        value: any,
+        options: UpdateAssetMetaUserDataOptions = {},
+    ): Promise<AssetUserDataMap[T]> {
+        const uuid = subMetaId ? `${parentUuid}@${subMetaId}` : parentUuid;
+        const asset = assetQuery.queryAsset(uuid);
+        if (!asset) {
+            console.error(`can not find asset ${uuid}`);
+            return;
+        }
+        const userData = asset.meta.userData || (asset.meta.userData = {} as AssetUserDataMap[T]);
+        lodash.set(userData, path, value);
+        await asset.save();
+        if (options.reimport) {
+            await asset._assetDB.reimport(asset.uuid);
+        }
+        return userData;
     }
 
     async saveAsset(uuidOrURLOrPath: string, content: string | Buffer) {

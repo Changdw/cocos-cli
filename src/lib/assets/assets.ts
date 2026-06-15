@@ -1,4 +1,4 @@
-import type { AssetOperationOption, CreateAssetByTypeOptions, DeleteAssetOptions, IAssetFileSystemProvider, IAssetInfo, IAssetMeta, ISupportCreateType, QueryAssetsOption } from '../../core/assets/@types/public';
+import type { AssetOperationOption, CreateAssetByTypeOptions, DeleteAssetOptions, IAssetFileSystemProvider, IAssetInfo, IAssetMeta, ISupportCreateType, QueryAssetsOption, UpdateAssetMetaUserDataOptions } from '../../core/assets/@types/public';
 import type { CreateAssetOptions, IAssetConfig, IAssetDBInfo, ICreateMenuInfo, IUerDataConfigItem, QueryAssetType, ThumbnailInfo, ThumbnailSize } from '../../core/assets/@types/protected';
 import type { FilterPluginOptions, IPluginScriptInfo } from '../../core/scripting/interface';
 import { assetDBManager, assetManager } from '../../core/assets';
@@ -106,13 +106,6 @@ export async function queryAssetInfo(
  */
 export async function queryAssetMeta(urlOrUUIDOrPath: string): Promise<IAssetMeta<'unknown'> | null> {
     return await assetManager.queryAssetMeta(urlOrUUIDOrPath);
-}
-
-/**
- * Save Asset Metadata // 保存资源元数据
- */
-export async function saveAssetMeta(uuid: string, meta: IAssetMeta): Promise<void> {
-    return await assetManager.saveAssetMeta(uuid, meta);
 }
 
 /**
@@ -291,6 +284,19 @@ export async function updateAssetUserData(
     value: any
 ): Promise<any> {
     return await assetManager.updateUserData(urlOrUuidOrPath, path, value);
+}
+
+/**
+ * Update Asset Meta User Data // 更新资源 meta 中的用户数据
+ */
+export async function updateAssetMetaUserData(
+    parentUuid: string,
+    subMetaId: string | null | undefined,
+    path: string,
+    value: any,
+    options?: UpdateAssetMetaUserDataOptions
+): Promise<any> {
+    return await assetManager.updateMetaUserData(parentUuid, subMetaId, path, value, options);
 }
 
 /**

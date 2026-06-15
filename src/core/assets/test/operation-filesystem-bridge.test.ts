@@ -166,6 +166,62 @@ describe('asset operation filesystem bridge', () => {
         jest.restoreAllMocks();
     });
 
+    it('updateMetaUserData updates parent asset userData without reimport by default', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const reimport = jest.fn();
+        const asset = {
+            uuid: 'parent-uuid',
+            meta: {
+                userData: {},
+            },
+            save: jest.fn().mockResolvedValue(true),
+            _assetDB: {
+                reimport,
+            },
+        };
+        mockQueryAsset.mockReturnValue(asset);
+
+        const result = await assetOperation.updateMetaUserData('parent-uuid', null, 'custom.enabled', true);
+
+        expect(mockQueryAsset).toHaveBeenCalledWith('parent-uuid');
+        expect(asset.meta.userData).toEqual({
+            custom: {
+                enabled: true,
+            },
+        });
+        expect(asset.save).toHaveBeenCalledTimes(1);
+        expect(reimport).not.toHaveBeenCalled();
+        expect(result).toBe(asset.meta.userData);
+    });
+
+    it('updateMetaUserData updates sub asset userData and reimports when requested', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const reimport = jest.fn();
+        const subAsset = {
+            uuid: 'parent-uuid@6c48a',
+            meta: {
+                userData: {
+                    minfilter: 'linear',
+                },
+            },
+            save: jest.fn().mockResolvedValue(true),
+            _assetDB: {
+                reimport,
+            },
+        };
+        mockQueryAsset.mockReturnValue(subAsset);
+
+        const result = await assetOperation.updateMetaUserData('parent-uuid', '6c48a', 'minfilter', 'nearest', { reimport: true });
+
+        expect(mockQueryAsset).toHaveBeenCalledWith('parent-uuid@6c48a');
+        expect(subAsset.meta.userData).toEqual({
+            minfilter: 'nearest',
+        });
+        expect(subAsset.save).toHaveBeenCalledTimes(1);
+        expect(reimport).toHaveBeenCalledWith('parent-uuid@6c48a');
+        expect(result).toBe(subAsset.meta.userData);
+    });
+
     it('renameAsset should delegate rename steps to filesystem bridge', async () => {
         const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
         const source = 'D:/project/assets/source.txt';

@@ -72,6 +72,10 @@ export interface DeleteAssetOptions {
     useTrash?: boolean;
 }
 
+export interface UpdateAssetMetaUserDataOptions {
+    reimport?: boolean;
+}
+
 // Basic information about the resource
 // 资源的基础信息
 export interface AssetInfo extends IAssetInfo {

@@ -30,8 +30,9 @@ export function tool(toolName?: string) {
       throw new Error(`Tool name "${name}" is already registered`);
     }
 
-    const paramSchemas: ParamSchema[] =
-        Reflect.getOwnMetadata(`tool:paramSchemas:${propertyKey.toString()}`, proto) || [];
+    const paramSchemas: ParamSchema[] = [
+      ...(Reflect.getOwnMetadata(`tool:paramSchemas:${propertyKey.toString()}`, proto) || []),
+    ].sort((a, b) => a.index - b.index);
 
     const returnSchema: ZodType<any> | undefined =
         Reflect.getOwnMetadata(`tool:returnSchema:${propertyKey.toString()}`, proto);

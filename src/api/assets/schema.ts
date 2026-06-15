@@ -259,6 +259,17 @@ export type TUpdateAssetUserDataValue = z.infer<typeof SchemaUpdateAssetUserData
 export const SchemaUpdateAssetUserDataResult = z.any().describe('Updated user data object'); // 更新后的用户数据对象
 export type TUpdateAssetUserDataResult = z.infer<typeof SchemaUpdateAssetUserDataResult>;
 
+export const SchemaUpdateAssetMetaUserDataParentUuid = z.string().min(1).describe('Parent asset UUID. Use subMetaId to target a sub asset meta.');
+export type TUpdateAssetMetaUserDataParentUuid = z.infer<typeof SchemaUpdateAssetMetaUserDataParentUuid>;
+
+export const SchemaUpdateAssetMetaUserDataSubMetaId = z.string().min(1).nullable().optional().describe('Sub meta id. Pass null or omit it to update the parent asset meta userData.');
+export type TUpdateAssetMetaUserDataSubMetaId = z.infer<typeof SchemaUpdateAssetMetaUserDataSubMetaId>;
+
+export const SchemaUpdateAssetMetaUserDataOptions = z.object({
+    reimport: z.boolean().optional().describe('Whether to reimport the asset after saving .meta. Default false.'),
+}).optional().describe('Options for updating asset meta userData');
+export type TUpdateAssetMetaUserDataOptions = z.infer<typeof SchemaUpdateAssetMetaUserDataOptions>;
+
 // Recursively defined user data configuration item // 递归定义用户数据配置项
 const SchemaUserDataConfigItem: z.ZodType<any> = z.lazy(() => z.object({
     key: z.string().optional().describe('Unique identifier'), // 唯一标识符

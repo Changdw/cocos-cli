@@ -170,6 +170,9 @@ export declare function deleteAsset(dbPath: string, options?: DeleteAssetOptions
 export declare interface DeleteAssetOptions {
     useTrash?: boolean;
 }
+export declare interface UpdateAssetMetaUserDataOptions {
+    reimport?: boolean;
+}
 export declare interface DirectoryAssetUserData {
     isBundle?: boolean;
     bundleConfigID?: string;
@@ -658,7 +661,6 @@ export declare interface RtSpriteFrameAssetUserData {
     height?: number;
 }
 export declare function saveAsset(pathOrUrlOrUUID: string, data: string | Buffer): Promise<IAssetInfo>;
-export declare function saveAssetMeta(uuid: string, meta: IAssetMeta): Promise<void>;
 export declare interface ScriptModuleUserData {
     isPlugin: false;
 }
@@ -762,6 +764,7 @@ export declare interface ThumbnailInfo {
 }
 export declare type ThumbnailSize = 'large' | 'small' | 'middle' | 'origin';
 export declare function updateAssetUserData(urlOrUuidOrPath: string, path: string, value: any): Promise<any>;
+export declare function updateAssetMetaUserData(parentUuid: string, subMetaId: string | null | undefined, path: string, value: any, options?: UpdateAssetMetaUserDataOptions): Promise<any>;
 export declare function updateDefaultUserData(handler: string, path: string, value: any): Promise<void>;
 export declare type WrapMode = 'repeat' | 'clamp-to-edge' | 'mirrored-repeat';
 export { }
@@ -6817,7 +6820,6 @@ export declare namespace Assets {
         refresh,
         queryAssetInfo,
         queryAssetMeta,
-        saveAssetMeta,
         queryCreateMap,
         queryAssetInfos,
         queryAssetDBInfos,
@@ -6837,6 +6839,7 @@ export declare namespace Assets {
         updateDefaultUserData,
         queryAssetUserDataConfig,
         updateAssetUserData,
+        updateAssetMetaUserData,
         queryAssetConfigMap,
         queryThumbnailHandlers,
         generateThumbnail,
@@ -6862,6 +6865,7 @@ export declare namespace Assets {
         IAssetInfo,
         AssetOperationOption,
         DeleteAssetOptions,
+        UpdateAssetMetaUserDataOptions,
         AssetInfo,
         IRedirectInfo,
         QueryAssetsOption,
@@ -7015,6 +7019,9 @@ export declare interface CreateAssetOptions {
 export declare function deleteAsset(dbPath: string, options?: DeleteAssetOptions): Promise<IAssetInfo | null>;
 export declare interface DeleteAssetOptions {
     useTrash?: boolean;
+}
+export declare interface UpdateAssetMetaUserDataOptions {
+    reimport?: boolean;
 }
 export declare interface DirectoryAssetUserData {
     isBundle?: boolean;
@@ -8733,7 +8740,6 @@ export declare interface RtSpriteFrameAssetUserData {
 }
 export declare function save(force?: boolean): Promise<void>;
 export declare function saveAsset(pathOrUrlOrUUID: string, data: string | Buffer): Promise<IAssetInfo>;
-export declare function saveAssetMeta(uuid: string, meta: IAssetMeta): Promise<void>;
 export declare namespace Scene {
     export {
         init_6 as init,
@@ -8897,6 +8903,7 @@ export declare type TSceneTemplateType = typeof SCENE_TEMPLATE_TYPE[number];
 export declare type UIAlignType = 'top' | 'v-center' | 'bottom' | 'left' | 'h-center' | 'right';
 export declare function unregister(): Promise<void>;
 export declare function updateAssetUserData(urlOrUuidOrPath: string, path: string, value: any): Promise<any>;
+export declare function updateAssetMetaUserData(parentUuid: string, subMetaId: string | null | undefined, path: string, value: any, options?: UpdateAssetMetaUserDataOptions): Promise<any>;
 export declare function updateDefaultUserData(handler: string, path: string, value: any): Promise<void>;
 export declare interface Vec2 {
     x: number;
