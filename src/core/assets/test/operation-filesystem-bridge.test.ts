@@ -166,6 +166,38 @@ describe('asset operation filesystem bridge', () => {
         jest.restoreAllMocks();
     });
 
+    it('updateUserData updates sub asset userData through composite uuid without reimport', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const reimport = jest.fn();
+        const subAsset = {
+            uuid: '6fa5fbad-0d32-4b63-95d8-24507665775c@6c48a',
+            meta: {
+                userData: {
+                    minfilter: 'linear',
+                },
+            },
+            save: jest.fn().mockResolvedValue(true),
+            _assetDB: {
+                reimport,
+            },
+        };
+        mockQueryAsset.mockReturnValue(subAsset);
+
+        const result = await assetOperation.updateUserData(
+            '6fa5fbad-0d32-4b63-95d8-24507665775c@6c48a',
+            'minfilter',
+            'nearest',
+        );
+
+        expect(mockQueryAsset).toHaveBeenCalledWith('6fa5fbad-0d32-4b63-95d8-24507665775c@6c48a');
+        expect(subAsset.meta.userData).toEqual({
+            minfilter: 'nearest',
+        });
+        expect(subAsset.save).toHaveBeenCalledTimes(1);
+        expect(reimport).not.toHaveBeenCalled();
+        expect(result).toBe(subAsset.meta.userData);
+    });
+
     it('renameAsset should delegate rename steps to filesystem bridge', async () => {
         const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
         const source = 'D:/project/assets/source.txt';
