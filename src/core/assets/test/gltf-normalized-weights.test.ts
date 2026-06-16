@@ -1,5 +1,23 @@
 import type { GlTf } from '../@types/glTF';
 
+function mockEngineModuleLoad(moduleMocks: Record<string, unknown>) {
+    const Module = require('module') as {
+        _load: (request: string, parent?: unknown, isMain?: boolean) => unknown;
+    };
+    const originalLoad = Module._load;
+
+    Module._load = function patchedLoad(this: unknown, request: string, ...args: unknown[]) {
+        if (Object.prototype.hasOwnProperty.call(moduleMocks, request)) {
+            return moduleMocks[request];
+        }
+        return originalLoad.call(this, request, ...args);
+    };
+
+    return () => {
+        Module._load = originalLoad;
+    };
+}
+
 jest.resetModules();
 
 jest.doMock('cc', () => {
@@ -96,23 +114,40 @@ jest.doMock('cc', () => {
             JOINT_UNIFORM_CAPACITY: 30,
         },
     };
-});
+}, { virtual: true });
 
 jest.doMock('cc/editor/exotic-animation', () => ({
     exoticAnimationTag: Symbol('exoticAnimation'),
+    ExoticAnimation: class ExoticAnimation { },
     RealArrayTrack: class RealArrayTrack { },
-}));
+}), { virtual: true });
 
 jest.doMock('cc/editor/color-utils', () => ({
     linearToSrgb8Bit: (value: number) => Math.round(value * 255),
-}));
+}), { virtual: true });
 
-const { GltfConverter } = require('../asset-handler/assets/utils/gltf-converter') as typeof import('../asset-handler/assets/utils/gltf-converter');
-const { PPGeometry } = require('../asset-handler/assets/utils/pp-geometry') as typeof import('../asset-handler/assets/utils/pp-geometry');
+const restoreModuleLoad = mockEngineModuleLoad({
+    cc: jest.requireMock('cc'),
+    'cc/editor/exotic-animation': jest.requireMock('cc/editor/exotic-animation'),
+    'cc/editor/color-utils': jest.requireMock('cc/editor/color-utils'),
+});
+
 const {
+    GltfConverter,
+    PPGeometry,
     NormalImportSetting,
     TangentImportSetting,
-} = require('../@types/interface') as typeof import('../@types/interface');
+} = (() => {
+    try {
+        return {
+            ...require('../asset-handler/assets/utils/gltf-converter') as typeof import('../asset-handler/assets/utils/gltf-converter'),
+            ...require('../asset-handler/assets/utils/pp-geometry') as typeof import('../asset-handler/assets/utils/pp-geometry'),
+            ...require('../@types/interface') as typeof import('../@types/interface'),
+        };
+    } finally {
+        restoreModuleLoad();
+    }
+})();
 
 function asBuffer(view: ArrayBufferView) {
     return Buffer.from(view.buffer, view.byteOffset, view.byteLength);
