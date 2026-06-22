@@ -170,6 +170,57 @@ describe('serialized asset data', function () {
         });
     });
 
+    it('saves a RenderPipeline nested IProperty patch and reads the fresh value back', async () => {
+        const fixture = join(
+            TestGlobalEnv.engineRoot,
+            'editor/assets/default_file_content/render-pipeline/forward-pipeline.rpp',
+        );
+        const assetInfo = await assetManager.createAsset({
+            target: join(TestGlobalEnv.testRoot, `${name}-pipeline-save.rpp`),
+            content: readFileSync(fixture, 'utf8'),
+            overwrite: true,
+        });
+
+        const before = await assetManager.querySerializedData(assetInfo.uuid);
+        const dump = before.dump as IProperty;
+        const value = dump.value as DumpMap;
+        const flows = value._flows.value as IProperty[];
+        const firstFlow = flows[0];
+        const firstFlowValue = firstFlow.value as DumpMap;
+
+        expect(firstFlowValue._priority.value).toBe(0);
+
+        await assetManager.saveSerializedData(assetInfo.uuid, {
+            ...dump,
+            value: {
+                ...value,
+                _flows: {
+                    ...value._flows,
+                    value: flows.map((flow, index) => index === 0 ? {
+                        ...flow,
+                        value: {
+                            ...(flow.value as DumpMap),
+                            _priority: {
+                                ...((flow.value as DumpMap)._priority),
+                                value: 3,
+                            },
+                        },
+                    } : flow),
+                },
+            },
+        });
+
+        const after = await assetManager.querySerializedData(assetInfo.uuid);
+        const afterDump = after.dump as IProperty;
+        const afterValue = afterDump.value as DumpMap;
+        const afterFlows = afterValue._flows.value as IProperty[];
+        const afterFirstFlowValue = afterFlows[0].value as DumpMap;
+        const source = readJSONSync(assetInfo.file);
+
+        expect(afterFirstFlowValue._priority.value).toBe(3);
+        expect(source[1]._priority).toBe(3);
+    });
+
     it('rejects unknown nested RenderPipeline fields without changing the source file', async () => {
         const fixture = join(
             TestGlobalEnv.engineRoot,
