@@ -1,4 +1,4 @@
-import type { AssetOperationOption, CreateAssetByTypeOptions, DeleteAssetOptions, IAssetFileSystemProvider, IAssetInfo, IAssetMeta, ISupportCreateType, QueryAssetsOption } from '../../core/assets/@types/public';
+import type { AssetOperationOption, CreateAssetByTypeOptions, DeleteAssetOptions, IAssetFileSystemProvider, IAssetInfo, IAssetMeta, ISupportCreateType, QueryAssetsOption, SerializedAssetPatch, SerializedAssetQueryResult } from '../../core/assets/@types/public';
 import type { CreateAssetOptions, IAssetConfig, IAssetDBInfo, ICreateMenuInfo, IUerDataConfigItem, QueryAssetType, ThumbnailInfo, ThumbnailSize } from '../../core/assets/@types/protected';
 import type { FilterPluginOptions, IPluginScriptInfo } from '../../core/scripting/interface';
 import { assetDBManager, assetManager } from '../../core/assets';
@@ -199,6 +199,28 @@ export const animationGraphVariant = {
     save(uuid: string): Promise<void> {
         return assetManager.saveAnimationGraphVariant(uuid);
     },
+};
+
+/**
+ * Query serialized asset dump data.
+ */
+export async function querySerializedData(uuidOrUrlOrPath: string): Promise<SerializedAssetQueryResult> {
+    return await assetManager.querySerializedData(uuidOrUrlOrPath);
+}
+
+/**
+ * Save serialized asset dump data.
+ */
+export async function saveSerializedData(
+    uuidOrUrlOrPath: string,
+    patch: SerializedAssetPatch
+): Promise<SerializedAssetQueryResult> {
+    return await assetManager.saveSerializedData(uuidOrUrlOrPath, patch);
+}
+
+export const serializedData = {
+    query: querySerializedData,
+    save: saveSerializedData,
 };
 
 /**
