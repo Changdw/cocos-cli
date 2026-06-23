@@ -76,6 +76,12 @@ import {
     TUUIDOrPath,
     TUrlOrUUID,
     TUrlOrPath,
+    SchemaAnimationGraphVariantDump,
+    SchemaAnimationGraphVariantResult,
+    SchemaAnimationGraphVariantSaveResult,
+    TAnimationGraphVariantDump,
+    TAnimationGraphVariantResult,
+    TAnimationGraphVariantSaveResult,
 } from './schema';
 import { z } from 'zod';
 import { description, param, result, title, tool } from '../decorator/decorator.js';
@@ -409,8 +415,78 @@ export class AssetsApi {
     }
 
     /**
-     * Query Asset UUID // 查询资源 UUID
+     * Animation Graph Variant
      */
+    @tool('assets-animation-graph-variant-query')
+    @title('Query Animation Graph Variant')
+    @description('Load an AnimationGraphVariant asset and return its referenced graph UUID, valid clip override rows, and invalid saved override entries.')
+    @result(SchemaAnimationGraphVariantResult)
+    async queryAnimationGraphVariant(
+        @param(SchemaUrlOrUUID) uuid: TUrlOrUUID
+    ): Promise<CommonResultType<TAnimationGraphVariantResult>> {
+        const ret: CommonResultType<TAnimationGraphVariantResult> = {
+            code: COMMON_STATUS.SUCCESS,
+            data: undefined,
+        };
+
+        try {
+            ret.data = await assetManager.queryAnimationGraphVariant(uuid);
+        } catch (e) {
+            ret.code = getCommonErrorStatus(e);
+            console.error('query animation graph variant fail:', e instanceof Error ? e.message : String(e));
+            ret.reason = e instanceof Error ? e.message : String(e);
+        }
+
+        return ret;
+    }
+
+    @tool('assets-animation-graph-variant-change')
+    @title('Change Animation Graph Variant')
+    @description('Update the pending AnimationGraphVariant edit. Changing graphUuid rebuilds the original clip list from the new graph; otherwise clips updates override mappings.')
+    @result(SchemaAnimationGraphVariantResult)
+    async changeAnimationGraphVariant(
+        @param(SchemaUrlOrUUID) uuid: TUrlOrUUID,
+        @param(SchemaAnimationGraphVariantDump) dump: TAnimationGraphVariantDump
+    ): Promise<CommonResultType<TAnimationGraphVariantResult>> {
+        const ret: CommonResultType<TAnimationGraphVariantResult> = {
+            code: COMMON_STATUS.SUCCESS,
+            data: undefined,
+        };
+
+        try {
+            ret.data = await assetManager.changeAnimationGraphVariant(uuid, dump);
+        } catch (e) {
+            ret.code = getCommonErrorStatus(e);
+            console.error('change animation graph variant fail:', e instanceof Error ? e.message : String(e));
+            ret.reason = e instanceof Error ? e.message : String(e);
+        }
+
+        return ret;
+    }
+
+    @tool('assets-animation-graph-variant-save')
+    @title('Save Animation Graph Variant')
+    @description('Save the pending AnimationGraphVariant edit created by query/change. This method takes only the asset UUID and writes the cached pending dump.')
+    @result(SchemaAnimationGraphVariantSaveResult)
+    async saveAnimationGraphVariant(
+        @param(SchemaUrlOrUUID) uuid: TUrlOrUUID
+    ): Promise<CommonResultType<TAnimationGraphVariantSaveResult>> {
+        const ret: CommonResultType<TAnimationGraphVariantSaveResult> = {
+            code: COMMON_STATUS.SUCCESS,
+            data: null,
+        };
+
+        try {
+            await assetManager.saveAnimationGraphVariant(uuid);
+        } catch (e) {
+            ret.code = getCommonErrorStatus(e);
+            console.error('save animation graph variant fail:', e instanceof Error ? e.message : String(e));
+            ret.reason = e instanceof Error ? e.message : String(e);
+        }
+
+        return ret;
+    }
+
     @tool('assets-query-uuid')
     @title('Query Asset UUID') // 查询资源 UUID
     @description('Query the unique identifier UUID of an asset based on its URL or file path. Supports db:// protocol paths and file system paths.') // 根据资源的 URL 或文件路径查询资源的唯一标识符 UUID。支持 db:// 协议路径和文件系统路径。

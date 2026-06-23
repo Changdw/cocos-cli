@@ -2,10 +2,12 @@ import type { AssetOperationOption, CreateAssetByTypeOptions, DeleteAssetOptions
 import type { CreateAssetOptions, IAssetConfig, IAssetDBInfo, ICreateMenuInfo, IUerDataConfigItem, QueryAssetType, ThumbnailInfo, ThumbnailSize } from '../../core/assets/@types/protected';
 import type { FilterPluginOptions, IPluginScriptInfo } from '../../core/scripting/interface';
 import { assetDBManager, assetManager } from '../../core/assets';
+import type { AnimGraphVariantDump } from '../../core/assets/animation-graph-variant';
 
 export type * from '../../core/assets/@types/public';
 export type { CreateAssetOptions, IAssetConfig, IAssetDBInfo, ICreateMenuInfo, IUerDataConfigItem, QueryAssetType } from '../../core/assets/@types/protected';
 export type { FilterPluginOptions, IPluginScriptInfo } from '../../core/scripting/interface';
+export type { AnimGraphVariantDump } from '../../core/assets/animation-graph-variant';
 
 export async function init(): Promise<void> {
     // 初始化资源数据库
@@ -184,6 +186,20 @@ export async function saveAsset(
 ): Promise<IAssetInfo> {
     return await assetManager.saveAsset(pathOrUrlOrUUID, data);
 }
+
+export const animationGraphVariant = {
+    query(uuid: string): Promise<AnimGraphVariantDump> {
+        return assetManager.queryAnimationGraphVariant(uuid);
+    },
+
+    change(uuid: string, dump: AnimGraphVariantDump): Promise<AnimGraphVariantDump> {
+        return assetManager.changeAnimationGraphVariant(uuid, dump);
+    },
+
+    save(uuid: string): Promise<void> {
+        return assetManager.saveAnimationGraphVariant(uuid);
+    },
+};
 
 /**
  * Query Asset UUID // 查询资源 UUID

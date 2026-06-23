@@ -289,3 +289,14 @@ export const SchemaAssetConfig = z.object({
 
 export const SchemaAssetConfigMapResult = z.record(z.string(), SchemaAssetConfig).describe('Asset configuration map, key is asset handler name, value is corresponding configuration information'); // 资源配置映射表，键为资源处理器名称，值为对应的配置信息
 export type TAssetConfigMapResult = z.infer<typeof SchemaAssetConfigMapResult>;
+
+export const SchemaAnimationGraphVariantDump = z.object({
+    graphUuid: z.string().min(1).nullable().describe('UUID of the referenced AnimationGraph asset. Null clears the graph reference.'),
+    clips: z.record(z.string().min(1), z.string()).describe('Animation clip override map: original clip UUID to substitute clip UUID. Empty substitute means no override.'),
+    invalids: z.record(z.string().min(1), z.string()).optional().describe('Saved override entries whose original clip is not found in the current graph. These entries are returned for display only and are not saved.'),
+}).describe('AnimationGraphVariant editable dump');
+export const SchemaAnimationGraphVariantResult = SchemaAnimationGraphVariantDump.describe('AnimationGraphVariant editable dump result');
+export const SchemaAnimationGraphVariantSaveResult = z.null().describe('AnimationGraphVariant save result');
+export type TAnimationGraphVariantDump = z.infer<typeof SchemaAnimationGraphVariantDump>;
+export type TAnimationGraphVariantResult = z.infer<typeof SchemaAnimationGraphVariantResult>;
+export type TAnimationGraphVariantSaveResult = z.infer<typeof SchemaAnimationGraphVariantSaveResult>;
