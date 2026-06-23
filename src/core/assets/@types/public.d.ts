@@ -85,6 +85,24 @@ export interface DeleteAssetOptions {
     useTrash?: boolean;
 }
 
+export interface AnimationMaskDump {
+    version: 1;
+    assetUuid: string;
+    joints: AnimationMaskJoint[];
+}
+
+export interface AnimationMaskJoint {
+    path: string;
+    enabled: boolean;
+    children?: AnimationMaskJoint[];
+}
+
+export interface AnimationMaskChange {
+    path: string;
+    enabled: boolean;
+    recursive?: boolean;
+}
+
 // Basic information about the resource
 // 资源的基础信息
 export interface AssetInfo extends IAssetInfo {

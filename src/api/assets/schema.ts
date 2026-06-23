@@ -207,6 +207,22 @@ export const SchemaRefreshDirResult = z.null().describe('Refresh asset directory
 export const SchemaUUIDResult = z.string().nullable().describe('Unique identifier UUID of the asset'); // 资源的唯一标识符 UUID
 export const SchemaPathResult = z.string().nullable().describe('File system path of the asset'); // 资源的文件系统路径
 export const SchemaUrlResult = z.string().nullable().describe('Database URL address of the asset'); // 资源的数据库 URL 地址
+export const SchemaAnimationMaskJoint: z.ZodType<any> = z.lazy(() => z.object({
+    path: z.string().min(1).describe('Joint path relative to the skeleton root, for example "spine/leftArm"'), // 相对骨骼根节点的关节路径
+    enabled: z.boolean().describe('Whether this joint is enabled in the animation mask'), // 关节是否启用
+    children: z.array(SchemaAnimationMaskJoint).optional().describe('Child joint masks'), // 子关节遮罩
+}));
+export const SchemaAnimationMaskDump = z.object({
+    version: z.literal(1).describe('Animation mask DTO schema version'), // DTO 版本
+    assetUuid: z.string().min(1).describe('AnimationMask asset UUID'), // AnimationMask 资源 UUID
+    joints: z.array(SchemaAnimationMaskJoint).describe('Animation mask joint tree'), // 关节遮罩树
+}).describe('Stable AnimationMask DTO for panel and CLI consumption'); // 面板/CLI 专用稳定 AnimationMask DTO
+export const SchemaAnimationMaskChanges = z.array(z.object({
+    path: z.string().min(1).describe('Joint path to update'), // 要更新的关节路径
+    enabled: z.boolean().describe('New enabled state'), // 新的启用状态
+    recursive: z.boolean().optional().describe('Whether to apply the change to descendant joint paths. Defaults to false.'), // 是否递归更新子树
+})).describe('AnimationMask path patch list'); // AnimationMask 路径 patch 列表
+export const SchemaVoidResult = z.null().describe('No result data'); // 无返回数据
 
 // Asset operation related // 资源操作相关
 export const SchemaQueryAssetType = z.enum(['asset', 'script', 'all']).describe('Query asset type: asset (normal asset), script (script), all (all)'); // 查询资源类型：asset(普通资源)、script(脚本)、all(全部)
@@ -275,6 +291,9 @@ export type TRefreshDirResult = z.infer<typeof SchemaRefreshDirResult>;
 export type TUUIDResult = z.infer<typeof SchemaUUIDResult>;
 export type TPathResult = z.infer<typeof SchemaPathResult>;
 export type TUrlResult = z.infer<typeof SchemaUrlResult>;
+export type TAnimationMaskDump = z.infer<typeof SchemaAnimationMaskDump>;
+export type TAnimationMaskChanges = z.infer<typeof SchemaAnimationMaskChanges>;
+export type TVoidResult = z.infer<typeof SchemaVoidResult>;
 export type TQueryAssetType = z.infer<typeof SchemaQueryAssetType>;
 export type TFilterPluginOptions = z.infer<typeof SchemaFilterPluginOptions>;
 export type TPluginScriptInfo = z.infer<typeof SchemaPluginScriptInfo>;
