@@ -1,4 +1,4 @@
-import type { AssetOperationOption, CreateAssetByTypeOptions, DeleteAssetOptions, IAssetFileSystemProvider, IAssetInfo, IAssetMeta, ISupportCreateType, QueryAssetsOption, SerializedAssetPatch, SerializedAssetQueryResult } from '../../core/assets/@types/public';
+import type { AnimationMaskChange, AnimationMaskDump, AssetOperationOption, CreateAssetByTypeOptions, DeleteAssetOptions, IAssetFileSystemProvider, IAssetInfo, IAssetMeta, ISupportCreateType, QueryAssetsOption, SerializedAssetPatch, SerializedAssetQueryResult } from '../../core/assets/@types/public';
 import type { CreateAssetOptions, IAssetConfig, IAssetDBInfo, ICreateMenuInfo, IUerDataConfigItem, QueryAssetType, ThumbnailInfo, ThumbnailSize } from '../../core/assets/@types/protected';
 import type { FilterPluginOptions, IPluginScriptInfo } from '../../core/scripting/interface';
 import { assetDBManager, assetManager } from '../../core/assets';
@@ -198,6 +198,33 @@ export const animationGraphVariant = {
 
     save(uuid: string): Promise<void> {
         return assetManager.saveAnimationGraphVariant(uuid);
+    },
+};
+
+export const animationMask = {
+    async query(uuid: string): Promise<AnimationMaskDump> {
+        const { queryAnimationMask } = await import('../../core/assets/animation-mask');
+        return queryAnimationMask(uuid);
+    },
+
+    async importSkeleton(uuid: string, skeletonSourceUuid: string): Promise<AnimationMaskDump> {
+        const { importAnimationMaskSkeleton } = await import('../../core/assets/animation-mask');
+        return importAnimationMaskSkeleton(uuid, skeletonSourceUuid);
+    },
+
+    async clearNodes(uuid: string): Promise<AnimationMaskDump> {
+        const { clearAnimationMaskNodes } = await import('../../core/assets/animation-mask');
+        return clearAnimationMaskNodes(uuid);
+    },
+
+    async changeDump(uuid: string, changes: AnimationMaskChange[]): Promise<AnimationMaskDump> {
+        const { changeAnimationMaskDump } = await import('../../core/assets/animation-mask');
+        return changeAnimationMaskDump(uuid, changes);
+    },
+
+    async save(uuid: string): Promise<void> {
+        const { saveAnimationMask } = await import('../../core/assets/animation-mask');
+        return saveAnimationMask(uuid);
     },
 };
 

@@ -53,15 +53,14 @@ export async function createBuildTask<P extends Platform>(platform: P, options?:
         options = await pluginManager.getOptionsByPlatform(platform);
     }
     options.platform = platform;
+    options.taskId = options.taskId || String(new Date().getTime());
+    options.taskName = options.taskName || platform;
+    ensureBuildLogSink(options, platform);
 
     // 不支持的构建平台不执行构建
     if (!pluginManager.checkPlatform(platform)) {
         throw new Error(`Unsupported platform ${platform} for build command!`);
     }
-    options.taskId = options.taskId || String(new Date().getTime());
-    options.taskName = options.taskName || platform;
-    ensureBuildLogSink(options, platform);
-
     // @ts-ignore
     let realOptions: IBuildTaskOption<any> = options;
     if (!options.skipCheck) {
@@ -201,16 +200,13 @@ function readBuildOptionsForBuildStage(options: IBuildStageOptions) {
     return buildOptions;
 }
 
-function tryReadBuildOptionsForBuildStage(options: IBuildStageOptions) {
-    options.dest = utils.Path.resolveToRaw(options.dest);
-    try {
-        return readBuildTaskOptions(options.dest);
-    } catch {
-        return undefined;
-    }
-}
-
 function mergeBuildStageRuntimeOptions(buildOptions: IBuildTaskOption<any>, options: IBuildStageOptions) {
+    buildOptions.platform = options.platform;
+    (buildOptions as IBuildTaskOption<any> & { dest?: string }).dest = options.dest;
+    if (options.logDest) {
+        buildOptions.logDest = options.logDest;
+    }
+
     if (!options.packages) {
         return;
     }
@@ -228,23 +224,19 @@ export async function executeBuildStageTask(taskId: string, stageName: string, o
         options.taskName = stageName + ' build';
     }
     const restoreLogSink = newConsole.createLogSinkRestorer();
+    ensureBuildLogSink(options, options.taskName, options.logDest);
     let buildStageTask: Awaited<ReturnType<typeof createBuildStageTask>> | undefined;
 
     try {
         let buildOptions: IBuildTaskOption<any> | undefined;
-        let savedBuildOptions: IBuildTaskOption<any> | undefined;
-        if (options.platform.startsWith('web')) {
-            savedBuildOptions = tryReadBuildOptionsForBuildStage(options);
-        } else {
+        if (!options.platform.startsWith('web')) {
             options.dest = utils.Path.resolveToRaw(options.dest);
-            savedBuildOptions = readBuildTaskOptions(options.dest);
-            buildOptions = savedBuildOptions;
+            buildOptions = readBuildTaskOptions(options.dest);
             if (!buildOptions) {
                 throw new Error('Build options is not exist!');
             }
             mergeBuildStageRuntimeOptions(buildOptions, options);
         }
-        ensureBuildLogSink(options, options.taskName, options.logDest || savedBuildOptions?.logDest);
         buildStageTask = await createBuildStageTaskWithBuildOptions(taskId, stageName, options, buildOptions);
         if (onProgress) {
             buildStageTask.on('update', onProgress);
