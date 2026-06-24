@@ -756,6 +756,7 @@ export declare interface RtSpriteFrameAssetUserData {
     height?: number;
 }
 export declare function saveAsset(pathOrUrlOrUUID: string, data: string | Buffer): Promise<IAssetInfo>;
+export declare function saveSerializedData(uuidOrUrlOrPath: string, patch: SerializedAssetPatch): Promise<SerializedAssetQueryResult>;
 export declare interface ScriptModuleUserData {
     isPlugin: false;
 }
@@ -8234,6 +8235,7 @@ export declare interface RtSpriteFrameAssetUserData {
 }
 export declare function save(force?: boolean): Promise<void>;
 export declare function saveAsset(pathOrUrlOrUUID: string, data: string | Buffer): Promise<IAssetInfo>;
+export declare function saveSerializedData(uuidOrUrlOrPath: string, patch: SerializedAssetPatch): Promise<SerializedAssetQueryResult>;
 export declare namespace Scene {
     export {
         init_6 as init,
