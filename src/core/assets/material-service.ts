@@ -259,7 +259,6 @@ async function decodeMaterial(dump: MaterialDump): Promise<string | object> {
 
     const technique = dump.data?.[material._techIdx];
     const passes = technique?.passes || [];
-    const tasks: Promise<void>[] = [];
     const matProps: Record<string, any>[] = [];
     const matDefines: Record<string, any>[] = [];
     const matStates: Record<string, any>[] = [];
@@ -270,43 +269,19 @@ async function decodeMaterial(dump: MaterialDump): Promise<string | object> {
         }
 
         if (dumpData.isObject) {
-            const nextData: Record<string, any> = {};
-            let hasChanged = false;
-            getObjectKeys(dumpData.value).forEach((key) => {
-                hasChanged = compareAndDecode(dumpData.value[key], nextData) || hasChanged;
-            });
-            if (hasChanged) {
-                dstData[dumpData.name] = nextData;
-            }
-            return hasChanged;
-        } else if (dumpData.isArray) {
-            if (cc.js.getClassByName(dumpData.type) || dumpData.type === 'Object' || dumpData.type === 'Array') {
-                const nextData: any[] = [];
-                let hasChanged = false;
-                for (let i = 0; i < dumpData.value.length; i++) {
-                    hasChanged = compareAndDecode(dumpData.value[i], nextData) || hasChanged;
-                }
-                if (hasChanged) {
-                    dstData[dumpData.name] = nextData;
-                }
-                return hasChanged;
-            } else {
-                const isChanged = (dumpData.value || []).some((item: any) => isModified(item));
-                if (isChanged) {
-                    dstData[dumpData.name] = createDecodeSeed(dumpData);
-                    tasks.push(getDecodePatch()(`${dumpData.name}`, dumpData, dstData) as Promise<void>);
-                }
-                return isChanged;
-            }
-        } else {
-            if (!isModified(dumpData)) {
+            const decoded = decodeChangedObjectDump(dumpData);
+            if (Object.keys(decoded).length === 0) {
                 return false;
             }
-
-            dstData[dumpData.name] = createDecodeSeed(dumpData);
-            tasks.push(getDecodePatch()(`${dumpData.name}`, dumpData, dstData) as Promise<void>);
+            dstData[dumpData.name] = decoded;
+            return true;
         }
 
+        if (!hasModifiedDump(dumpData)) {
+            return false;
+        }
+
+        dstData[dumpData.name] = decodeMaterialDumpValue(dumpData);
         return true;
     };
 
@@ -335,8 +310,6 @@ async function decodeMaterial(dump: MaterialDump): Promise<string | object> {
             compareAndDecode(state, matStates[i]);
         }
     }
-
-    await Promise.all(tasks);
 
     material._props = matProps;
     material._defines = matDefines;
@@ -501,23 +474,6 @@ function warnEffectLoadFailure(asset: IAsset, error: unknown) {
     console.warn(error);
 }
 
-function createDecodeSeed(dumpData: any) {
-    if (!dumpData?.type) {
-        return undefined;
-    }
-
-    try {
-        const ccType = cc.js.getClassByName(dumpData.type);
-        if (ccType && (dumpData.extends || []).includes('cc.ValueType')) {
-            return new ccType();
-        }
-    } catch {
-        // Fall back to undefined and let decodePatch handle the dump normally.
-    }
-
-    return undefined;
-}
-
 function deepCopyProperty(dstObj: any, srcObj: any, propName: string | number, propClass?: any) {
     if (!dstObj) {
         return;
@@ -595,8 +551,140 @@ function getMaterialCtor(): any {
     return ccModule.Material;
 }
 
-function getDecodePatch(): (path: string, dump: any, node: any) => Promise<void> {
-    return require('../scene/scene-process/service/dump/decode').decodePatch;
+function hasModifiedDump(dumpData: any): boolean {
+    if (!dumpData) {
+        return false;
+    }
+
+    if (dumpData.isObject && dumpData.value && typeof dumpData.value === 'object') {
+        return Object.values(dumpData.value).some((item) => hasModifiedDump(item));
+    }
+
+    if (dumpData.isArray && Array.isArray(dumpData.value)) {
+        return isModified(dumpData) || dumpData.value.some((item: any) => hasModifiedDump(item));
+    }
+
+    return isModified(dumpData);
+}
+
+function decodeChangedObjectDump(dumpData: any): Record<string, any> {
+    const result: Record<string, any> = {};
+    if (!dumpData?.value || typeof dumpData.value !== 'object') {
+        return result;
+    }
+
+    getObjectKeys(dumpData.value).forEach((key) => {
+        const child = dumpData.value[key];
+        if (!hasModifiedDump(child)) {
+            return;
+        }
+        result[child.name ?? key] = child.isObject ? decodeChangedObjectDump(child) : decodeMaterialDumpValue(child);
+    });
+    return result;
+}
+
+function decodeMaterialDumpValue(dumpData: any): any {
+    if (!dumpData || !('value' in dumpData)) {
+        return undefined;
+    }
+
+    const value = dumpData.value;
+    if (isAssetReferenceDump(dumpData)) {
+        return createAssetReference(value.uuid, dumpData.type);
+    }
+
+    if (dumpData.isArray) {
+        if (!Array.isArray(value)) {
+            return [];
+        }
+        return value.map((item: any) => isPropertyDump(item) ? decodeMaterialDumpValue(item) : cloneSerializedValue(item));
+    }
+
+    if (dumpData.isObject) {
+        const result: Record<string, any> = {};
+        if (value && typeof value === 'object') {
+            getObjectKeys(value).forEach((key) => {
+                const child = value[key];
+                result[child.name ?? key] = isPropertyDump(child) ? decodeMaterialDumpValue(child) : cloneSerializedValue(child);
+            });
+        }
+        return result;
+    }
+
+    if (!value || typeof value !== 'object') {
+        return value;
+    }
+
+    const ccType = getCCClassByName(dumpData.type);
+    if (ccType && ((dumpData.extends || []).includes('cc.ValueType') || Array.isArray(ccType.__props__))) {
+        const instance = new ccType();
+        const keys = Array.isArray(ccType.__props__) ? ccType.__props__ : getObjectKeys(value);
+        keys.forEach((key: string) => {
+            if (value[key] === undefined) {
+                return;
+            }
+            instance[key] = isPropertyDump(value[key]) ? decodeMaterialDumpValue(value[key]) : cloneSerializedValue(value[key]);
+        });
+        return instance;
+    }
+
+    const result: Record<string, any> = {};
+    getObjectKeys(value).forEach((key) => {
+        const child = value[key];
+        result[key] = isPropertyDump(child) ? decodeMaterialDumpValue(child) : cloneSerializedValue(child);
+    });
+    return result;
+}
+
+function isAssetReferenceDump(dumpData: any): boolean {
+    const value = dumpData?.value;
+    if (!value || typeof value !== 'object' || Array.isArray(value) || typeof value.uuid !== 'string') {
+        return false;
+    }
+
+    if ((dumpData.extends || []).includes('cc.Asset')) {
+        return true;
+    }
+
+    const ccType = getCCClassByName(dumpData.type);
+    try {
+        if (ccType && cc?.js?.isChildClassOf && cc?.Asset) {
+            return cc.js.isChildClassOf(ccType, cc.Asset);
+        }
+    } catch {
+        // Fall back to known material asset property types.
+    }
+
+    return ['cc.Asset', 'cc.TextureBase', 'cc.Texture2D', 'cc.TextureCube'].includes(dumpData.type);
+}
+
+function createAssetReference(uuid: string, type?: string) {
+    if (!uuid) {
+        return null;
+    }
+    return getEditorSerialize().asAsset(uuid, type ? getCCClassByName(type) : undefined);
+}
+
+function getCCClassByName(type?: string): any {
+    if (!type) {
+        return undefined;
+    }
+    try {
+        return cc.js.getClassByName(type);
+    } catch {
+        return undefined;
+    }
+}
+
+function isPropertyDump(value: any): boolean {
+    return !!value && typeof value === 'object' && !Array.isArray(value) && Object.prototype.hasOwnProperty.call(value, 'value');
+}
+
+function cloneSerializedValue(value: any): any {
+    if (!value || typeof value !== 'object') {
+        return value;
+    }
+    return JSON.parse(JSON.stringify(value));
 }
 
 function getConstructor(object: any, attribute: any) {
