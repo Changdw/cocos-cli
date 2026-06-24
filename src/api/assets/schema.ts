@@ -367,3 +367,14 @@ export const SchemaAssetPropertySchema: z.ZodType<any> = z.lazy(() => z.object({
 
 export const SchemaAssetPropertySchemaResult = z.record(z.string(), SchemaAssetPropertySchema).describe('Asset import property schema map, key is property name'); // 资源导入属性 schema 映射
 export type TAssetPropertySchemaResult = z.infer<typeof SchemaAssetPropertySchemaResult>;
+
+export const SchemaAnimationGraphVariantDump = z.object({
+    graphUuid: z.string().min(1).nullable().describe('UUID of the referenced AnimationGraph asset. Null clears the graph reference.'),
+    clips: z.record(z.string().min(1), z.string()).describe('Animation clip override map: original clip UUID to substitute clip UUID. Empty substitute means no override.'),
+    invalids: z.record(z.string().min(1), z.string()).optional().describe('Saved override entries whose original clip is not found in the current graph. These entries are returned for display only and are not saved.'),
+}).describe('AnimationGraphVariant editable dump');
+export const SchemaAnimationGraphVariantResult = SchemaAnimationGraphVariantDump.describe('AnimationGraphVariant editable dump result');
+export const SchemaAnimationGraphVariantSaveResult = z.null().describe('AnimationGraphVariant save result');
+export type TAnimationGraphVariantDump = z.infer<typeof SchemaAnimationGraphVariantDump>;
+export type TAnimationGraphVariantResult = z.infer<typeof SchemaAnimationGraphVariantResult>;
+export type TAnimationGraphVariantSaveResult = z.infer<typeof SchemaAnimationGraphVariantSaveResult>;

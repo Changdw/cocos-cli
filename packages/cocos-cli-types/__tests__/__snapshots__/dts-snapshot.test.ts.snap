@@ -4,6 +4,11 @@ exports[`DTS API compatibility assets.d.ts should match snapshot 1`] = `
 "export declare interface AnimationClipAssetUserData {
     name: string;
 }
+export declare const animationGraphVariant: {
+    query(uuid: string): Promise<AnimGraphVariantDump>;
+    change(uuid: string, dump: AnimGraphVariantDump): Promise<AnimGraphVariantDump>;
+    save(uuid: string): Promise<void>;
+};
 export declare interface AnimationImportSetting {
     name: string;
     duration: number;
@@ -49,6 +54,11 @@ export declare interface AnimationMaskJoint {
     path: string;
     enabled: boolean;
     children?: AnimationMaskJoint[];
+}
+export declare interface AnimGraphVariantDump {
+    graphUuid: string | null;
+    clips: Record<string, string>;
+    invalids?: Record<string, string>;
 }
 export declare const ASSET_HANDLER_TYPES: string[];
 export declare interface AssetDBOptions {
@@ -6874,6 +6884,11 @@ import { Response as Response_2 } from 'express';
 export declare interface AnimationClipAssetUserData {
     name: string;
 }
+export declare const animationGraphVariant: {
+    query(uuid: string): Promise<AnimGraphVariantDump>;
+    change(uuid: string, dump: AnimGraphVariantDump): Promise<AnimGraphVariantDump>;
+    save(uuid: string): Promise<void>;
+};
 export declare interface AnimationImportSetting {
     name: string;
     duration: number;
@@ -6919,6 +6934,11 @@ export declare interface AnimationMaskJoint {
     path: string;
     enabled: boolean;
     children?: AnimationMaskJoint[];
+}
+export declare interface AnimGraphVariantDump {
+    graphUuid: string | null;
+    clips: Record<string, string>;
+    invalids?: Record<string, string>;
 }
 export declare const ASSET_HANDLER_TYPES: string[];
 export declare enum AssetActionEnum {
@@ -7063,6 +7083,8 @@ export declare namespace Assets {
         QueryAssetType,
         FilterPluginOptions,
         IPluginScriptInfo,
+        AnimGraphVariantDump,
+        animationGraphVariant,
         animationMask,
         serializedData,
         IProperty,
