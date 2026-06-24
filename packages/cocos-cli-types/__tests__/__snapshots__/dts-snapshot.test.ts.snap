@@ -28,6 +28,28 @@ export declare interface AnimationImportSetting {
         };
     }>;
 }
+export declare const animationMask: {
+    query(uuid: string): Promise<AnimationMaskDump>;
+    importSkeleton(uuid: string, skeletonSourceUuid: string): Promise<AnimationMaskDump>;
+    clearNodes(uuid: string): Promise<AnimationMaskDump>;
+    changeDump(uuid: string, changes: AnimationMaskChange[]): Promise<AnimationMaskDump>;
+    save(uuid: string): Promise<void>;
+};
+export declare interface AnimationMaskChange {
+    path: string;
+    enabled: boolean;
+    recursive?: boolean;
+}
+export declare interface AnimationMaskDump {
+    version: 1;
+    assetUuid: string;
+    joints: AnimationMaskJoint[];
+}
+export declare interface AnimationMaskJoint {
+    path: string;
+    enabled: boolean;
+    children?: AnimationMaskJoint[];
+}
 export declare const ASSET_HANDLER_TYPES: string[];
 export declare interface AssetDBOptions {
     name: string;
@@ -6853,6 +6875,28 @@ export declare interface AnimationImportSetting {
         };
     }>;
 }
+export declare const animationMask: {
+    query(uuid: string): Promise<AnimationMaskDump>;
+    importSkeleton(uuid: string, skeletonSourceUuid: string): Promise<AnimationMaskDump>;
+    clearNodes(uuid: string): Promise<AnimationMaskDump>;
+    changeDump(uuid: string, changes: AnimationMaskChange[]): Promise<AnimationMaskDump>;
+    save(uuid: string): Promise<void>;
+};
+export declare interface AnimationMaskChange {
+    path: string;
+    enabled: boolean;
+    recursive?: boolean;
+}
+export declare interface AnimationMaskDump {
+    version: 1;
+    assetUuid: string;
+    joints: AnimationMaskJoint[];
+}
+export declare interface AnimationMaskJoint {
+    path: string;
+    enabled: boolean;
+    children?: AnimationMaskJoint[];
+}
 export declare const ASSET_HANDLER_TYPES: string[];
 export declare enum AssetActionEnum {
     'add' = 0,
@@ -6973,6 +7017,7 @@ export declare namespace Assets {
         QueryAssetType,
         FilterPluginOptions,
         IPluginScriptInfo,
+        animationMask,
         serializedData,
         IProperty,
         IAssetDeleteOptions,
@@ -6989,6 +7034,9 @@ export declare namespace Assets {
         IAssetInfo,
         AssetOperationOption,
         DeleteAssetOptions,
+        AnimationMaskDump,
+        AnimationMaskJoint,
+        AnimationMaskChange,
         AssetInfo,
         IRedirectInfo,
         QueryAssetsOption,
