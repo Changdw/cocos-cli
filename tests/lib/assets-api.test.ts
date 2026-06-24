@@ -49,4 +49,40 @@ describe('lib assets api', () => {
         expect(querySpy).toHaveBeenCalledWith('test-uuid');
         expect(saveSpy).toHaveBeenCalledWith('test-uuid', {});
     });
+
+    it('exposes material namespace and delegates query/save to assetManager', async () => {
+        const effects = {
+            'effect-uuid': {
+                uuid: 'effect-uuid',
+                name: 'builtin-standard',
+                hideInEditor: false,
+                assetPath: 'db://internal/effects/builtin-standard.effect',
+            },
+        };
+        const effectDump = [{ name: 'default', passes: [] }];
+        const materialDump = {
+            effect: 'effect-uuid',
+            technique: 0,
+            data: effectDump,
+        };
+        const queryAllSpy = jest.spyOn(assetManager, 'queryMaterialAllEffects').mockResolvedValue(effects);
+        const queryEffectSpy = jest.spyOn(assetManager, 'queryMaterialEffect').mockResolvedValue(effectDump);
+        const querySpy = jest.spyOn(assetManager, 'queryMaterial').mockResolvedValue(materialDump);
+        const saveSpy = jest.spyOn(assetManager, 'saveMaterial').mockResolvedValue(undefined);
+
+        expect(Assets.material.query).toEqual(expect.any(Function));
+        expect(Assets.material.queryEffect).toEqual(expect.any(Function));
+        expect(Assets.material.queryAllEffects).toEqual(expect.any(Function));
+        expect(Assets.material.save).toEqual(expect.any(Function));
+
+        await expect(Assets.material.queryAllEffects()).resolves.toEqual(effects);
+        await expect(Assets.material.queryEffect('effect-uuid')).resolves.toEqual(effectDump);
+        await expect(Assets.material.query('material-uuid')).resolves.toEqual(materialDump);
+        await expect(Assets.material.save('material-uuid', materialDump)).resolves.toBeUndefined();
+
+        expect(queryAllSpy).toHaveBeenCalledWith();
+        expect(queryEffectSpy).toHaveBeenCalledWith('effect-uuid');
+        expect(querySpy).toHaveBeenCalledWith('material-uuid');
+        expect(saveSpy).toHaveBeenCalledWith('material-uuid', materialDump);
+    });
 });

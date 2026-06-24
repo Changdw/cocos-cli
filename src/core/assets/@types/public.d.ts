@@ -37,6 +37,35 @@ export interface SerializedAssetQueryResult {
     dump: SerializedAssetDump;
 }
 
+export interface MaterialEffectInfo {
+    uuid: string;
+    name: string;
+    hideInEditor?: boolean;
+    assetPath: string;
+}
+
+export interface MaterialPassDump {
+    index: number;
+    name?: string;
+    phase?: string;
+    switch?: IProperty;
+    propertyIndex: IProperty;
+    props: IProperty[];
+    defines: IProperty[];
+    states: IProperty;
+}
+
+export interface MaterialTechniqueDump {
+    name?: string;
+    passes: MaterialPassDump[];
+}
+
+export interface MaterialDump {
+    effect: string;
+    technique: number;
+    data: MaterialTechniqueDump[];
+}
+
 // 如果使用了 datakeys 过滤，请使用此接口定义
 export interface IAssetInfo {
     name: string; // 资源名字
