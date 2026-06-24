@@ -86,6 +86,14 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
             if (!assetUuid) {
                 throw new Error(`Asset not found for dbURL: ${params.dbURL}`);
             }
+            // 阻止添加自己到当前的Prefab中，防止Prefab的循环引用
+            if (Service.Editor.getCurrentEditorType() === 'prefab') {
+                const rootNode = Service.Editor.getRootNode();
+                const rootNodePrefabInfo = rootNode?.['_prefab'];
+                if (rootNodePrefabInfo && rootNodePrefabInfo.asset && rootNodePrefabInfo.asset._uuid === assetUuid) {
+                    throw new Error('The prefab you are trying to add is the same with the prefab in editing, this is not allowed.');
+                }
+            }
             const assetInfo = await Rpc.getInstance().request('assetManager', 'queryAssetInfo', [assetUuid]);
             const canvasNeeded = params.canvasRequired || false;
             const result = await this._createNode(assetUuid, canvasNeeded, false, params, assetInfo?.type);
@@ -177,12 +185,7 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
         // 发送添加节点事件，添加节点中的根节点
         this.emit('node:add', resultNode);
 
-        // 发送节点修改消息
-        if (parent) {
-            this.emit('node:change', parent, { type: NodeEventType.CHILD_CHANGED });
-        }
-
-        return sceneUtils.generateNodeDump(resultNode) as Promise<INode>;
+        return sceneUtils.generateNodeDump(resultNode) as INode;
     }
 
     /**
@@ -305,10 +308,7 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
                 node = NodeMgr.getNodeByPath(path);
             }
             if (!node) return null;
-            return await sceneUtils.generateNodeDump(node, {
-                queryChildren: params?.queryChildren,
-                queryComponent: params?.queryComponent,
-            });
+            return sceneUtils.generateNodeDump(node, params);
         } catch (error) {
             console.error(error);
             throw error;
@@ -441,24 +441,15 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
     }
 
     public onEditorOpened() {
-        const nodeMap = NodeMgr.getNodesInScene();
-        // 场景载入后要将现有节点监听所需事件
-        Object.keys(nodeMap).forEach((key) => {
-            nodeMgr.registerEventListeners(nodeMap[key]);
-        });
-        nodeMgr.registerNodeMgrEvents();
+        nodeMgr.onEditorOpened();
+        // 节点缓存刷新完成后，再注册组件事件转发。
         Service.Component.init();
     }
 
     public onEditorClosed() {
+        // nodeMgr 清理 EditorExtends.Component 缓存前，先停止组件事件转发。
         Service.Component.unregisterCompMgrEvents();
-        nodeMgr.unregisterNodeMgrEvents();
-        const nodeMap = NodeMgr.getNodes();
-        Object.keys(nodeMap).forEach((key) => {
-            nodeMgr.unregisterEventListeners(nodeMap[key]);
-        });
-        NodeMgr.clear();
-        EditorExtends.Component.clear();
+        nodeMgr.onEditorClosed();
         this._cutUuids = [];
     }
 

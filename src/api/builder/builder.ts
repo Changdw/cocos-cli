@@ -1,8 +1,8 @@
-import { build, executeBuildStageTask, queryDefaultBuildConfigByPlatform } from '../../core/builder';
+import { build, createBuildTemplate as createCoreBuildTemplate, executeBuildStageTask, queryDefaultBuildConfigByPlatform } from '../../core/builder';
 import { HttpStatusCode, COMMON_STATUS, CommonResultType } from '../base/schema-base';
 import { BuildExitCode, IBuildCommandOption } from '../../core/builder/@types/protected';
 import { description, param, result, title, tool } from '../decorator/decorator';
-import { SchemaBuildConfigResult, SchemaBuildOption, SchemaBuildResult, SchemaPlatform, SchemaBuildDest, SchemaRunResult, TBuildConfigResult, TBuildOption, TBuildResultData, TPlatform, TBuildDest, TRunResult, SchemaPlatformCanMake, TPlatformCanMake, IMakeResultData, IRunResultData, SchemaMakeResult } from './schema';
+import { SchemaBuildConfigResult, SchemaBuildOption, SchemaBuildResult, SchemaPlatform, SchemaBuildDest, SchemaRunResult, TBuildConfigResult, TBuildOption, TBuildResultData, TPlatform, TBuildDest, TRunResult, SchemaPlatformCanMake, TPlatformCanMake, IMakeResultData, IRunResultData, IUploadResultData, SchemaMakeResult, SchemaUploadResult, SchemaUploadAccessToken, TUploadAccessToken, SchemaBuildTemplateName, TBuildTemplateName, SchemaCreateBuildTemplateResult, TCreateBuildTemplateResult } from './schema';
 
 export class BuilderApi {
 
@@ -73,6 +73,27 @@ export class BuilderApi {
         return ret;
     }
 
+    @tool('builder-create-build-template')
+    @title('Create Build Template')
+    @description('Create or update the user build template for a platform or build template display name.')
+    @result(SchemaCreateBuildTemplateResult)
+    async createBuildTemplate(@param(SchemaBuildTemplateName) nameOrPlatform: TBuildTemplateName): Promise<CommonResultType<TCreateBuildTemplateResult>> {
+        const code: HttpStatusCode = COMMON_STATUS.SUCCESS;
+        const ret: CommonResultType<TCreateBuildTemplateResult> = {
+            code: code,
+            data: null,
+        };
+
+        try {
+            await createCoreBuildTemplate(nameOrPlatform);
+        } catch (e) {
+            ret.code = COMMON_STATUS.FAIL;
+            console.error('create build template failed:', e instanceof Error ? e.message : String(e));
+            ret.reason = e instanceof Error ? e.message : String(e);
+        }
+        return ret;
+    }
+
     @tool('builder-make')
     @title('Make Build Package') // 编译构建包
     @description('Compile the built game package, supported only by some platforms') // 编译构建后的游戏包，仅部分平台支持
@@ -124,6 +145,39 @@ export class BuilderApi {
         } catch (e) {
             ret.code = COMMON_STATUS.FAIL;
             console.error('run build result failed:', e instanceof Error ? e.message : String(e));
+            ret.reason = e instanceof Error ? e.message : String(e);
+        }
+        return ret;
+    }
+
+    @tool('builder-upload')
+    @title('Upload Build Package') // 上传构建产物
+    @description('Upload a previously built game package, supported only by some platforms') // 上传已经构建好的游戏包，仅部分平台支持
+    @result(SchemaUploadResult)
+    async upload(@param(SchemaPlatform) platform: TPlatform, @param(SchemaBuildDest) dest: TBuildDest, @param(SchemaUploadAccessToken) accessToken?: TUploadAccessToken): Promise<CommonResultType<IUploadResultData>> {
+        const code: HttpStatusCode = COMMON_STATUS.SUCCESS;
+        const ret: CommonResultType<IUploadResultData> = {
+            code: code,
+            data: null,
+        };
+        try {
+            const res = await executeBuildStageTask(platform, 'upload', {
+                dest,
+                platform,
+                packages: accessToken ? {
+                    [platform]: {
+                        accessToken,
+                    },
+                } : undefined,
+            });
+            ret.data = res as IUploadResultData;
+            if (res.code !== BuildExitCode.BUILD_SUCCESS) {
+                ret.code = COMMON_STATUS.FAIL;
+                ret.reason = res.reason || `Upload ${platform} in ${dest} failed!`;
+            }
+        } catch (e) {
+            ret.code = COMMON_STATUS.FAIL;
+            console.error(`upload project ${dest} in platform ${platform} failed:`, e instanceof Error ? e.message : String(e));
             ret.reason = e instanceof Error ? e.message : String(e);
         }
         return ret;

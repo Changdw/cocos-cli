@@ -1,3 +1,7 @@
+import { mkdtempSync, readFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+
 describe('newConsole dead loop reproduction', () => {
     // Store original state at the suite level
     let originalMaxListeners: number;
@@ -274,4 +278,89 @@ describe('newConsole dead loop reproduction', () => {
             await new Promise(resolve => setTimeout(resolve, 100));
         }
     }, 5000);
+
+    it('should keep native console group APIs compatible', async () => {
+        const { newConsole } = await import('../../base/console');
+        const logMessage = jest.spyOn(newConsole as any, '_logMessage').mockImplementation(() => {});
+
+        expect(typeof (newConsole as any).group).toBe('function');
+        expect(typeof (newConsole as any).groupCollapsed).toBe('function');
+        expect(typeof (newConsole as any).groupEnd).toBe('function');
+
+        try {
+            expect(() => {
+                (newConsole as any).group('group label');
+                (newConsole as any).groupCollapsed('collapsed group label');
+                (newConsole as any).groupEnd();
+            }).not.toThrow();
+            expect(logMessage).toHaveBeenCalledWith('debug', 'group label');
+            expect(logMessage).toHaveBeenCalledWith('debug', 'collapsed group label');
+        } finally {
+            logMessage.mockRestore();
+        }
+    });
+
+    it('should restore previous log sink after a temporary switch', async () => {
+        const { newConsole } = await import('../../base/console');
+        const originalLogDest = (newConsole as any).logDest;
+        const originalStart = (newConsole as any)._start;
+        const flush = jest.spyOn(newConsole, 'flush').mockImplementation(() => {});
+        const stopRecord = jest.spyOn(newConsole, 'stopRecord').mockImplementation(function (this: any) {
+            this._start = false;
+        });
+        const record = jest.spyOn(newConsole, 'record').mockImplementation(function (this: any, logDest?: string) {
+            if (logDest) {
+                this.logDest = logDest;
+            }
+            this._start = true;
+        });
+
+        try {
+            (newConsole as any).logDest = 'origin-log';
+            (newConsole as any)._start = true;
+
+            const restoreLogSink = newConsole.createLogSinkRestorer();
+            newConsole.record('build-log');
+            expect((newConsole as any).logDest).toBe('build-log');
+
+            restoreLogSink();
+            restoreLogSink();
+
+            expect(record).toHaveBeenCalledWith('origin-log');
+            expect(stopRecord).not.toHaveBeenCalled();
+            expect(flush).toHaveBeenCalledTimes(1);
+            expect((newConsole as any).logDest).toBe('origin-log');
+            expect((newConsole as any)._start).toBe(true);
+        } finally {
+            (newConsole as any).logDest = originalLogDest;
+            (newConsole as any)._start = originalStart;
+            record.mockRestore();
+            stopRecord.mockRestore();
+            flush.mockRestore();
+        }
+    });
+
+    it('should synchronously append failure logs to the active log file', async () => {
+        const { newConsole } = await import('../../base/console');
+        const tempDir = mkdtempSync(join(tmpdir(), 'cocos-cli-console-'));
+        const logFile = join(tempDir, 'build.log');
+        const originalLogDest = (newConsole as any).logDest;
+        const originalStart = (newConsole as any)._start;
+
+        try {
+            newConsole.record(logFile);
+            newConsole.error(new Error('sync build failure'));
+            newConsole.flush();
+
+            const content = readFileSync(logFile, 'utf8');
+            expect(content).toContain('sync build failure');
+        } finally {
+            if ((newConsole as any)._start) {
+                newConsole.stopRecord();
+            }
+            (newConsole as any).logDest = originalLogDest;
+            (newConsole as any)._start = originalStart;
+            rmSync(tempDir, { recursive: true, force: true });
+        }
+    });
 });

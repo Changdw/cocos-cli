@@ -21,7 +21,7 @@ import { isEditorNode, isPartOfNode } from '../node/node-utils';
 import { Service } from '../core';
 import { IChangeNodeOptions, NodeEventType } from '../../../common';
 import { Rpc } from '../../rpc';
-import { TimerUtil } from './timer-util';
+import { TimerUtil } from '../utils/timer-util';
 import { sceneUtils } from '../scene/utils';
 
 const nodeMgr = EditorExtends.Node;
@@ -85,7 +85,7 @@ class NodeOperation {
 
     _timerUtil = new TimerUtil();
 
-    public onSceneOpened() {
+    public onEditorOpened() {
         this.assetToNodesMap.clear();
         componentOperation.clearCompCache();
         prefabUtils.clearCache();
@@ -94,7 +94,7 @@ class NodeOperation {
 
             // 场景节点特殊处理
             if (node instanceof Scene) {
-                return;
+                continue;
             }
 
             if (node && !isEditorNode(node)) {

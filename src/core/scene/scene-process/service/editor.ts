@@ -1,5 +1,6 @@
 import cc from 'cc';
 import { BaseService, register, Service } from './core';
+import { InternalServiceEvents } from './core/internal-events';
 import {
     IBaseIdentifier,
     ICloseOptions,
@@ -15,6 +16,7 @@ import {
 import { PrefabEditor, SceneEditor } from './editors';
 import { IAssetInfo } from '../../../assets/@types/public';
 import { Rpc } from '../rpc';
+import { enrichMissingDependencyError } from './error-utils';
 
 /**
  * EditorAsset - 统一的编辑器管理入口
@@ -136,16 +138,13 @@ export class EditorService extends BaseService<IEditorEvents> implements IEditor
             }
         }
 
-        const outputDependentInfo = async function (err: any) {
+        const outputDependentInfo = async (err: any) => {
             try {
-                const errInfo = err.message || '';
-                const regexObj = /^download failed: .*\/([\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12})\.json/i;
-                const result = regexObj.exec(errInfo);
-                let uuid = '';
-                if (result) {
-                    uuid = result[1];
-                }
-                err.message = `The asset ${urlOrUUID} cannot be loaded because a dependent asset is missing: ${uuid}`;
+                const rpc = Rpc.getInstance();
+                err.message = await enrichMissingDependencyError(err.message || '', urlOrUUID,
+                    (uuid) => rpc.request('assetManager', 'queryAssetInfo', [uuid]),
+                    (mainUuid, subId) => rpc.request('assetManager', 'querySubAssetName', [mainUuid, subId]),
+                );
             } catch (error) {
                 //
             }
@@ -159,7 +158,7 @@ export class EditorService extends BaseService<IEditorEvents> implements IEditor
                 editor = this.createEditor(assetInfo.type);
                 this.editorMap.set(uuid, editor);
             }
-            const encode = await editor.open(assetInfo);
+            const encode = await editor.open(assetInfo, params);
 
             this._clearUndoHistory();
 
@@ -203,6 +202,8 @@ export class EditorService extends BaseService<IEditorEvents> implements IEditor
             this.editorMap.delete(uuid);
 
             this.emit('editor:close');
+            // 真正关闭编辑器时的会话清理边界；重载只复用内容卸载/挂载边界。
+            this.emitInternal(InternalServiceEvents.EditorDisposed);
             this.isOpen = false;
             console.log(`关闭 ${assetInfo.url}`);
             return result;
@@ -235,7 +236,6 @@ export class EditorService extends BaseService<IEditorEvents> implements IEditor
             this._markUndoSaved();
 
             this.emit('editor:save');
-
             console.log(`保存 ${assetInfo.url}`);
             return result;
         } catch (error) {
@@ -278,7 +278,13 @@ export class EditorService extends BaseService<IEditorEvents> implements IEditor
                     let currentParams: IReloadOptions | null = params;
                     while (currentParams) {
                         await this.waitLocks();
-                        await editor.reload();
+                        // 重载不是对外的编辑器关闭/打开；这里只复用内部内容卸载/挂载边界。
+                        this.emitInternal(InternalServiceEvents.EditorReloadClose);
+                        try {
+                            await editor.reload();
+                        } finally {
+                            this.emitInternal(InternalServiceEvents.EditorReloadOpen);
+                        }
 
                         if (!currentParams.preserveUndoHistory) {
                             this._clearUndoHistory();
@@ -291,7 +297,6 @@ export class EditorService extends BaseService<IEditorEvents> implements IEditor
                             currentParams = null;
                         }
 
-                        this.emit('editor:reload');
                         this.broadcast('editor:reload');
                         console.log(`重载 ${assetInfo.url}`);
                     }

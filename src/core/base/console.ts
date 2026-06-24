@@ -1,4 +1,6 @@
-import { basename, join } from 'path';
+import { basename, dirname, extname, join } from 'path';
+import { appendFileSync } from 'fs';
+import { ensureDirSync } from 'fs-extra';
 import { consola, type ConsolaInstance } from 'consola';
 import type { Ora } from 'ora';
 import pino from 'pino';
@@ -17,6 +19,38 @@ export interface trackTimeEndOptions {
 }
 
 let rawConsole: any = global.console;
+
+function normalizeLogFilePath(logDest?: string) {
+    if (!logDest) {
+        return join(process.cwd(), 'temp', 'logs', 'cocos.log');
+    }
+    return extname(logDest).toLowerCase() === '.log' ? logDest : `${logDest}.log`;
+}
+
+function getLogFileTransportOptions(logDest: string) {
+    const logFile = normalizeLogFilePath(logDest);
+    const logDir = dirname(logFile);
+    return {
+        logFile,
+        logDir,
+        filename: basename(logFile, extname(logFile)),
+    };
+}
+
+function appendCriticalLogSync(logDest: string, type: IConsoleType, message: string) {
+    if (!logDest || (type !== 'error' && type !== 'warn')) {
+        return;
+    }
+
+    const logFile = normalizeLogFilePath(logDest);
+    try {
+        ensureDirSync(dirname(logFile));
+        const time = new Date().toISOString();
+        appendFileSync(logFile, `[${time}] [${type.toUpperCase()}] ${message}\n`, 'utf8');
+    } catch (_e) {
+        // ignore fallback write errors
+    }
+}
 
 /**
  * 自定义的一个新 console 类型，用于收集日志
@@ -82,7 +116,7 @@ export class NewConsole {
         // @ts-ignore 手动继承 console
         this.__proto__.__proto__ = rawConsole;
 
-        this.logDest = logDest;
+        this.logDest = normalizeLogFilePath(logDest);
         this.cacheLogs = cacheLogs;
 
         this._init = true;
@@ -92,25 +126,23 @@ export class NewConsole {
      * 开始记录资源导入日志
      * */
     public record(logDest?: string) {
+        this.logDest = normalizeLogFilePath(logDest || this.logDest);
         if (this._start) {
-            console.warn('Console is already recording logs.');
-            return;
-        }
-        logDest && (this.logDest = logDest);
-        if (!this.logDest) {
-            console.error('logDest is required');
+            this.resetPinoLogger();
+            rawConsole.debug(`Switch record log to {file(${this.logDest})}`);
             return;
         }
         // @ts-ignore
         if (globalThis.console.switchConsole) {
             // @ts-ignore
             globalThis.console.switchConsole(this);
+            this._start = true;
             return;
         }
 
         this.flush(); // Finish previous writes
-
-        // Reset pino using new log destination
+        const logFileOptions = getLogFileTransportOptions(this.logDest);
+        ensureDirSync(logFileOptions.logDir);
         const isTest = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined;
         this.pino = pino({
             level: process.env.DEBUG === 'true' || process.argv.includes('--debug')
@@ -120,16 +152,16 @@ export class NewConsole {
                     {
                         target: 'pino-transport-rotating-file',
                         options: {
-                            dir: this.logDest,
-                            filename: 'cocos',
+                            dir: logFileOptions.logDir,
+                            filename: logFileOptions.filename,
                             enabled: true,
                             size: '1M',
                             interval: '1d',
                             compress: true,
-                            immutable: true,
+                            immutable: false,
                             retentionDays: 30,
                             compressionOptions: { level: 6, strategy: 0 },
-                            errorLogFile: join(this.logDest, 'errors.log'),
+                            errorLogFile: join(logFileOptions.logDir, 'errors.log'),
                             timestampFormat: 'iso',
                             skipPretty: false,
                             errorFlushIntervalMs: 100, // Reduced for faster flush
@@ -160,6 +192,68 @@ export class NewConsole {
         // @ts-ignore
         globalThis.console = this;
         rawConsole.debug(`Start record log in {file(${this.logDest})}`);
+    }
+
+    public createLogSinkRestorer() {
+        const previousLogDest = this.logDest;
+        const wasRecording = this._start;
+        let restored = false;
+
+        return () => {
+            if (restored) {
+                return;
+            }
+            restored = true;
+            this.flush();
+
+            if (wasRecording && previousLogDest) {
+                this.record(previousLogDest);
+                return;
+            }
+
+            if (this._start) {
+                this.stopRecord();
+            }
+            this.logDest = previousLogDest;
+        };
+    }
+
+    /**
+     * Reset file log sink.
+     */
+    private resetPinoLogger() {
+        this.flush(); // Finish previous writes
+        this.logDest = normalizeLogFilePath(this.logDest);
+        const logFileOptions = getLogFileTransportOptions(this.logDest);
+        ensureDirSync(logFileOptions.logDir);
+
+        const isTest = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined;
+        this.pino = pino({
+            level: process.env.DEBUG === 'true' || process.argv.includes('--debug')
+                ? 'debug' : 'trace',
+            transport: !isTest ? {
+                targets: [
+                    {
+                        target: 'pino-transport-rotating-file',
+                        options: {
+                            dir: logFileOptions.logDir,
+                            filename: logFileOptions.filename,
+                            enabled: true,
+                            size: '1M',
+                            interval: '1d',
+                            compress: true,
+                            immutable: false,
+                            retentionDays: 30,
+                            compressionOptions: { level: 6, strategy: 0 },
+                            errorLogFile: join(logFileOptions.logDir, 'errors.log'),
+                            timestampFormat: 'iso',
+                            skipPretty: false,
+                            errorFlushIntervalMs: 100, // Reduced for faster flush
+                        },
+                    }
+                ],
+            } : undefined
+        });
     }
 
     /**
@@ -262,6 +356,22 @@ export class NewConsole {
         this._logMessage('debug', ...args);
     }
 
+    public group(...args: any[]) {
+        if (args.length > 0) {
+            this._logMessage('debug', ...args);
+        }
+    }
+
+    public groupCollapsed(...args: any[]) {
+        if (args.length > 0) {
+            this._logMessage('debug', ...args);
+        }
+    }
+
+    public groupEnd() {
+        // Compatibility with native console group APIs.
+    }
+
     /**
      * 处理进度消息显示
      */
@@ -317,6 +427,9 @@ export class NewConsole {
         });
 
         // 使用 try-catch 包裹 pino 调用，避免 pino 内部错误触发全局错误处理器导致死循环
+        if (this._start) {
+            appendCriticalLogSync(this.logDest, type, cleanMessage);
+        }
         try {
             switch (type) {
                 case 'debug':

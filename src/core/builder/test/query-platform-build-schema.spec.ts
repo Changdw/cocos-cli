@@ -1,5 +1,8 @@
 import { PluginManager } from '../manager/plugin';
 import builderConfig from '../share/builder-config';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 let mockLanguage = 'en';
 const mockTranslations: Record<string, Record<string, string>> = {
@@ -65,6 +68,7 @@ jest.mock('../share/builder-config', () => ({
             },
         },
         setProject: jest.fn(),
+        buildTemplateDir: '',
     },
 }));
 
@@ -86,9 +90,12 @@ function createPluginManager(): PluginManager {
 
 describe('PluginManager platform config schema queries', () => {
     let pm: PluginManager;
+    let tempDir = '';
 
     beforeEach(() => {
         mockLanguage = 'en';
+        tempDir = mkdtempSync(join(tmpdir(), 'cocos-cli-build-template-'));
+        (builderConfig as any).buildTemplateDir = join(tempDir, 'build-templates');
         pm = createPluginManager();
         (pm as any).platformConfig = {
             test: {
@@ -150,6 +157,13 @@ describe('PluginManager platform config schema queries', () => {
         (pm as any).translateConfigDisplayFields((pm as any).configMap.test.test);
     });
 
+    afterEach(() => {
+        if (tempDir) {
+            rmSync(tempDir, { recursive: true, force: true });
+            tempDir = '';
+        }
+    });
+
     it('returns translated platform display config with doc and plugin path', () => {
         const result = pm.queryPlatformConfig();
 
@@ -181,6 +195,57 @@ describe('PluginManager platform config schema queries', () => {
             createTemplateLabel: 'Test Platform',
             supportTextureCompress: true,
         }));
+    });
+
+    it('queryPlatformConfig returns custom build stages registered from platform config', async () => {
+        await (pm as any).internalRegister({
+            platform: 'test',
+            path: '/plugins/test',
+            type: 'register',
+            config: {
+                priority: 0,
+                customBuildStages: [{
+                    name: 'make',
+                    displayName: 'Make',
+                    description: 'Make Description',
+                    hook: 'make',
+                }],
+            },
+        });
+        await (pm as any).internalRegister({
+            platform: 'test',
+            path: '/plugins/custom',
+            type: 'plugin',
+            pkgName: 'custom',
+            config: {
+                priority: 10,
+                customBuildStages: [{
+                    name: 'deploy',
+                    displayName: 'Deploy',
+                    description: 'Deploy Description',
+                    hook: 'deploy',
+                    hidden: true,
+                }],
+            },
+        });
+
+        const [result] = pm.queryPlatformConfig();
+
+        expect(result.customBuildStages).toEqual([{
+            name: 'deploy',
+            displayName: 'Deploy',
+            description: 'Deploy Description',
+            hook: 'deploy',
+            hidden: true,
+        }, {
+            name: 'make',
+            displayName: 'Make',
+            description: 'Make Description',
+            hook: 'make',
+        }]);
+
+        result.customBuildStages![0].displayName = 'Changed';
+        expect((pm as any).customBuildStages.test.custom[0].displayName).toBe('Deploy');
     });
 
     it('returns common options and platform options for a platform', () => {
@@ -513,5 +578,79 @@ describe('PluginManager platform config schema queries', () => {
         // 源 option 对象不被 getPlatformBuildSchema 修改(克隆后再转换)
         expect(option.label).toBe('Stored Mode Value');
         expect(option.labelI18nKey).toBe('i18n:test.option.mode');
+    });
+
+    it('creates build template files and records template version by platform', async () => {
+        const sourceDir = join(tempDir, 'source');
+        const sourceFile = join(sourceDir, 'index.ejs');
+        mkdirSync(sourceDir, { recursive: true });
+        writeFileSync(sourceFile, 'template content', 'utf8');
+
+        await (pm as any).registerPlatform({
+            platform: 'template-platform',
+            path: '/plugins/template-platform',
+            type: 'register',
+            config: {
+                displayName: 'Template Platform',
+                platformType: 'WEB',
+                buildTemplateConfig: {
+                    templates: [{
+                        path: sourceFile,
+                        destUrl: 'index.ejs',
+                    }],
+                    version: '2.0.0',
+                },
+            },
+        });
+
+        await pm.createBuildTemplate('template-platform');
+
+        const targetFile = join((builderConfig as any).buildTemplateDir, 'template-platform', 'index.ejs');
+        const versionFile = join((builderConfig as any).buildTemplateDir, 'templates-version.json');
+        expect(readFileSync(targetFile, 'utf8')).toBe('template content');
+        expect(JSON.parse(readFileSync(versionFile, 'utf8'))).toEqual({
+            'template-platform': '2.0.0',
+        });
+    });
+
+    it('creates build template by display label and preserves other template version records', async () => {
+        const sourceFile = join(tempDir, 'native-index.ejs');
+        writeFileSync(sourceFile, 'native template', 'utf8');
+
+        const buildTemplateDir = (builderConfig as any).buildTemplateDir;
+        mkdirSync(buildTemplateDir, { recursive: true });
+        writeFileSync(join(buildTemplateDir, 'templates-version.json'), JSON.stringify({
+            common: '1.0.0',
+            native: '0.1.0',
+        }), 'utf8');
+
+        (pm as any).buildTemplateConfigMap = {
+            'Native Template': {
+                templates: [{
+                    path: sourceFile,
+                    destUrl: 'index.ejs',
+                }],
+                version: '3.0.0',
+                dirname: 'native',
+                pkgName: 'native',
+            },
+        };
+
+        await pm.createBuildTemplate('Native Template');
+
+        expect(readFileSync(join(buildTemplateDir, 'native', 'index.ejs'), 'utf8')).toBe('native template');
+        expect(JSON.parse(readFileSync(join(buildTemplateDir, 'templates-version.json'), 'utf8'))).toEqual({
+            common: '1.0.0',
+            native: '3.0.0',
+        });
+    });
+
+    it('does nothing when no build template is registered for the platform', async () => {
+        const debug = jest.spyOn(console, 'debug').mockImplementation();
+        await pm.createBuildTemplate('test');
+
+        expect(debug).toHaveBeenCalledWith('no build template for test');
+        expect(existsSync((builderConfig as any).buildTemplateDir)).toBe(false);
+        debug.mockRestore();
     });
 });

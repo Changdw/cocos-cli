@@ -30,11 +30,13 @@ export const SchemaBundleConfig = z.object({
 // Platform Enum - Accepts any string, built-in platform names are for reference only // 平台枚举 - 接受任意字符串，内置平台名称仅作为参考
 export const SchemaPlatform = z.string().default('web-mobile').describe('Platform Identifier (e.g., web-desktop, web-mobile, windows, mac, ios, android, ohos, google-play, harmonyos-next etc.)'); // 平台标识符 (如: web-desktop, web-mobile, windows, mac, ios, android, ohos, harmonyos-next 等)
 export const SchemaPlatformCanMake = z.string().describe('Platform Identifier supported for compilation (e.g., windows, mac, ios, android, google-play etc.)'); // 支持编译的平台标识符 (如: windows, mac, ios, android 等)
+export const SchemaBuildTemplateName = z.string().min(1).describe('Platform identifier or build template display name used to create a build template');
 
 export const SchemaRoot = z.string().min(1).describe('Build Output Directory'); // 构建发布目录
 export type IPlatformRoot = z.infer<typeof SchemaRoot>;
 export type TPlatform = z.infer<typeof SchemaPlatform>;
 export type TPlatformCanMake = z.infer<typeof SchemaPlatformCanMake>;
+export type TBuildTemplateName = z.infer<typeof SchemaBuildTemplateName>;
 
 // ==================== Platform Specific Packages Configuration ==================== // 平台特定的 Packages 配置
 
@@ -150,7 +152,7 @@ const BuildConfigCoreFields = z.object({
     useSplashScreen: z.boolean().describe('Whether to use custom splash screen'), // 是否使用自定义启动画面
 
     // Build Stages // 构建阶段
-    nextStages: z.array(z.enum(['make', 'run'])).describe('Specify subsequent combined build stages, multiple can be specified'), // 指定后续联合的构建阶段，可指定多个
+    nextStages: z.array(z.enum(['make', 'run', 'upload'])).describe('Specify subsequent combined build stages, multiple can be specified'), // 指定后续联合的构建阶段，可指定多个
 
     // Cache Configuration // 缓存配置
     useCacheConfig: z.object({
@@ -170,7 +172,7 @@ export const SchemaBuildRuntimeOptions = z.object({
     skipCheck: z.boolean().default(false).optional().describe('Skip build parameter check and auto-completion process. Only set to true when confirming other build parameters are complete, otherwise build may fail due to missing configuration'), // 跳过构建参数的检查和自动补全流程，请在确认其他构建参数都是完整的情况才能设置为 true ，否则可能因为缺少配置导致构建失败
     taskId: z.string().optional().describe('Specify build task ID'), // 指定构建任务 ID
     taskName: z.string().optional().describe('Specify build task name'), // 指定构建任务名称
-    // logDest: z.string().optional().describe('Specify build log output path'), // 指定构建日志输出地址
+    logDest: z.string().optional().describe('Specify build log output path'), // 指定构建日志输出地址
 });
 
 // ==================== Platform Specific Complete Build Options ==================== // 平台特定的完整构建选项
@@ -342,6 +344,12 @@ export const SchemaMakeResult = SchemaResultBase.extend({
     }).passthrough().optional().describe('Custom fields after compiling the project, in object format'), // 编译项目后的自定义字段, object 形式
 }).nullable().describe('Result after compiling the project'); // 编译项目后的结果
 
+export const SchemaUploadResult = SchemaResultBase.extend({
+    custom: z.object({
+        upload: z.any().optional().describe('Platform upload result'), // 平台上传结果
+    }).passthrough().optional().describe('Custom fields after uploading the build package, in object format'), // 上传构建产物后的自定义字段
+}).nullable().describe('Result after uploading the build package'); // 上传构建产物后的结果
+
 export const SchemaPreviewSettingsResult = z.object({
     settings: z.object({
         CocosEngine: z.string().describe('Cocos Engine Version'), // Cocos Engine 版本
@@ -381,16 +389,16 @@ export type TPreviewSettingsResult = z.infer<typeof SchemaPreviewSettingsResult>
 // Build configuration query result: union type, all fields required, including packages, excluding runtime options
 // Build Configuration Query Result: Union type, all fields required, including packages, excluding runtime options // 构建配置查询结果：union 类型，所有字段必填，包含 packages，不包含运行时选项
 export const SchemaBuildConfigResult = z.union([
-    SchemaWebDesktopBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true }),
-    SchemaWebMobileBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true }),
-    SchemaWindowsBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true }),
-    SchemaIOSBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true }),
-    SchemaAndroidBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true }),
-    SchemaMacBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true }),
-    SchemaOhosBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true }),
-    SchemaHarmonyOSNextBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true }),
-    SchemaGooglePlayBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true }),
-    SchemaOtherPlatformBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true }),
+    SchemaWebDesktopBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true, logDest: true }),
+    SchemaWebMobileBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true, logDest: true }),
+    SchemaWindowsBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true, logDest: true }),
+    SchemaIOSBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true, logDest: true }),
+    SchemaAndroidBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true, logDest: true }),
+    SchemaMacBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true, logDest: true }),
+    SchemaOhosBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true, logDest: true }),
+    SchemaHarmonyOSNextBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true, logDest: true }),
+    SchemaGooglePlayBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true, logDest: true }),
+    SchemaOtherPlatformBuildOption.omit({ configPath: true, skipCheck: true, taskId: true, taskName: true, logDest: true }),
 ]).nullable().describe('Build configuration query result (all fields required, including packages)'); // 构建配置查询结果（所有字段必填，包含 packages）
 
 export type TBuildConfigResult = z.infer<typeof SchemaBuildConfigResult>;
@@ -401,6 +409,7 @@ export type TBuildRuntimeOptions = z.infer<typeof SchemaBuildRuntimeOptions>;
 export type TBuildResultData = z.infer<typeof SchemaBuildResult>;
 export type IMakeResultData = z.infer<typeof SchemaMakeResult>;
 export type IRunResultData = z.infer<typeof SchemaBuildResult>;
+export type IUploadResultData = z.infer<typeof SchemaUploadResult>;
 export type TBundleConfig = z.infer<typeof SchemaBundleConfig>;
 export type TPolyfills = z.infer<typeof SchemaPolyfills>;
 export type TSceneRef = z.infer<typeof SchemaSceneRef>;
@@ -411,5 +420,11 @@ export type TWebMobilePackages = z.infer<typeof SchemaWebMobilePackages>;
 export const SchemaBuildDest = z.string().min(1).describe('Build Output Directory, supports absolute path and project:// protocol URL'); // 构建输出目录，支持绝对路径和 project:// 协议 URL
 export type TBuildDest = z.infer<typeof SchemaBuildDest>;
 
+export const SchemaUploadAccessToken = z.string().min(1).optional().describe('Access token used by the target platform upload API'); // 平台上传 API 使用的 access token
+export type TUploadAccessToken = z.infer<typeof SchemaUploadAccessToken>;
+
 export const SchemaRunResult = z.string().describe('Run URL'); // 运行 URL
 export type TRunResult = z.infer<typeof SchemaRunResult>;
+
+export const SchemaCreateBuildTemplateResult = z.null().describe('Build template creation result');
+export type TCreateBuildTemplateResult = z.infer<typeof SchemaCreateBuildTemplateResult>;

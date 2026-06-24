@@ -64,6 +64,7 @@ export interface PlatformConfigItem {
     pluginPath: string;
     createTemplateLabel?: string;
     supportTextureCompress: boolean;
+    customBuildStages?: IBuildStageItem[];
 }
 
 export interface IPlatformRegisterInfo {
@@ -229,6 +230,10 @@ export namespace IInternalHook {
     // 内置插件才有可能触发这个函数
     export type make = IInternalStageTaskHooks;
     export type onAfterMake = IInternalStageTaskHooks;
+
+    export type onBeforeUpload = IInternalStageTaskHooks;
+    export type upload = IInternalStageTaskHooks;
+    export type onAfterUpload = IInternalStageTaskHooks;
 }
 
 export interface PlatformPackageOptions {
@@ -360,6 +365,7 @@ export interface BuildTemplateConfig {
     displayName?: string;
     displayNameI18nKey?: string;
     version: string;
+    pkgName?: string; // Internal template directory name, defaults to the registered platform name.
     dirname?: string; // 指定构建模板目录名称，默认与平台名称保持一致
 }
 
