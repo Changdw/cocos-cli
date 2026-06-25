@@ -1,4 +1,3 @@
-import type { IAssetMeta } from '../../src/core/assets/@types/public';
 import { assetManager } from '../../src/core/assets';
 import * as Assets from '../../src/lib/assets/assets';
 
@@ -7,27 +6,33 @@ describe('lib assets api', () => {
         jest.restoreAllMocks();
     });
 
-    it('exposes saveAssetMeta and delegates to assetManager', async () => {
-        const meta = {
-            ver: 'ver',
-            importer: 'database',
-            imported: true,
-            uuid: 'test-uuid',
-            files: [],
-            subMetas: {},
-            userData: {},
-        } as IAssetMeta;
-        const spy = jest.spyOn(assetManager, 'saveAssetMeta').mockResolvedValue(undefined);
-        const saveAssetMeta = (Assets as { saveAssetMeta?: typeof assetManager.saveAssetMeta }).saveAssetMeta;
+    it('does not expose saveAssetMeta from the public lib API', () => {
+        expect((Assets as { saveAssetMeta?: unknown }).saveAssetMeta).toBeUndefined();
+    });
 
-        expect(saveAssetMeta).toEqual(expect.any(Function));
+    it('does not expose updateAssetMetaUserData from the public lib API', () => {
+        expect((Assets as { updateAssetMetaUserData?: unknown }).updateAssetMetaUserData).toBeUndefined();
+    });
 
-        if (!saveAssetMeta) {
-            throw new Error('saveAssetMeta is not exposed from lib/assets/assets');
+    it('updateAssetUserData delegates sub asset uuid to assetManager', async () => {
+        const result = { minfilter: 'nearest' };
+        const spy = jest.spyOn(assetManager, 'updateUserData').mockResolvedValue(result);
+        const updateAssetUserData = (Assets as {
+            updateAssetUserData?: (
+                urlOrUuidOrPath: string,
+                path: string,
+                value: unknown
+            ) => Promise<unknown>;
+        }).updateAssetUserData;
+
+        expect(updateAssetUserData).toEqual(expect.any(Function));
+
+        if (!updateAssetUserData) {
+            throw new Error('updateAssetUserData is not exposed from lib/assets/assets');
         }
 
-        await expect(saveAssetMeta('test-uuid', meta)).resolves.toBeUndefined();
-        expect(spy).toHaveBeenCalledWith('test-uuid', meta);
+        await expect(updateAssetUserData('parent-uuid@6c48a', 'minfilter', 'nearest')).resolves.toBe(result);
+        expect(spy).toHaveBeenCalledWith('parent-uuid@6c48a', 'minfilter', 'nearest');
     });
 
     it('exposes serializedData namespace and delegates query/save to assetManager', async () => {

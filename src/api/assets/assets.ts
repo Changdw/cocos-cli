@@ -1071,7 +1071,7 @@ export class AssetsApi {
      */
     @tool('assets-update-asset-user-data')
     @title('Update Asset User Data') // 更新资源用户数据
-    @description('Update the user data configuration of the specified asset. Precisely update the asset\'s user data via path and value, supporting nested path access.') // 更新指定资源的用户数据配置。通过路径和值来精确更新资源的用户数据，支持嵌套路径访问。
+    @description('Update the userData of the specified asset via path and value. urlOrUuidOrPath accepts an asset URL, UUID, file path, or sub asset UUID in parentUuid@subMetaId format.') // 更新指定资源的用户数据配置。通过路径和值来精确更新资源的用户数据，支持嵌套路径访问。
     @result(SchemaUpdateAssetUserDataResult)
     async updateAssetUserData(
         @param(SchemaUrlOrUUIDOrPath) urlOrUuidOrPath: TUrlOrUUIDOrPath,

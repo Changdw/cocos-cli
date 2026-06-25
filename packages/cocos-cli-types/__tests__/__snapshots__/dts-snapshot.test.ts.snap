@@ -790,7 +790,6 @@ export declare interface RtSpriteFrameAssetUserData {
     height?: number;
 }
 export declare function saveAsset(pathOrUrlOrUUID: string, data: string | Buffer): Promise<IAssetInfo>;
-export declare function saveAssetMeta(uuid: string, meta: IAssetMeta): Promise<void>;
 export declare function saveMaterial(uuidOrUrlOrPath: string, dump: MaterialDump): Promise<void>;
 export declare function saveSerializedData(uuidOrUrlOrPath: string, patch: SerializedAssetPatch): Promise<SerializedAssetQueryResult>;
 export declare interface ScriptModuleUserData {
@@ -7036,7 +7035,6 @@ export declare namespace Assets {
         refresh,
         queryAssetInfo,
         queryAssetMeta,
-        saveAssetMeta,
         queryCreateMap,
         queryAssetInfos,
         queryAssetDBInfos,
@@ -8315,7 +8313,6 @@ export declare interface RtSpriteFrameAssetUserData {
 }
 export declare function save(force?: boolean): Promise<void>;
 export declare function saveAsset(pathOrUrlOrUUID: string, data: string | Buffer): Promise<IAssetInfo>;
-export declare function saveAssetMeta(uuid: string, meta: IAssetMeta): Promise<void>;
 export declare function saveMaterial(uuidOrUrlOrPath: string, dump: MaterialDump): Promise<void>;
 export declare function saveSerializedData(uuidOrUrlOrPath: string, patch: SerializedAssetPatch): Promise<SerializedAssetQueryResult>;
 export declare namespace Scene {
