@@ -90,4 +90,18 @@ describe('lib assets api', () => {
         expect(querySpy).toHaveBeenCalledWith('material-uuid');
         expect(saveSpy).toHaveBeenCalledWith('material-uuid', materialDump);
     });
+
+    it('exposes queryPropertySchema and delegates to assetManager', async () => {
+        const schema = {
+            type: {
+                label: 'Import Type',
+                type: 'enum' as const,
+                default: 'sprite-frame',
+            },
+        };
+        const spy = jest.spyOn(assetManager, 'queryPropertySchema').mockResolvedValue(schema);
+
+        await expect(Assets.queryPropertySchema('image')).resolves.toEqual(schema);
+        expect(spy).toHaveBeenCalledWith('image');
+    });
 });
