@@ -49,127 +49,127 @@ export const GltfHandler: AssetHandlerBase = {
     name: 'gltf',
 
     propertySchemaConfig: {
-            dumpMaterials: {
-                label: 'Dump Materials',
-                default: false,
-                render: { ui: 'ui-checkbox' },
+        dumpMaterials: {
+            title: 'Dump Materials',
+            type: 'boolean',
+            default: false,
+        },
+        mountAllAnimationsOnPrefab: {
+            title: 'Mount All Animations On Prefab',
+            type: 'boolean',
+            default: false,
+        },
+        allowMeshDataAccess: {
+            title: 'Allow Mesh Data Access',
+            type: 'boolean',
+            default: true,
+        },
+        addVertexColor: {
+            title: 'Add Vertex Color',
+            type: 'boolean',
+            default: false,
+        },
+        promoteSingleRootNode: {
+            title: 'Promote Single Root Node',
+            type: 'boolean',
+            default: false,
+        },
+        generateLightmapUVNode: {
+            title: 'Generate Lightmap UV',
+            type: 'boolean',
+            default: false,
+        },
+        normals: {
+            title: 'Normals',
+            type: 'number',
+            default: NormalImportSetting.require,
+            enum: [
+                NormalImportSetting.optional,
+                NormalImportSetting.exclude,
+                NormalImportSetting.require,
+                NormalImportSetting.recalculate,
+            ],
+            enumDescriptions: ['Optional', 'Exclude', 'Require', 'Recalculate'],
+        },
+        tangents: {
+            title: 'Tangents',
+            type: 'number',
+            default: TangentImportSetting.require,
+            enum: [
+                TangentImportSetting.exclude,
+                TangentImportSetting.optional,
+                TangentImportSetting.require,
+                TangentImportSetting.recalculate,
+            ],
+            enumDescriptions: ['Exclude', 'Optional', 'Require', 'Recalculate'],
+        },
+        morphNormals: {
+            title: 'Morph Normals',
+            type: 'number',
+            default: NormalImportSetting.exclude,
+            enum: [
+                NormalImportSetting.exclude,
+                NormalImportSetting.optional,
+            ],
+            enumDescriptions: ['Exclude', 'Optional'],
+        },
+        meshOptimizer: {
+            title: 'Mesh Optimizer',
+            type: 'object',
+            default: {
+                enable: false,
+                algorithm: 'simplify',
+                simplifyOptions: getDefaultSimplifyOptions(),
             },
-            mountAllAnimationsOnPrefab: {
-                label: 'Mount All Animations On Prefab',
-                default: false,
-                render: { ui: 'ui-checkbox' },
-            },
-            allowMeshDataAccess: {
-                label: 'Allow Mesh Data Access',
-                default: true,
-                render: { ui: 'ui-checkbox' },
-            },
-            addVertexColor: {
-                label: 'Add Vertex Color',
-                default: false,
-                render: { ui: 'ui-checkbox' },
-            },
-            promoteSingleRootNode: {
-                label: 'Promote Single Root Node',
-                default: false,
-                render: { ui: 'ui-checkbox' },
-            },
-            generateLightmapUVNode: {
-                label: 'Generate Lightmap UV',
-                default: false,
-                render: { ui: 'ui-checkbox' },
-            },
-            normals: {
-                label: 'Normals',
-                default: NormalImportSetting.require,
-                render: {
-                    ui: 'ui-select',
-                    items: [
-                        { label: 'Optional', value: String(NormalImportSetting.optional) },
-                        { label: 'Exclude', value: String(NormalImportSetting.exclude) },
-                        { label: 'Require', value: String(NormalImportSetting.require) },
-                        { label: 'Recalculate', value: String(NormalImportSetting.recalculate) },
-                    ],
+            properties: {
+                enable: {
+                    title: 'Enable',
+                    type: 'boolean',
+                    default: false,
                 },
-            },
-            tangents: {
-                label: 'Tangents',
-                default: TangentImportSetting.require,
-                render: {
-                    ui: 'ui-select',
-                    items: [
-                        { label: 'Exclude', value: String(TangentImportSetting.exclude) },
-                        { label: 'Optional', value: String(TangentImportSetting.optional) },
-                        { label: 'Require', value: String(TangentImportSetting.require) },
-                        { label: 'Recalculate', value: String(TangentImportSetting.recalculate) },
-                    ],
+                algorithm: {
+                    title: 'Algorithm',
+                    type: 'string',
+                    default: 'simplify',
+                    enum: ['simplify', 'gltfpack'],
+                    enumDescriptions: ['Simplify', 'gltfpack'],
                 },
-            },
-            morphNormals: {
-                label: 'Morph Normals',
-                default: NormalImportSetting.exclude,
-                render: {
-                    ui: 'ui-select',
-                    items: [
-                        { label: 'Exclude', value: String(NormalImportSetting.exclude) },
-                        { label: 'Optional', value: String(NormalImportSetting.optional) },
-                    ],
-                },
-            },
-            meshOptimizer: {
-                label: 'Mesh Optimizer',
-                type: 'object',
-                default: {
-                    enable: false,
-                    algorithm: 'simplify',
-                    simplifyOptions: getDefaultSimplifyOptions(),
-                },
-                itemConfigs: {
-                    enable: {
-                        label: 'Enable',
-                        default: false,
-                        render: { ui: 'ui-checkbox' },
-                    },
-                    algorithm: {
-                        label: 'Algorithm',
-                        default: 'simplify',
-                        render: {
-                            ui: 'ui-select',
-                            items: [
-                                { label: 'Simplify', value: 'simplify' },
-                                { label: 'gltfpack', value: 'gltfpack' },
-                            ],
+                simplifyOptions: {
+                    title: 'Simplify Options',
+                    type: 'object',
+                    default: getDefaultSimplifyOptions(),
+                    properties: {
+                        targetRatio: {
+                            title: 'Target Ratio',
+                            type: 'number',
+                            default: 1,
+                            minimum: 0,
+                            maximum: 1,
+                            step: 0.01,
+                        },
+                        enableSmartLink: {
+                            title: 'Enable Smart Link',
+                            type: 'boolean',
+                            default: true,
+                        },
+                        agressiveness: {
+                            title: 'Agressiveness',
+                            type: 'number',
+                            default: 7,
+                            minimum: 0,
+                            step: 1,
+                        },
+                        maxIterationCount: {
+                            title: 'Max Iteration Count',
+                            type: 'number',
+                            default: 100,
+                            minimum: 1,
+                            step: 1,
                         },
                     },
-                    simplifyOptions: {
-                        label: 'Simplify Options',
-                        type: 'object',
-                        default: getDefaultSimplifyOptions(),
-                        itemConfigs: {
-                            targetRatio: {
-                                label: 'Target Ratio',
-                                default: 1,
-                                render: { ui: 'ui-number-input', attributes: { min: 0, max: 1, step: 0.01 } },
-                            },
-                            enableSmartLink: {
-                                label: 'Enable Smart Link',
-                                default: true,
-                                render: { ui: 'ui-checkbox' },
-                            },
-                            agressiveness: {
-                                label: 'Agressiveness',
-                                default: 7,
-                                render: { ui: 'ui-number-input', attributes: { min: 0, step: 1 } },
-                            },
-                            maxIterationCount: {
-                                label: 'Max Iteration Count',
-                                default: 100,
-                                render: { ui: 'ui-number-input', attributes: { min: 1, step: 1 } },
-                            },
-                        },
-                    },
                 },
             },
+        },
     },
 
     importer: {

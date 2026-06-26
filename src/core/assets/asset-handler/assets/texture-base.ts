@@ -2,7 +2,7 @@
 
 import { Asset } from '@cocos/asset-db';
 import { Filter, SpriteFrameBaseAssetUserData, TextureBaseAssetUserData, WrapMode } from '../../@types/userDatas';
-import type { IUerDataConfigItem } from '../../@types/protected';
+import type { ICocosConfigurationPropertySchema } from '../../../configuration/script/metadata';
 
 export const defaultMinFilter: Filter = 'linear';
 export const defaultMagFilter: Filter = 'linear';
@@ -21,58 +21,49 @@ export function makeDefaultTextureBaseAssetUserData(): TextureBaseAssetUserData 
     };
 }
 
-export function createTextureBaseUserDataConfig(): Record<string, IUerDataConfigItem> {
+export function createTextureBasePropertySchema(): Record<string, ICocosConfigurationPropertySchema> {
     return {
         wrapModeS: {
-            label: 'Wrap Mode S',
+            title: 'Wrap Mode S',
+            type: 'string',
             default: defaultWrapModeS,
-            render: {
-                ui: 'ui-select',
-                items: createWrapModeOptions(),
-            },
+            enum: ['repeat', 'clamp-to-edge', 'mirrored-repeat'],
+            enumDescriptions: ['Repeat', 'Clamp To Edge', 'Mirrored Repeat'],
         },
         wrapModeT: {
-            label: 'Wrap Mode T',
+            title: 'Wrap Mode T',
+            type: 'string',
             default: defaultWrapModeT,
-            render: {
-                ui: 'ui-select',
-                items: createWrapModeOptions(),
-            },
+            enum: ['repeat', 'clamp-to-edge', 'mirrored-repeat'],
+            enumDescriptions: ['Repeat', 'Clamp To Edge', 'Mirrored Repeat'],
         },
         minfilter: {
-            label: 'Min Filter',
+            title: 'Min Filter',
+            type: 'string',
             default: defaultMinFilter,
-            render: {
-                ui: 'ui-select',
-                items: createFilterOptions(),
-            },
+            enum: ['none', 'nearest', 'linear'],
+            enumDescriptions: ['None', 'Nearest', 'Linear'],
         },
         magfilter: {
-            label: 'Mag Filter',
+            title: 'Mag Filter',
+            type: 'string',
             default: defaultMagFilter,
-            render: {
-                ui: 'ui-select',
-                items: createFilterOptions().filter((item) => item.value !== 'none'),
-            },
+            enum: ['nearest', 'linear'],
+            enumDescriptions: ['Nearest', 'Linear'],
         },
         mipfilter: {
-            label: 'Mip Filter',
+            title: 'Mip Filter',
+            type: 'string',
             default: defaultMipFilter,
-            render: {
-                ui: 'ui-select',
-                items: createFilterOptions(),
-            },
+            enum: ['none', 'nearest', 'linear'],
+            enumDescriptions: ['None', 'Nearest', 'Linear'],
         },
         anisotropy: {
-            label: 'Anisotropy',
+            title: 'Anisotropy',
+            type: 'number',
             default: 0,
-            render: {
-                ui: 'ui-number-input',
-                attributes: {
-                    min: 0,
-                    step: 1,
-                },
-            },
+            minimum: 0,
+            step: 1,
         },
     };
 }
@@ -116,22 +107,6 @@ export function makeDefaultSpriteFrameBaseAssetUserData(): SpriteFrameBaseAssetU
             maxPos: [],
         },
     };
-}
-
-function createWrapModeOptions() {
-    return [
-        { label: 'Repeat', value: 'repeat' },
-        { label: 'Clamp To Edge', value: 'clamp-to-edge' },
-        { label: 'Mirrored Repeat', value: 'mirrored-repeat' },
-    ];
-}
-
-function createFilterOptions() {
-    return [
-        { label: 'None', value: 'none' },
-        { label: 'Nearest', value: 'nearest' },
-        { label: 'Linear', value: 'linear' },
-    ];
 }
 
 export function getWrapMode(wrapMode: WrapMode) {

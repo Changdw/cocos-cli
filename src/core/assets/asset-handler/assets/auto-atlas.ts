@@ -1,5 +1,5 @@
 import { Asset } from '@cocos/asset-db';
-import { createTextureBaseUserDataConfig, makeDefaultTextureBaseAssetUserData } from './texture-base';
+import { createTextureBasePropertySchema, makeDefaultTextureBaseAssetUserData } from './texture-base';
 
 import { getDependUUIDList } from '../utils';
 import { AssetHandler } from '../../@types/protected';
@@ -36,108 +36,98 @@ const AutoAtlasHandler: AssetHandler = {
     assetType: 'cc.SpriteAtlas',
     propertySchemaConfig: {
             maxWidth: {
-                label: 'Max Width',
+                title: 'Max Width',
+                type: 'number',
                 default: defaultAutoAtlasUserData.maxWidth,
-                render: {
-                    ui: 'ui-number-input',
-                    attributes: { min: 1, step: 1 },
-                },
+                minimum: 1,
+                step: 1,
             },
             maxHeight: {
-                label: 'Max Height',
+                title: 'Max Height',
+                type: 'number',
                 default: defaultAutoAtlasUserData.maxHeight,
-                render: {
-                    ui: 'ui-number-input',
-                    attributes: { min: 1, step: 1 },
-                },
+                minimum: 1,
+                step: 1,
             },
             padding: {
-                label: 'Padding',
+                title: 'Padding',
+                type: 'number',
                 default: defaultAutoAtlasUserData.padding,
-                render: {
-                    ui: 'ui-number-input',
-                    attributes: { min: 0, step: 1 },
-                },
+                minimum: 0,
+                step: 1,
             },
             allowRotation: {
-                label: 'Allow Rotation',
+                title: 'Allow Rotation',
+                type: 'boolean',
                 default: defaultAutoAtlasUserData.allowRotation,
-                render: { ui: 'ui-checkbox' },
             },
             forceSquared: {
-                label: 'Force Squared',
+                title: 'Force Squared',
+                type: 'boolean',
                 default: defaultAutoAtlasUserData.forceSquared,
-                render: { ui: 'ui-checkbox' },
             },
             powerOfTwo: {
-                label: 'Power Of Two',
+                title: 'Power Of Two',
+                type: 'boolean',
                 default: defaultAutoAtlasUserData.powerOfTwo,
-                render: { ui: 'ui-checkbox' },
             },
             algorithm: {
-                label: 'Algorithm',
+                title: 'Algorithm',
+                type: 'string',
                 default: defaultAutoAtlasUserData.algorithm,
-                render: {
-                    ui: 'ui-select',
-                    items: [
-                        { label: 'MaxRects', value: 'MaxRects' },
-                    ],
-                },
+                enum: ['MaxRects'],
+                enumDescriptions: ['MaxRects'],
             },
             format: {
-                label: 'Format',
+                title: 'Format',
+                type: 'string',
                 default: defaultAutoAtlasUserData.format,
-                render: {
-                    ui: 'ui-select',
-                    items: [
-                        { label: 'PNG', value: 'png' },
-                        { label: 'JPG', value: 'jpg' },
-                    ],
-                },
+                enum: ['png', 'jpg'],
+                enumDescriptions: ['PNG', 'JPG'],
             },
             quality: {
-                label: 'Quality',
+                title: 'Quality',
+                type: 'number',
                 default: defaultAutoAtlasUserData.quality,
-                render: {
-                    ui: 'ui-number-input',
-                    attributes: { min: 0, max: 100, step: 1 },
-                },
+                minimum: 0,
+                maximum: 100,
+                step: 1,
             },
             contourBleed: {
-                label: 'Contour Bleed',
+                title: 'Contour Bleed',
+                type: 'boolean',
                 default: defaultAutoAtlasUserData.contourBleed,
-                render: { ui: 'ui-checkbox' },
             },
             paddingBleed: {
-                label: 'Padding Bleed',
+                title: 'Padding Bleed',
+                type: 'boolean',
                 default: defaultAutoAtlasUserData.paddingBleed,
-                render: { ui: 'ui-checkbox' },
             },
             filterUnused: {
-                label: 'Filter Unused',
+                title: 'Filter Unused',
+                type: 'boolean',
                 default: defaultAutoAtlasUserData.filterUnused,
-                render: { ui: 'ui-checkbox' },
             },
             removeTextureInBundle: {
-                label: 'Remove Texture In Bundle',
+                title: 'Remove Texture In Bundle',
+                type: 'boolean',
                 default: defaultAutoAtlasUserData.removeTextureInBundle,
-                render: { ui: 'ui-checkbox' },
             },
             removeImageInBundle: {
-                label: 'Remove Image In Bundle',
+                title: 'Remove Image In Bundle',
+                type: 'boolean',
                 default: defaultAutoAtlasUserData.removeImageInBundle,
-                render: { ui: 'ui-checkbox' },
             },
             removeSpriteAtlasInBundle: {
-                label: 'Remove SpriteAtlas In Bundle',
+                title: 'Remove SpriteAtlas In Bundle',
+                type: 'boolean',
                 default: defaultAutoAtlasUserData.removeSpriteAtlasInBundle,
-                render: { ui: 'ui-checkbox' },
             },
             textureSetting: {
-                label: 'Texture Setting',
+                title: 'Texture Setting',
                 type: 'object',
                 default: defaultAutoAtlasUserData.textureSetting,
-                itemConfigs: createTextureBaseUserDataConfig(),
+                properties: createTextureBasePropertySchema(),
             },
     },
     createInfo: {

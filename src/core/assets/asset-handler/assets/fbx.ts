@@ -10,12 +10,12 @@ export const FbxHandler: AssetHandlerBase = {
     propertySchemaConfig: {
         ...(GltfHandler.propertySchemaConfig ?? {}),
         legacyFbxImporter: {
-            label: 'Legacy FBX Importer',
+            title: 'Legacy FBX Importer',
+            type: 'boolean',
             default: false,
-            render: { ui: 'ui-checkbox' },
         },
         fbx: {
-            label: 'FBX',
+            title: 'FBX',
             type: 'object',
             default: {
                 unitConversion: 'geometry-level',
@@ -24,47 +24,35 @@ export const FbxHandler: AssetHandlerBase = {
                 smartMaterialEnabled: false,
                 matchMeshNames: false,
             },
-            itemConfigs: {
+            properties: {
                 unitConversion: {
-                    label: 'Unit Conversion',
+                    title: 'Unit Conversion',
+                    type: 'string',
                     default: 'geometry-level',
-                    render: {
-                        ui: 'ui-select',
-                        items: [
-                            { label: 'Geometry Level', value: 'geometry-level' },
-                            { label: 'Hierarchy Level', value: 'hierarchy-level' },
-                            { label: 'Disabled', value: 'disabled' },
-                        ],
-                    },
+                    enum: ['geometry-level', 'hierarchy-level', 'disabled'],
+                    enumDescriptions: ['Geometry Level', 'Hierarchy Level', 'Disabled'],
                 },
                 animationBakeRate: {
-                    label: 'Animation Bake Rate',
+                    title: 'Animation Bake Rate',
+                    type: 'number',
                     default: 24,
-                    render: {
-                        ui: 'ui-select',
-                        items: [
-                            { label: 'Original', value: '0' },
-                            { label: '24 FPS', value: '24' },
-                            { label: '25 FPS', value: '25' },
-                            { label: '30 FPS', value: '30' },
-                            { label: '60 FPS', value: '60' },
-                        ],
-                    },
+                    enum: [0, 24, 25, 30, 60],
+                    enumDescriptions: ['Original', '24 FPS', '25 FPS', '30 FPS', '60 FPS'],
                 },
                 preferLocalTimeSpan: {
-                    label: 'Prefer Local Time Span',
+                    title: 'Prefer Local Time Span',
+                    type: 'boolean',
                     default: true,
-                    render: { ui: 'ui-checkbox' },
                 },
                 smartMaterialEnabled: {
-                    label: 'Smart Material',
+                    title: 'Smart Material',
+                    type: 'boolean',
                     default: false,
-                    render: { ui: 'ui-checkbox' },
                 },
                 matchMeshNames: {
-                    label: 'Match Mesh Names',
+                    title: 'Match Mesh Names',
+                    type: 'boolean',
                     default: false,
-                    render: { ui: 'ui-checkbox' },
                 },
             },
         },

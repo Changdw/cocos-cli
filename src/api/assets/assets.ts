@@ -1018,7 +1018,7 @@ export class AssetsApi {
      */
     @tool('assets-query-property-schema')
     @title('Query Asset Import Property Schema') // 查询资源导入属性 schema
-    @description('Query the standardized import property schema for a specific asset importer. The result is designed for panels to render import settings automatically and includes stable fields such as label, type, default, options, assetType, min, max, step, readOnly, and order. The raw field is only for debugging and should not be used as a UI contract.') // 查询指定资源导入器的标准化导入属性 schema，用于面板自动渲染导入设置。
+    @description('Query the import property schema map for a specific asset importer. The result value follows ICocosConfigurationPropertySchema, using fields such as title, type, default, enum, enumDescriptions, minimum, maximum, step, properties, and items.') // 查询指定资源导入器的标准化导入属性 schema，用于面板自动渲染导入设置。
     @result(SchemaAssetPropertySchemaResult)
     async queryPropertySchema(
         @param(SchemaUserDataHandler) importer: TUserDataHandler
