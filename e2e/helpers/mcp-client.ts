@@ -130,12 +130,18 @@ export class MCPTestClient {
                 const portMatch = output.match(/Server is running on:.*:(\d+)/);
                 if (portMatch) {
                     const actualPort = parseInt(portMatch[1], 10);
-                    if (this.port === 0) {
-                        // 如果是自动选择端口，更新端口号
-                        this.port = actualPort;
-                        if (E2E_DEBUG) {
-                            console.log(`✅ MCP server started on auto-assigned port: ${actualPort}`);
+                    // 始终以服务端实际绑定的端口为准。
+                    // 即使显式指定了端口，服务端在端口被占用时也会自动回退到其它端口
+                    // （见 server.ts 的 createServerWithRetry），此时必须跟随真实端口，
+                    // 否则客户端会连接到一个无人监听的端口而触发 "fetch failed"。
+                    if (actualPort !== this.port) {
+                        if (E2E_DEBUG && this.port > 0) {
+                            console.warn(`⚠️ MCP server fell back from port ${this.port} to ${actualPort}`);
                         }
+                        this.port = actualPort;
+                    }
+                    if (E2E_DEBUG) {
+                        console.log(`✅ MCP server started on port: ${actualPort}`);
                     }
                 }
 
@@ -199,32 +205,60 @@ export class MCPTestClient {
 
     /**
      * 连接客户端到服务器（通过 HTTP）
+     *
+     * 服务端打印 "Server is running on" 之后，监听 socket 偶尔还没准备好接受连接
+     * （尤其在负载较高的 CI 机器上），首个请求可能瞬时 ECONNREFUSED / "fetch failed"。
+     * 因此这里带少量重试，避免概率性失败。
      */
     private async connectClient(): Promise<void> {
-        if (E2E_DEBUG) {
-            console.log(`📡 Connecting MCP client via HTTP to port ${this.port}...`);
+        const maxAttempts = 5;
+        const retryDelay = 1000;
+
+        let lastError: unknown;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            if (E2E_DEBUG) {
+                console.log(`📡 Connecting MCP client via HTTP to port ${this.port} (attempt ${attempt}/${maxAttempts})...`);
+            }
+
+            // 每次重试都重建 transport / client，失败后的实例可能处于不可用状态
+            const mcpUrl = new URL(`http://localhost:${this.port}/mcp`);
+            this.transport = new StreamableHTTPClientTransport(mcpUrl);
+            this.client = new Client({
+                name: 'e2e-test-client',
+                version: '1.0.0',
+            }, {
+                capabilities: {
+                    tools: {},
+                },
+            });
+
+            try {
+                // 连接客户端到服务器
+                await this.client.connect(this.transport);
+
+                if (E2E_DEBUG) {
+                    console.log(`✅ MCP client connected successfully!`);
+                }
+                return;
+            } catch (error) {
+                lastError = error;
+                if (E2E_DEBUG) {
+                    console.warn(`   Connect attempt ${attempt} failed:`, error instanceof Error ? error.message : error);
+                }
+
+                // 清理失败的实例后再重试
+                try { await this.client.close(); } catch { /* ignore */ }
+                try { await this.transport.close(); } catch { /* ignore */ }
+                this.client = null;
+                this.transport = null;
+
+                if (attempt < maxAttempts) {
+                    await new Promise((r) => setTimeout(r, retryDelay));
+                }
+            }
         }
 
-        // 创建 HTTP 传输层（构造函数接受 URL 对象）
-        const mcpUrl = new URL(`http://localhost:${this.port}/mcp`);
-        this.transport = new StreamableHTTPClientTransport(mcpUrl);
-
-        // 创建客户端
-        this.client = new Client({
-            name: 'e2e-test-client',
-            version: '1.0.0',
-        }, {
-            capabilities: {
-                tools: {},
-            },
-        });
-
-        // 连接客户端到服务器
-        await this.client.connect(this.transport);
-
-        if (E2E_DEBUG) {
-            console.log(`✅ MCP client connected successfully!`);
-        }
+        throw lastError instanceof Error ? lastError : new Error(String(lastError));
     }
 
     /**
