@@ -166,7 +166,42 @@ describe('asset operation filesystem bridge', () => {
         jest.restoreAllMocks();
     });
 
-    it('updateUserData updates sub asset userData through composite uuid without reimport', async () => {
+    it('updateUserData replaces sub asset userData through composite uuid with one reimport', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const reimport = jest.fn();
+        const subAsset = {
+            uuid: '6fa5fbad-0d32-4b63-95d8-24507665775c@6c48a',
+            meta: {
+                userData: {
+                    minfilter: 'linear',
+                    obsolete: true,
+                },
+            },
+            save: jest.fn().mockResolvedValue(true),
+            _assetDB: {
+                reimport,
+            },
+        };
+        mockQueryAsset.mockReturnValue(subAsset);
+
+        const userData = {
+            minfilter: 'nearest',
+            wrapMode: 'clamp',
+        };
+        const result = await assetOperation.updateUserData(
+            '6fa5fbad-0d32-4b63-95d8-24507665775c@6c48a',
+            userData,
+        );
+
+        expect(mockQueryAsset).toHaveBeenCalledWith('6fa5fbad-0d32-4b63-95d8-24507665775c@6c48a');
+        expect(subAsset.meta.userData).toEqual(userData);
+        expect(subAsset.save).toHaveBeenCalledTimes(1);
+        expect(reimport).toHaveBeenCalledTimes(1);
+        expect(reimport).toHaveBeenCalledWith('6fa5fbad-0d32-4b63-95d8-24507665775c@6c48a');
+        expect(result).toBe(subAsset.meta.userData);
+    });
+
+    it('updateUserDataByPath updates sub asset userData through composite uuid with one reimport', async () => {
         const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
         const reimport = jest.fn();
         const subAsset = {
@@ -183,7 +218,7 @@ describe('asset operation filesystem bridge', () => {
         };
         mockQueryAsset.mockReturnValue(subAsset);
 
-        const result = await assetOperation.updateUserData(
+        const result = await assetOperation.updateUserDataByPath(
             '6fa5fbad-0d32-4b63-95d8-24507665775c@6c48a',
             'minfilter',
             'nearest',
@@ -194,8 +229,20 @@ describe('asset operation filesystem bridge', () => {
             minfilter: 'nearest',
         });
         expect(subAsset.save).toHaveBeenCalledTimes(1);
-        expect(reimport).not.toHaveBeenCalled();
+        expect(reimport).toHaveBeenCalledTimes(1);
+        expect(reimport).toHaveBeenCalledWith('6fa5fbad-0d32-4b63-95d8-24507665775c@6c48a');
         expect(result).toBe(subAsset.meta.userData);
+    });
+
+    it('updateUserDataByPath rejects empty path instead of replacing complete userData', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+
+        await expect(assetOperation.updateUserDataByPath(
+            '6fa5fbad-0d32-4b63-95d8-24507665775c@6c48a',
+            '',
+            { minfilter: 'nearest' },
+        )).rejects.toThrow('path must not be empty');
+        expect(mockQueryAsset).not.toHaveBeenCalled();
     });
 
     it('renameAsset should delegate rename steps to filesystem bridge', async () => {

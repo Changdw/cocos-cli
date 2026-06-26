@@ -69,9 +69,11 @@ import {
     TAssetMoveOptions,
     TAssetRenameOptions,
     TUserDataHandler,
+    SchemaUpdateAssetUserData,
     SchemaUpdateAssetUserDataPath,
     SchemaUpdateAssetUserDataValue,
     SchemaUpdateAssetUserDataResult,
+    TUpdateAssetUserData,
     TUpdateAssetUserDataPath,
     TUpdateAssetUserDataValue,
     TUpdateAssetUserDataResult,
@@ -960,9 +962,41 @@ export class AssetsApi {
      */
     @tool('assets-update-asset-user-data')
     @title('Update Asset User Data') // 更新资源用户数据
-    @description('Update the userData of the specified asset via path and value. urlOrUuidOrPath accepts an asset URL, UUID, file path, or sub asset UUID in parentUuid@subMetaId format.') // 更新指定资源的用户数据配置。通过路径和值来精确更新资源的用户数据，支持嵌套路径访问。
+    @description('Replace the complete userData object of the specified asset in one save. urlOrUuidOrPath accepts an asset URL, UUID, file path, or sub asset UUID in parentUuid@subMetaId format.') // 一次性整体替换指定资源的 userData，支持父资源与 parentUuid@subMetaId 子资源 UUID。
     @result(SchemaUpdateAssetUserDataResult)
     async updateAssetUserData(
+        @param(SchemaUrlOrUUIDOrPath) urlOrUuidOrPath: TUrlOrUUIDOrPath,
+        @param(SchemaUpdateAssetUserData) userData: TUpdateAssetUserData
+    ): Promise<CommonResultType<TUpdateAssetUserDataResult>> {
+        const code: HttpStatusCode = COMMON_STATUS.SUCCESS;
+        const ret: CommonResultType<TUpdateAssetUserDataResult> = {
+            code: code,
+            data: null,
+        };
+
+        try {
+            ret.data = await assetManager.updateUserData(urlOrUuidOrPath, userData);
+            if (!ret.data) {
+                ret.code = COMMON_STATUS.NOT_FOUND;
+                ret.reason = `❌Asset can not be found: ${urlOrUuidOrPath}. Please refresh asset db and try again.`;
+            }
+        } catch (e) {
+            ret.code = getCommonErrorStatus(e);
+            console.error('update asset user data fail:', e instanceof Error ? e.message : String(e));
+            ret.reason = e instanceof Error ? e.message : String(e);
+        }
+
+        return ret;
+    }
+
+    /**
+     * Update Asset User Data By Path // 按路径更新资源用户数据
+     */
+    @tool('assets-update-asset-user-data-by-path')
+    @title('Update Asset User Data By Path') // 按路径更新资源用户数据
+    @description('Update a single path in the userData of the specified asset. urlOrUuidOrPath accepts an asset URL, UUID, file path, or sub asset UUID in parentUuid@subMetaId format.') // 通过路径和值精确更新指定资源 userData 的单个字段，支持父资源与 parentUuid@subMetaId 子资源 UUID。
+    @result(SchemaUpdateAssetUserDataResult)
+    async updateAssetUserDataByPath(
         @param(SchemaUrlOrUUIDOrPath) urlOrUuidOrPath: TUrlOrUUIDOrPath,
         @param(SchemaUpdateAssetUserDataPath) path: TUpdateAssetUserDataPath,
         @param(SchemaUpdateAssetUserDataValue) value: TUpdateAssetUserDataValue
@@ -974,14 +1008,14 @@ export class AssetsApi {
         };
 
         try {
-            ret.data = await assetManager.updateUserData(urlOrUuidOrPath, path, value);
+            ret.data = await assetManager.updateUserDataByPath(urlOrUuidOrPath, path, value);
             if (!ret.data) {
                 ret.code = COMMON_STATUS.NOT_FOUND;
                 ret.reason = `❌Asset can not be found: ${urlOrUuidOrPath}. Please refresh asset db and try again.`;
             }
         } catch (e) {
             ret.code = getCommonErrorStatus(e);
-            console.error('update asset user data fail:', e instanceof Error ? e.message : String(e));
+            console.error('update asset user data by path fail:', e instanceof Error ? e.message : String(e));
             ret.reason = e instanceof Error ? e.message : String(e);
         }
 

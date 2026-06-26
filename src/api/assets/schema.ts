@@ -303,6 +303,9 @@ export type TUpdateUserDataOptions = z.infer<typeof SchemaUpdateUserDataOptions>
 export type TUserDataHandler = z.infer<typeof SchemaUserDataHandler>;
 
 // Update Asset User Data related Schema // Update Asset User Data 相关 Schema
+export const SchemaUpdateAssetUserData = z.record(z.string(), z.any()).describe('Complete asset userData object to replace the existing userData'); // 用于整体替换现有 userData 的完整资源 userData 对象
+export type TUpdateAssetUserData = z.infer<typeof SchemaUpdateAssetUserData>;
+
 export const SchemaUpdateAssetUserDataPath = z.string().min(1).describe('User data path, separated by dots, e.g. "texture.wrapMode"'); // 用户数据路径，使用点号分隔，如 "texture.wrapMode"
 export type TUpdateAssetUserDataPath = z.infer<typeof SchemaUpdateAssetUserDataPath>;
 

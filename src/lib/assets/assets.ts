@@ -345,10 +345,20 @@ export async function queryAssetUserDataConfig(
  */
 export async function updateAssetUserData(
     urlOrUuidOrPath: string,
+    userData: Record<string, any>
+): Promise<any> {
+    return await assetManager.updateUserData(urlOrUuidOrPath, userData);
+}
+
+/**
+ * Update Asset User Data By Path // 按路径更新资源用户数据
+ */
+export async function updateAssetUserDataByPath(
+    urlOrUuidOrPath: string,
     path: string,
     value: any
 ): Promise<any> {
-    return await assetManager.updateUserData(urlOrUuidOrPath, path, value);
+    return await assetManager.updateUserDataByPath(urlOrUuidOrPath, path, value);
 }
 
 /**
