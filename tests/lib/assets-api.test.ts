@@ -14,14 +14,14 @@ describe('lib assets api', () => {
         expect((Assets as { updateAssetMetaUserData?: unknown }).updateAssetMetaUserData).toBeUndefined();
     });
 
-    it('updateAssetUserData delegates sub asset uuid to assetManager', async () => {
-        const result = { minfilter: 'nearest' };
+    it('updateAssetUserData delegates complete userData replacement to assetManager', async () => {
+        const userData = { minfilter: 'nearest', wrapMode: 'clamp' };
+        const result = { ...userData };
         const spy = jest.spyOn(assetManager, 'updateUserData').mockResolvedValue(result);
         const updateAssetUserData = (Assets as {
             updateAssetUserData?: (
                 urlOrUuidOrPath: string,
-                path: string,
-                value: unknown
+                userData: Record<string, unknown>
             ) => Promise<unknown>;
         }).updateAssetUserData;
 
@@ -31,7 +31,28 @@ describe('lib assets api', () => {
             throw new Error('updateAssetUserData is not exposed from lib/assets/assets');
         }
 
-        await expect(updateAssetUserData('parent-uuid@6c48a', 'minfilter', 'nearest')).resolves.toBe(result);
+        await expect(updateAssetUserData('parent-uuid@6c48a', userData)).resolves.toBe(result);
+        expect(spy).toHaveBeenCalledWith('parent-uuid@6c48a', userData);
+    });
+
+    it('updateAssetUserDataByPath delegates path updates to assetManager', async () => {
+        const result = { minfilter: 'nearest' };
+        const spy = jest.spyOn(assetManager, 'updateUserDataByPath').mockResolvedValue(result);
+        const updateAssetUserDataByPath = (Assets as {
+            updateAssetUserDataByPath?: (
+                urlOrUuidOrPath: string,
+                path: string,
+                value: unknown
+            ) => Promise<unknown>;
+        }).updateAssetUserDataByPath;
+
+        expect(updateAssetUserDataByPath).toEqual(expect.any(Function));
+
+        if (!updateAssetUserDataByPath) {
+            throw new Error('updateAssetUserDataByPath is not exposed from lib/assets/assets');
+        }
+
+        await expect(updateAssetUserDataByPath('parent-uuid@6c48a', 'minfilter', 'nearest')).resolves.toBe(result);
         expect(spy).toHaveBeenCalledWith('parent-uuid@6c48a', 'minfilter', 'nearest');
     });
 

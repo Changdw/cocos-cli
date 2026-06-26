@@ -895,7 +895,8 @@ export declare interface ThumbnailInfo {
     value: string;
 }
 export declare type ThumbnailSize = 'large' | 'small' | 'middle' | 'origin';
-export declare function updateAssetUserData(urlOrUuidOrPath: string, path: string, value: any): Promise<any>;
+export declare function updateAssetUserData(urlOrUuidOrPath: string, userData: Record<string, any>): Promise<any>;
+export declare function updateAssetUserDataByPath(urlOrUuidOrPath: string, path: string, value: any): Promise<any>;
 export declare function updateDefaultUserData(handler: string, path: string, value: any): Promise<void>;
 export declare interface Vec2 {
     x: number;
@@ -7066,6 +7067,7 @@ export declare namespace Assets {
         updateDefaultUserData,
         queryAssetUserDataConfig,
         updateAssetUserData,
+        updateAssetUserDataByPath,
         queryAssetConfigMap,
         queryPropertySchema,
         queryThumbnailHandlers,
@@ -8454,7 +8456,8 @@ export declare interface ThumbnailInfo {
 }
 export declare type ThumbnailSize = 'large' | 'small' | 'middle' | 'origin';
 export declare function unregister(): Promise<void>;
-export declare function updateAssetUserData(urlOrUuidOrPath: string, path: string, value: any): Promise<any>;
+export declare function updateAssetUserData(urlOrUuidOrPath: string, userData: Record<string, any>): Promise<any>;
+export declare function updateAssetUserDataByPath(urlOrUuidOrPath: string, path: string, value: any): Promise<any>;
 export declare function updateDefaultUserData(handler: string, path: string, value: any): Promise<void>;
 export declare interface Vec2 {
     x: number;

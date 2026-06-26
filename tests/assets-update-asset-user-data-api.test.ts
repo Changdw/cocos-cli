@@ -1,9 +1,11 @@
 const mockUpdateUserData = jest.fn();
+const mockUpdateUserDataByPath = jest.fn();
 
 jest.mock('../src/core/assets', () => ({
     assetDBManager: {},
     assetManager: {
         updateUserData: (...args: unknown[]) => mockUpdateUserData(...args),
+        updateUserDataByPath: (...args: unknown[]) => mockUpdateUserDataByPath(...args),
     },
 }));
 
@@ -16,6 +18,7 @@ import { AssetsApi } from '../src/api/assets/assets';
 describe('assets-update-asset-user-data api', () => {
     beforeEach(() => {
         mockUpdateUserData.mockReset();
+        mockUpdateUserDataByPath.mockReset();
     });
 
     it('does not register a separate meta userData update tool', () => {
@@ -30,11 +33,31 @@ describe('assets-update-asset-user-data api', () => {
         expect(schema!.parse('6FA5FBAD0D324B6395D824507665775C@6C48A')).toBe('6fa5fbad-0d32-4b63-95d8-24507665775c@6c48a');
     });
 
-    it('delegates sub asset UUID updates to assetManager.updateUserData', async () => {
-        const updatedUserData = { minfilter: 'nearest' };
+    it('delegates complete userData replacement to assetManager.updateUserData', async () => {
+        const userData = { minfilter: 'nearest', wrapMode: 'clamp' };
+        const updatedUserData = { ...userData };
         mockUpdateUserData.mockResolvedValue(updatedUserData);
 
         const result = await new AssetsApi().updateAssetUserData(
+            '6fa5fbad-0d32-4b63-95d8-24507665775c@6c48a',
+            userData,
+        );
+
+        expect(result).toEqual({
+            code: COMMON_STATUS.SUCCESS,
+            data: updatedUserData,
+        });
+        expect(mockUpdateUserData).toHaveBeenCalledWith(
+            '6fa5fbad-0d32-4b63-95d8-24507665775c@6c48a',
+            userData,
+        );
+    });
+
+    it('delegates path updates to assetManager.updateUserDataByPath', async () => {
+        const updatedUserData = { minfilter: 'nearest' };
+        mockUpdateUserDataByPath.mockResolvedValue(updatedUserData);
+
+        const result = await new AssetsApi().updateAssetUserDataByPath(
             '6fa5fbad-0d32-4b63-95d8-24507665775c@6c48a',
             'minfilter',
             'nearest',
@@ -44,7 +67,7 @@ describe('assets-update-asset-user-data api', () => {
             code: COMMON_STATUS.SUCCESS,
             data: updatedUserData,
         });
-        expect(mockUpdateUserData).toHaveBeenCalledWith(
+        expect(mockUpdateUserDataByPath).toHaveBeenCalledWith(
             '6fa5fbad-0d32-4b63-95d8-24507665775c@6c48a',
             'minfilter',
             'nearest',
