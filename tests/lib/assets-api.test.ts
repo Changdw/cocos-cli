@@ -1,9 +1,21 @@
-import { assetManager } from '../../src/core/assets';
+const mockAssetManager = {
+    updateUserData: jest.fn(),
+    updateUserDataByPath: jest.fn(),
+    querySerializedData: jest.fn(),
+    saveSerializedData: jest.fn(),
+    queryPropertySchema: jest.fn(),
+};
+
+jest.mock('../../src/core/assets', () => ({
+    assetDBManager: {},
+    assetManager: mockAssetManager,
+}));
+
 import * as Assets from '../../src/lib/assets/assets';
 
 describe('lib assets api', () => {
     afterEach(() => {
-        jest.restoreAllMocks();
+        jest.clearAllMocks();
     });
 
     it('does not expose saveAssetMeta from the public lib API', () => {
@@ -17,7 +29,7 @@ describe('lib assets api', () => {
     it('updateAssetUserData delegates complete userData replacement to assetManager', async () => {
         const userData = { minfilter: 'nearest', wrapMode: 'clamp' };
         const result = { ...userData };
-        const spy = jest.spyOn(assetManager, 'updateUserData').mockResolvedValue(result);
+        mockAssetManager.updateUserData.mockResolvedValue(result);
         const updateAssetUserData = (Assets as {
             updateAssetUserData?: (
                 urlOrUuidOrPath: string,
@@ -32,12 +44,12 @@ describe('lib assets api', () => {
         }
 
         await expect(updateAssetUserData('parent-uuid@6c48a', userData)).resolves.toBe(result);
-        expect(spy).toHaveBeenCalledWith('parent-uuid@6c48a', userData);
+        expect(mockAssetManager.updateUserData).toHaveBeenCalledWith('parent-uuid@6c48a', userData);
     });
 
     it('updateAssetUserDataByPath delegates path updates to assetManager', async () => {
         const result = { minfilter: 'nearest' };
-        const spy = jest.spyOn(assetManager, 'updateUserDataByPath').mockResolvedValue(result);
+        mockAssetManager.updateUserDataByPath.mockResolvedValue(result);
         const updateAssetUserDataByPath = (Assets as {
             updateAssetUserDataByPath?: (
                 urlOrUuidOrPath: string,
@@ -53,7 +65,7 @@ describe('lib assets api', () => {
         }
 
         await expect(updateAssetUserDataByPath('parent-uuid@6c48a', 'minfilter', 'nearest')).resolves.toBe(result);
-        expect(spy).toHaveBeenCalledWith('parent-uuid@6c48a', 'minfilter', 'nearest');
+        expect(mockAssetManager.updateUserDataByPath).toHaveBeenCalledWith('parent-uuid@6c48a', 'minfilter', 'nearest');
     });
 
     it('exposes serializedData namespace and delegates query/save to assetManager', async () => {
@@ -64,16 +76,16 @@ describe('lib assets api', () => {
             importer: 'physics-material',
             dump: {},
         };
-        const querySpy = jest.spyOn(assetManager, 'querySerializedData').mockResolvedValue(result);
-        const saveSpy = jest.spyOn(assetManager, 'saveSerializedData').mockResolvedValue(result);
+        mockAssetManager.querySerializedData.mockResolvedValue(result);
+        mockAssetManager.saveSerializedData.mockResolvedValue(result);
 
         expect(Assets.serializedData.query).toEqual(expect.any(Function));
         expect(Assets.serializedData.save).toEqual(expect.any(Function));
 
         await expect(Assets.serializedData.query('test-uuid')).resolves.toEqual(result);
         await expect(Assets.serializedData.save('test-uuid', {})).resolves.toEqual(result);
-        expect(querySpy).toHaveBeenCalledWith('test-uuid');
-        expect(saveSpy).toHaveBeenCalledWith('test-uuid', {});
+        expect(mockAssetManager.querySerializedData).toHaveBeenCalledWith('test-uuid');
+        expect(mockAssetManager.saveSerializedData).toHaveBeenCalledWith('test-uuid', {});
     });
 
     it('exposes queryPropertySchema and delegates to assetManager', async () => {
@@ -84,9 +96,9 @@ describe('lib assets api', () => {
                 default: 'sprite-frame',
             },
         };
-        const spy = jest.spyOn(assetManager, 'queryPropertySchema').mockResolvedValue(schema);
+        mockAssetManager.queryPropertySchema.mockResolvedValue(schema);
 
         await expect(Assets.queryPropertySchema('image')).resolves.toEqual(schema);
-        expect(spy).toHaveBeenCalledWith('image');
+        expect(mockAssetManager.queryPropertySchema).toHaveBeenCalledWith('image');
     });
 });
