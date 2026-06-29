@@ -120,9 +120,7 @@ export declare interface AssetOperationOption {
 }
 export declare interface AssetPropertySchema {
     label: string;
-    labelI18nKey?: string;
     description?: string;
-    descriptionI18nKey?: string;
     type: AssetPropertySchemaType;
     default?: unknown;
     options?: AssetPropertySchemaOption[];
@@ -134,12 +132,10 @@ export declare interface AssetPropertySchema {
     order?: number;
     properties?: Record<string, AssetPropertySchema>;
     items?: AssetPropertySchema | AssetPropertySchema[];
-    raw?: unknown;
 }
 export declare type AssetPropertySchemaMap = Record<string, AssetPropertySchema>;
 export declare interface AssetPropertySchemaOption {
     label: string;
-    labelI18nKey?: string;
     value: string | number | boolean;
 }
 export declare type AssetPropertySchemaType = 'string' | 'number' | 'boolean' | 'enum' | 'asset' | 'array' | 'object';
@@ -574,9 +570,7 @@ export declare type ISupportCreateType = typeof SUPPORT_CREATE_TYPES[number];
 export declare interface IUerDataConfigItem {
     key?: string;
     label?: string;
-    labelI18nKey?: string;
     description?: string;
-    descriptionI18nKey?: string;
     default?: any;
     type?: 'array' | 'object';
     itemConfigs?: IUerDataConfigItem[] | Record<string, IUerDataConfigItem>;
@@ -585,7 +579,6 @@ export declare interface IUerDataConfigItem {
         attributes?: Record<string, string | boolean | number>;
         items?: Array<{
             label: string;
-            labelI18nKey?: string;
             value: string;
         }>;
     };
@@ -7020,9 +7013,7 @@ export declare interface AssetOperationOption {
 }
 export declare interface AssetPropertySchema {
     label: string;
-    labelI18nKey?: string;
     description?: string;
-    descriptionI18nKey?: string;
     type: AssetPropertySchemaType;
     default?: unknown;
     options?: AssetPropertySchemaOption[];
@@ -7034,12 +7025,10 @@ export declare interface AssetPropertySchema {
     order?: number;
     properties?: Record<string, AssetPropertySchema>;
     items?: AssetPropertySchema | AssetPropertySchema[];
-    raw?: unknown;
 }
 export declare type AssetPropertySchemaMap = Record<string, AssetPropertySchema>;
 export declare interface AssetPropertySchemaOption {
     label: string;
-    labelI18nKey?: string;
     value: string | number | boolean;
 }
 export declare type AssetPropertySchemaType = 'string' | 'number' | 'boolean' | 'enum' | 'asset' | 'array' | 'object';
@@ -7948,9 +7937,7 @@ export declare type ISupportCreateType = typeof SUPPORT_CREATE_TYPES[number];
 export declare interface IUerDataConfigItem {
     key?: string;
     label?: string;
-    labelI18nKey?: string;
     description?: string;
-    descriptionI18nKey?: string;
     default?: any;
     type?: 'array' | 'object';
     itemConfigs?: IUerDataConfigItem[] | Record<string, IUerDataConfigItem>;
@@ -7959,7 +7946,6 @@ export declare interface IUerDataConfigItem {
         attributes?: Record<string, string | boolean | number>;
         items?: Array<{
             label: string;
-            labelI18nKey?: string;
             value: string;
         }>;
     };

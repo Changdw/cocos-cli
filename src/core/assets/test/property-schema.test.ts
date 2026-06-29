@@ -75,6 +75,10 @@ describe('asset property schema conversion', () => {
             type: 'asset',
             assetType: 'cc.ImageAsset',
         });
+        expect(schema.type).not.toHaveProperty('raw');
+        expect(schema.flipVertical).not.toHaveProperty('raw');
+        expect(schema.quality).not.toHaveProperty('raw');
+        expect(schema.image).not.toHaveProperty('raw');
     });
 
     it('normalizes numeric enum option values when the default is numeric', () => {
@@ -97,7 +101,7 @@ describe('asset property schema conversion', () => {
         ]);
     });
 
-    it('localizes display fields while preserving raw i18n keys for render clients', async () => {
+    it('localizes display fields before returning the property schema', async () => {
         i18n.registerLanguagePatch('en', 'assets.propertySchemaTest', {
             field: 'Localized Field',
             help: 'Localized Help',
@@ -124,17 +128,17 @@ describe('asset property schema conversion', () => {
 
         expect(enSchema).toMatchObject({
             label: 'Localized Field',
-            labelI18nKey: 'i18n:assets.propertySchemaTest.field',
             description: 'Localized Help',
-            descriptionI18nKey: 'i18n:assets.propertySchemaTest.help',
             options: [
                 {
                     label: 'Localized Option',
-                    labelI18nKey: 'i18n:assets.propertySchemaTest.option',
                     value: 'enabled',
                 },
             ],
         });
+        expect(enSchema).not.toHaveProperty('labelI18nKey');
+        expect(enSchema).not.toHaveProperty('descriptionI18nKey');
+        expect(enSchema.options?.[0]).not.toHaveProperty('labelI18nKey');
 
         await i18n.setLanguage('zh');
         const zhSchema = convertUserDataConfigItemToPropertySchema('localized', {
@@ -152,38 +156,6 @@ describe('asset property schema conversion', () => {
         expect(zhSchema.label).toBe('ZH Field');
         expect(zhSchema.description).toBe('ZH Help');
         expect(zhSchema.options?.[0].label).toBe('ZH Option');
-
-        const materializedSchema = convertUserDataConfigItemToPropertySchema('localized', {
-            label: 'Stored Field',
-            labelI18nKey: 'i18n:assets.propertySchemaTest.field',
-            description: 'Stored Help',
-            descriptionI18nKey: 'i18n:assets.propertySchemaTest.help',
-            default: 'enabled',
-            render: {
-                ui: 'ui-select',
-                items: [
-                    {
-                        label: 'Stored Option',
-                        labelI18nKey: 'i18n:assets.propertySchemaTest.option',
-                        value: 'enabled',
-                    },
-                ],
-            },
-        });
-
-        expect(materializedSchema).toMatchObject({
-            label: 'ZH Field',
-            labelI18nKey: 'i18n:assets.propertySchemaTest.field',
-            description: 'ZH Help',
-            descriptionI18nKey: 'i18n:assets.propertySchemaTest.help',
-            options: [
-                {
-                    label: 'ZH Option',
-                    labelI18nKey: 'i18n:assets.propertySchemaTest.option',
-                    value: 'enabled',
-                },
-            ],
-        });
     });
 
     it('uses static importer i18n resources loaded by the shared i18n instance', async () => {
@@ -196,7 +168,7 @@ describe('asset property schema conversion', () => {
         });
 
         expect(schema.label).toBe('最大宽度');
-        expect(schema.labelI18nKey).toBe('i18n:importer.property_schema.auto_atlas.max_width');
+        expect(schema).not.toHaveProperty('labelI18nKey');
     });
 
     it('keeps built-in property schema i18n keys resolvable', () => {
@@ -271,6 +243,8 @@ describe('asset property schema conversion', () => {
                 },
             },
         });
+        expect(schema).not.toHaveProperty('raw');
+        expect(schema.properties?.anisotropy).not.toHaveProperty('raw');
     });
 
     it('treats array-form itemConfigs as object properties when the parent is not an array', () => {
@@ -297,6 +271,35 @@ describe('asset property schema conversion', () => {
                 },
             },
         });
+        expect(schema).not.toHaveProperty('raw');
+        expect(schema.properties?.x).not.toHaveProperty('raw');
+    });
+
+    it('does not expose raw legacy config through array item schemas', () => {
+        const schema = convertUserDataConfigItemToPropertySchema('entries', {
+            label: 'Entries',
+            type: 'array',
+            itemConfigs: [
+                {
+                    key: 'name',
+                    label: 'Name',
+                    default: '',
+                    render: { ui: 'ui-input' },
+                },
+            ],
+        });
+
+        expect(schema).toMatchObject({
+            label: 'Entries',
+            type: 'array',
+            items: {
+                label: 'Name',
+                type: 'string',
+                default: '',
+            },
+        });
+        expect(schema).not.toHaveProperty('raw');
+        expect(schema.items).not.toHaveProperty('raw');
     });
 
     it('merges schema-only config for property schema without mutating runtime userDataConfig', () => {

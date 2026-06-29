@@ -272,12 +272,8 @@ export interface IUerDataConfigItem {
     key?: string; // 唯一标识符
     // 配置显示的名字，如果需要翻译，则传入 i18n:${key}
     label?: string;
-    // label 对应的原始 i18n key
-    labelI18nKey?: string;
     // 设置的简单说明
     description?: string;
-    // description 对应的原始 i18n key
-    descriptionI18nKey?: string;
 
     // 默认值
     default?: any;
@@ -289,7 +285,6 @@ export interface IUerDataConfigItem {
         attributes?: Record<string, string | boolean | number>;
         items?: Array<{
             label: string;
-            labelI18nKey?: string;
             value: string;
         }>;
     };

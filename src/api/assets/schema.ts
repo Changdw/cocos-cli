@@ -348,15 +348,12 @@ export type TAssetConfigMapResult = z.infer<typeof SchemaAssetConfigMapResult>;
 
 export const SchemaAssetPropertySchemaOption = z.object({
     label: z.string().describe('Option display label'), // 选项显示名称
-    labelI18nKey: z.string().optional().describe('Original i18n key for option display label'), // 选项显示名称对应的原始 i18n key
     value: z.union([z.string(), z.number(), z.boolean()]).describe('Option value'), // 选项值
 }).describe('Asset property schema option'); // 资源属性 schema 选项
 
 export const SchemaAssetPropertySchema: z.ZodType<any> = z.lazy(() => z.object({
     label: z.string().describe('Property display label'), // 属性显示名称
-    labelI18nKey: z.string().optional().describe('Original i18n key for property display label'), // 属性显示名称对应的原始 i18n key
     description: z.string().optional().describe('Property description'), // 属性描述
-    descriptionI18nKey: z.string().optional().describe('Original i18n key for property description'), // 属性描述对应的原始 i18n key
     type: z.enum(['string', 'number', 'boolean', 'enum', 'asset', 'array', 'object']).describe('Property value/control type'), // 属性值或控件类型
     default: z.any().optional().describe('Static default value'), // 静态默认值
     options: z.array(SchemaAssetPropertySchemaOption).optional().describe('Enum/select options'), // 枚举/下拉选项
@@ -368,7 +365,6 @@ export const SchemaAssetPropertySchema: z.ZodType<any> = z.lazy(() => z.object({
     order: z.number().optional().describe('Display order'), // 展示顺序
     properties: z.record(z.string(), SchemaAssetPropertySchema).optional().describe('Nested object properties'), // 嵌套对象属性
     items: z.union([SchemaAssetPropertySchema, z.array(SchemaAssetPropertySchema)]).optional().describe('Array item schema'), // 数组元素 schema
-    raw: z.any().optional().describe('Original legacy userDataConfig item for debugging only'), // 原始旧配置，仅用于调试
 }).describe('Standardized asset import property schema')); // 标准化资源导入属性 schema
 
 export const SchemaAssetPropertySchemaResult = z.record(z.string(), SchemaAssetPropertySchema).describe('Asset import property schema map, key is property name'); // 资源导入属性 schema 映射

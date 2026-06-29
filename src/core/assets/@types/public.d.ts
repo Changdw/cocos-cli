@@ -41,15 +41,12 @@ export type AssetPropertySchemaType = 'string' | 'number' | 'boolean' | 'enum' |
 
 export interface AssetPropertySchemaOption {
     label: string;
-    labelI18nKey?: string;
     value: string | number | boolean;
 }
 
 export interface AssetPropertySchema {
     label: string;
-    labelI18nKey?: string;
     description?: string;
-    descriptionI18nKey?: string;
     type: AssetPropertySchemaType;
     default?: unknown;
     options?: AssetPropertySchemaOption[];
@@ -61,7 +58,6 @@ export interface AssetPropertySchema {
     order?: number;
     properties?: Record<string, AssetPropertySchema>;
     items?: AssetPropertySchema | AssetPropertySchema[];
-    raw?: unknown;
 }
 
 export type AssetPropertySchemaMap = Record<string, AssetPropertySchema>;
