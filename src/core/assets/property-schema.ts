@@ -8,9 +8,15 @@ import {
 
 type LegacyConfigItem = IUerDataConfigItem & {
     assetType?: string;
+    labelI18nKey?: string;
+    descriptionI18nKey?: string;
     readOnly?: boolean;
     readonly?: boolean;
     order?: number;
+};
+
+type LegacyOption = AssetPropertySchemaOption & {
+    labelI18nKey?: string;
 };
 
 type LegacyRenderAttributes = Record<string, string | boolean | number>;
@@ -63,15 +69,22 @@ export function convertUserDataConfigItemToPropertySchema(
 ): AssetPropertySchema {
     const legacyItem = item as LegacyConfigItem;
     const attributes = item.render?.attributes;
+    const label = resolveDisplayText(item.label, legacyItem.labelI18nKey, createTitleFromKey(key));
     const schema: AssetPropertySchema = {
-        label: normalizeDisplayText(item.label, createTitleFromKey(key)),
+        label: label.text,
         type: inferSchemaType(item),
         raw: item,
     };
+    if (label.i18nKey) {
+        schema.labelI18nKey = label.i18nKey;
+    }
 
-    const description = translateMetadataText(item.description);
-    if (description) {
-        schema.description = description;
+    const description = resolveOptionalDisplayText(item.description, legacyItem.descriptionI18nKey);
+    if (description.text) {
+        schema.description = description.text;
+    }
+    if (description.i18nKey) {
+        schema.descriptionI18nKey = description.i18nKey;
     }
 
     if (item.default !== undefined) {
@@ -154,10 +167,58 @@ function inferSchemaType(item: IUerDataConfigItem): AssetPropertySchema['type'] 
 }
 
 function convertOptions(item: IUerDataConfigItem, defaultValue: unknown): AssetPropertySchemaOption[] {
-    return (item.render?.items ?? []).map((option) => ({
-        label: normalizeDisplayText(option.label, String(option.value)),
-        value: normalizeOptionValue(option.value, defaultValue),
-    }));
+    return (item.render?.items ?? []).map((option) => {
+        const legacyOption = option as LegacyOption;
+        const label = resolveDisplayText(option.label, legacyOption.labelI18nKey, String(option.value));
+        const schemaOption: AssetPropertySchemaOption = {
+            label: label.text,
+            value: normalizeOptionValue(option.value, defaultValue),
+        };
+        if (label.i18nKey) {
+            schemaOption.labelI18nKey = label.i18nKey;
+        }
+        return schemaOption;
+    });
+}
+
+function resolveDisplayText(value: string | undefined, i18nKey: string | undefined, fallback: string): {
+    text: string;
+    i18nKey?: string;
+} {
+    const rawI18nKey = getI18nKey(i18nKey) ?? getI18nKey(value);
+    if (rawI18nKey) {
+        return {
+            text: translateMetadataText(rawI18nKey, getPlainDisplayText(value) ?? fallback) ?? fallback,
+            i18nKey: rawI18nKey,
+        };
+    }
+    return {
+        text: normalizeDisplayText(value, fallback),
+    };
+}
+
+function resolveOptionalDisplayText(value: string | undefined, i18nKey: string | undefined): {
+    text?: string;
+    i18nKey?: string;
+} {
+    const rawI18nKey = getI18nKey(i18nKey) ?? getI18nKey(value);
+    if (rawI18nKey) {
+        return {
+            text: translateMetadataText(rawI18nKey, getPlainDisplayText(value)),
+            i18nKey: rawI18nKey,
+        };
+    }
+    return {
+        text: translateMetadataText(value),
+    };
+}
+
+function getPlainDisplayText(value: string | undefined): string | undefined {
+    return value && !getI18nKey(value) ? value : undefined;
+}
+
+function getI18nKey(value: string | undefined): string | undefined {
+    return value?.startsWith('i18n:') ? value : undefined;
 }
 
 function normalizeOptionValue(value: string | number | boolean, defaultValue: unknown): string | number | boolean {
