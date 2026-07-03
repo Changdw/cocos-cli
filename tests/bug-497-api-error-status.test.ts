@@ -6,6 +6,7 @@ const mockCreateAssetByType = jest.fn();
 const mockImportAsset = jest.fn();
 const mockSaveAsset = jest.fn();
 const mockQueryPath = jest.fn();
+const mockQueryUrl = jest.fn();
 const mockQueryLinesInFile = jest.fn();
 const mockEraseLinesInRange = jest.fn();
 const mockReplaceTextInFile = jest.fn();
@@ -32,6 +33,7 @@ jest.mock('../src/core/assets', () => ({
         importAsset: (...args: unknown[]) => mockImportAsset(...args),
         saveAsset: (...args: unknown[]) => mockSaveAsset(...args),
         queryPath: (...args: unknown[]) => mockQueryPath(...args),
+        queryUrl: (...args: unknown[]) => mockQueryUrl(...args),
     },
 }));
 
@@ -83,6 +85,7 @@ describe('Bug #497 common API error status codes', () => {
         mockImportAsset.mockReset();
         mockSaveAsset.mockReset();
         mockQueryPath.mockReset();
+        mockQueryUrl.mockReset();
         mockQueryLinesInFile.mockReset();
         mockEraseLinesInRange.mockReset();
         mockReplaceTextInFile.mockReset();
@@ -230,6 +233,28 @@ describe('Bug #497 common API error status codes', () => {
         expect(result.code).toBe(HTTP_STATUS.NOT_FOUND);
         expect(result.data).toBeNull();
         expect(result.reason).toContain('Asset path can not be found');
+    });
+
+    it('returns 400 when querying asset URL with a parameter error', async () => {
+        mockQueryUrl.mockImplementation(() => {
+            throw new Error('parameter error');
+        });
+
+        const result = await new AssetsApi().queryUrl('bad');
+
+        expect(result.code).toBe(HTTP_STATUS.BAD_REQUEST);
+        expect(result.data).toBeNull();
+        expect(result.reason).toBe('parameter error');
+    });
+
+    it('returns 404 when querying asset URL cannot resolve a URL', async () => {
+        mockQueryUrl.mockReturnValue('');
+
+        const result = await new AssetsApi().queryUrl('yj56j');
+
+        expect(result.code).toBe(HTTP_STATUS.NOT_FOUND);
+        expect(result.data).toBeNull();
+        expect(result.reason).toContain('Asset URL can not be found');
     });
 
     it('returns 400 when saving invalid scene or prefab content', async () => {
