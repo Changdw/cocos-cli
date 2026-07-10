@@ -94,6 +94,11 @@
     "exportsConditions": {
       "title": "导出条件"
     },
+    "sortingPlugin": {
+      "title": "插件脚本排序配置",
+      "description": "插件脚本加载顺序配置，使用资源选择器选择插件脚本，配置文件中保存插件脚本 UUID。",
+      "itemTitle": "插件脚本"
+    },
     "preserveSymlinks": {
       "title": "保留符号链接"
     },

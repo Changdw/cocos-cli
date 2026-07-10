@@ -1,5 +1,6 @@
 import { CocosMigrationManager, CocosMigration } from '../migration';
 import type { IMigrationTarget } from '../migration';
+import { getMigrationList } from '../migration/register-migration';
 
 jest.mock('../migration/cocos-migration', () => ({
     CocosMigration: {
@@ -128,5 +129,26 @@ describe('CocosMigrationManager', () => {
                 .mockRejectedValueOnce(new Error('单个迁移器失败直接抛异常'));
             await expect(CocosMigrationManager.migrate('/proj')).rejects.toThrow('[Migration] 迁移失败, 详情请查看日志');
         });
+    });
+});
+
+describe('registered cocos migrations', () => {
+    it('应从 Creator project script 配置迁移 sortingPlugin 到新 script 域', async () => {
+        const projectMigration = getMigrationList().find((target) => (
+            target.sourceScope === 'project'
+            && target.pluginName === 'project'
+            && !target.targetPath
+        ));
+
+        expect(projectMigration).toBeDefined();
+
+        const result = await projectMigration!.migrate({
+            script: {
+                exportsConditions: ['browser'],
+                sortingPlugin: ['plugin-uuid-a', 'plugin-uuid-b'],
+            },
+        });
+
+        expect(result.script.sortingPlugin).toEqual(['plugin-uuid-a', 'plugin-uuid-b']);
     });
 });

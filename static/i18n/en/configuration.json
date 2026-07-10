@@ -94,6 +94,11 @@
     "exportsConditions": {
       "title": "Export Conditions"
     },
+    "sortingPlugin": {
+      "title": "Plugin Scripts Sorting Config",
+      "description": "Plugin script load order. Select plugin scripts with the asset picker; the configuration stores plugin script UUIDs.",
+      "itemTitle": "Plugin Script"
+    },
     "preserveSymlinks": {
       "title": "Preserve Symlinks"
     },

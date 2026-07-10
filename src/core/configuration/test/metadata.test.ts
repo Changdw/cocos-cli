@@ -197,11 +197,29 @@ describe('configuration metadata', () => {
         const afterRegister = await runtime.getMetadata();
         const importNode = findNode(afterRegister, 'import');
         const scriptNode = findNode(afterRegister, 'script');
+        const sortingPluginProperty = findProperty(scriptNode, 'script.sortingPlugin');
+        const sortingPluginItemSchema = Array.isArray(sortingPluginProperty.items)
+            ? sortingPluginProperty.items[0]
+            : sortingPluginProperty.items;
 
         expect(findProperty(importNode, 'import.restoreAssetDBFromCache').type).toBe('boolean');
         expect(findProperty(importNode, 'import.fbx.material.smart').type).toBe('boolean');
         expect(importNode.properties['import.fbx']).toBeUndefined();
         expect(findProperty(scriptNode, 'script.useDefineForClassFields').type).toBe('boolean');
+        expect(sortingPluginProperty.type).toBe('array');
+        expect(sortingPluginProperty.default).toEqual([]);
+        expect(sortingPluginItemSchema).toMatchObject({
+            type: 'string',
+            ui: 'asset-picker',
+            assetType: 'cc.Script',
+            valueField: 'uuid',
+            displayFields: ['url', 'name'],
+            query: {
+                userData: {
+                    isPlugin: true,
+                },
+            },
+        });
     });
 
     it('should expose scene metadata only after the scene module registers itself', async () => {
@@ -272,6 +290,8 @@ describe('configuration metadata', () => {
         expect(findProperty(importNode, 'import.globList').description).toBe('资源导入 glob 匹配规则');
         expect(scriptNode.title).toBe('脚本');
         expect(findProperty(scriptNode, 'script.useDefineForClassFields').title).toBe('使用 defineProperty 定义类字段');
+        expect(findProperty(scriptNode, 'script.sortingPlugin').title).toBe('插件脚本排序配置');
+        expect(findProperty(scriptNode, 'script.sortingPlugin').description).toBe('插件脚本加载顺序配置，使用资源选择器选择插件脚本，配置文件中保存插件脚本 UUID。');
         expect(sceneTickNode.title).toBe('启用 Tick');
         expect(findProperty(sceneTickNode, 'scene.tick').title).toBe('启用 Tick');
         expect(findProperty(sceneTickNode, 'scene.tick').description).toBe('保持场景主循环运行');
@@ -295,6 +315,8 @@ describe('configuration metadata', () => {
 
         expect(findNode(zhNodes, 'script').title).toBe('脚本');
         expect(findNode(enNodes, 'script').title).toBe('Script');
+        expect(findProperty(findNode(zhNodes, 'script'), 'script.sortingPlugin').title).toBe('插件脚本排序配置');
+        expect(findProperty(findNode(enNodes, 'script'), 'script.sortingPlugin').title).toBe('Plugin Scripts Sorting Config');
         expect(findProperty(findNode(zhNodes, 'builder.common'), 'builder.common.platform').title).toBe('平台');
         expect(findProperty(findNode(enNodes, 'builder.common'), 'builder.common.platform').title).toBe('Platform');
         expect(findProperty(findNode(zhNodes, 'import'), 'import.globList').description).toBe('资源导入 glob 匹配规则');
