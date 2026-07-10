@@ -83,13 +83,31 @@ describe('configuration metadata', () => {
         await runtime.Engine.init(TestGlobalEnv.engineRoot);
 
         const nodes = await runtime.getMetadata();
+        const engineRenderingNode = findNode(nodes, 'engine.rendering');
+        const engineJointTextureLayoutNode = findNode(nodes, 'engine.jointTextureLayout');
         const engineModuleNode = findNode(nodes, 'engine.moduleConfig');
         const engineMacroNode = findNode(nodes, 'engine.macroConfig');
+        const jointTextureLayoutsProperty = findProperty(engineJointTextureLayoutNode, 'engine.customJointTextureLayouts');
         const globalConfigKeyProperty = findProperty(engineModuleNode, 'engine.globalConfigKey');
         const configsProperty = findProperty(engineModuleNode, 'engine.configs');
         const macroProperty = findProperty(engineMacroNode, 'engine.macroConfig.ENABLE_TILEDMAP_CULLING');
         const configItemSchema = configsProperty.additionalProperties as ICocosConfigurationPropertySchema | undefined;
+        const jointTextureLayoutItemSchema = Array.isArray(jointTextureLayoutsProperty.items)
+            ? jointTextureLayoutsProperty.items[0]
+            : jointTextureLayoutsProperty.items;
+        const jointTextureContentSchema = jointTextureLayoutItemSchema?.properties?.contents;
+        const jointTextureContentItemSchema = Array.isArray(jointTextureContentSchema?.items)
+            ? jointTextureContentSchema.items[0]
+            : jointTextureContentSchema?.items;
 
+        expect(engineRenderingNode.properties['engine.customJointTextureLayouts']).toBeUndefined();
+        expect(jointTextureLayoutsProperty.type).toBe('array');
+        expect(jointTextureLayoutItemSchema?.type).toBe('object');
+        expect(jointTextureLayoutItemSchema?.properties?.textureLength?.type).toBe('number');
+        expect(jointTextureContentSchema?.type).toBe('array');
+        expect(jointTextureContentItemSchema?.type).toBe('object');
+        expect(jointTextureContentItemSchema?.properties?.skeleton?.type).toBe('string');
+        expect(jointTextureContentItemSchema?.properties?.clips?.type).toBe('array');
         expect(engineModuleNode.properties['engine.includeModules']).toBeUndefined();
         expect(engineModuleNode.properties['engine.flags.LOAD_PHYSX_MANUALLY']).toBeUndefined();
         expect(engineModuleNode.properties['engine.noDeprecatedFeatures']).toBeUndefined();
