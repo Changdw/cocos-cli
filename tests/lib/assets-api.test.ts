@@ -4,6 +4,10 @@ const mockAssetManager = {
     querySerializedData: jest.fn(),
     saveSerializedData: jest.fn(),
     queryPropertySchema: jest.fn(),
+    queryMaterialAllEffects: jest.fn(),
+    queryMaterialEffect: jest.fn(),
+    queryMaterial: jest.fn(),
+    saveMaterial: jest.fn(),
 };
 
 jest.mock('../../src/core/assets', () => ({
@@ -103,10 +107,10 @@ describe('lib assets api', () => {
             technique: 0,
             data: effectDump,
         };
-        const queryAllSpy = jest.spyOn(assetManager, 'queryMaterialAllEffects').mockResolvedValue(effects);
-        const queryEffectSpy = jest.spyOn(assetManager, 'queryMaterialEffect').mockResolvedValue(effectDump);
-        const querySpy = jest.spyOn(assetManager, 'queryMaterial').mockResolvedValue(materialDump);
-        const saveSpy = jest.spyOn(assetManager, 'saveMaterial').mockResolvedValue(undefined);
+        mockAssetManager.queryMaterialAllEffects.mockResolvedValue(effects);
+        mockAssetManager.queryMaterialEffect.mockResolvedValue(effectDump);
+        mockAssetManager.queryMaterial.mockResolvedValue(materialDump);
+        mockAssetManager.saveMaterial.mockResolvedValue(undefined);
 
         expect(Assets.material.query).toEqual(expect.any(Function));
         expect(Assets.material.queryEffect).toEqual(expect.any(Function));
@@ -118,10 +122,10 @@ describe('lib assets api', () => {
         await expect(Assets.material.query('material-uuid')).resolves.toEqual(materialDump);
         await expect(Assets.material.save('material-uuid', materialDump)).resolves.toBeUndefined();
 
-        expect(queryAllSpy).toHaveBeenCalledWith();
-        expect(queryEffectSpy).toHaveBeenCalledWith('effect-uuid');
-        expect(querySpy).toHaveBeenCalledWith('material-uuid');
-        expect(saveSpy).toHaveBeenCalledWith('material-uuid', materialDump);
+        expect(mockAssetManager.queryMaterialAllEffects).toHaveBeenCalledWith();
+        expect(mockAssetManager.queryMaterialEffect).toHaveBeenCalledWith('effect-uuid');
+        expect(mockAssetManager.queryMaterial).toHaveBeenCalledWith('material-uuid');
+        expect(mockAssetManager.saveMaterial).toHaveBeenCalledWith('material-uuid', materialDump);
     });
 
     it('exposes queryPropertySchema and delegates to assetManager', async () => {
