@@ -89,6 +89,100 @@ export class EngineService extends BaseService<IEngineEvents> implements IEngine
         }
     }
 
+    /**
+     * 渲染调试视图（DebugView）：单一通道调试 / 组合光照项开关 / 纯光照带固有色 / 级联阴影染色。
+     * 与 cocos-editor scene-facade-manager.changeDebugOption 对齐。
+     * 注意：不对外暴露为公共 API（未加入 IEngineService / EngineProxy，不生成到 cocos-cli-types）；
+     * 目前仅由场景编辑器页面（scene-editor.ejs）在浏览器内通过 window.cli.Scene.Engine 直接调用。
+     * @param key 'single' | 'composite' | 'LIGHTING_WITH_BASE_COLOR' | 'CSM_LAYER_COLORATION'
+     * @param value single: DebugViewSingleType 数值；composite: { key: DebugViewCompositeType | 10000(=ALL), value: boolean }；其余: boolean
+     */
+    public async changeDebugOption(key: string, value: any) {
+        // debugView 未在 Root 类型里声明；2D 或引擎未就绪时可能为空
+        const debugView = (director.root as any)?.debugView;
+        if (!debugView) {
+            return;
+        }
+        switch (key) {
+            case 'single':
+                // 渲染单项调试模式
+                debugView.singleMode = value;
+                break;
+            case 'composite':
+                // 渲染组合调试模式（key === 10000 表示全部）
+                if (value?.key === 10000) {
+                    debugView.enableAllCompositeMode(value.value);
+                } else {
+                    debugView.enableCompositeMode(value?.key, value?.value);
+                }
+                break;
+            case 'LIGHTING_WITH_BASE_COLOR':
+                // 光照信息带固有色（纯光照切换）
+                debugView.lightingWithAlbedo = value;
+                break;
+            case 'CSM_LAYER_COLORATION':
+                // 级联阴影染色
+                debugView.csmLayerColoration = value;
+                break;
+            default:
+                // 未知 key：不做任何变更，直接返回，避免空转重绘
+                return;
+        }
+        void this.repaintInEditMode();
+    }
+
+     /* 从服务端拉取当前工程的设计分辨率，同步到 cc.view 并重排已打开场景里的 Canvas。
+     *
+     * 为什么必须手动重排：编辑器模式（EDITOR_NOT_IN_PREVIEW）下 cc.Canvas 不会注册
+     * 'design-resolution-changed' 监听（只有预览/运行模式才注册），只在场景实例化的 __preload 里
+     * 调 fitDesignResolution_EDITOR 对齐一次。因此改分辨率后：新实例化的场景会自动对齐，但
+     * 已打开、未重新实例化的场景不会更新——需要在这里手动调 fitDesignResolution_EDITOR
+     * （与 cocos-editor startup.initDesignResolution 的重排逻辑一致）。
+     *
+     * 在打开场景、重开同一场景、以及选中节点时都会调用：由于浏览器场景收不到主进程的配置变更推送，
+     * 只能在这些交互时机主动拉取比对。cc.view 未变化时直接返回（每次仅一次极小的读取），
+     * 变化时才更新并重排——因为 cc.view 每次变化都会连同重排当前场景，故不会出现“已更新但场景未重排”的情况。
+     */
+    public async syncDesignResolution() {
+        try {
+            const view = (cc as any).view;
+            if (!view || typeof fetch !== 'function') {
+                return;
+            }
+            const res = await fetch('/scripting/engine/design-resolution');
+            const dr = await res.json();
+            const width = Number(dr?.width);
+            const height = Number(dr?.height);
+            if (Number.isNaN(width) || Number.isNaN(height)) {
+                return;
+            }
+            const size = view.getDesignResolutionSize();
+            if (size && size.width === width && size.height === height) {
+                return; // 未变化，无需处理
+            }
+            // 保持与场景进程启动时一致的 ResolutionPolicy
+            view.setDesignResolutionSize(width, height, view.getResolutionPolicy());
+            // 手动对齐已打开场景里的 Canvas（编辑器模式不会自动响应 design-resolution-changed）
+            const scene = director.getScene();
+            if (scene) {
+                const canvases = (scene as any).getComponentsInChildren('cc.Canvas') as any[];
+                canvases.forEach((canvas) => {
+                    if (!canvas || !canvas.node) {
+                        return;
+                    }
+                    // 带 Widget 的 Canvas 由 Widget 对齐；未激活/未启用的跳过
+                    if (canvas.node.getComponent('cc.Widget') || !canvas.node.active || !canvas.enabled) {
+                        return;
+                    }
+                    canvas.fitDesignResolution_EDITOR?.();
+                });
+            }
+            void this.repaintInEditMode();
+        } catch (error) {
+            console.debug('[Engine] syncDesignResolution failed:', error);
+        }
+    }
+
     public async initCustomLayer(layers?: ICustomLayerConfig[]) {
         if (!Array.isArray(layers)) {
             return;
@@ -141,6 +235,14 @@ export class EngineService extends BaseService<IEngineEvents> implements IEngine
     public exitState(state: NeedAnimState) {
         this._stateRecord &= ~(1 << state);
         this._updateTickState();
+    }
+
+    public enterAnimationMode() {
+        this.enterState(NeedAnimState.ANIMATION_MODE);
+    }
+
+    public exitAnimationMode() {
+        this.exitState(NeedAnimState.ANIMATION_MODE);
     }
 
     public resume() {

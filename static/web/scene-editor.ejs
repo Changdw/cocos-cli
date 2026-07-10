@@ -2,6 +2,9 @@
 <html>
 <head>
     <meta charset="utf-8">
+    <!-- 页面挂在 /scene-editor/ 子路径下，但引擎/脚本资源都在根路径。
+         用 base 把相对解析（含 SystemJS import-map 的相对目标）锚定到根，避免被解析成 /scene-editor/... 而 404。 -->
+    <base href="/">
     <title><%= title %></title>
     <meta name="viewport" content="width=device-width,user-scalable=no,initial-scale=1,minimum-scale=1,maximum-scale=1,viewport-fit=cover"/>
     <meta name="apple-mobile-web-app-capable" content="yes"/>
@@ -177,6 +180,10 @@
                     <span id="sceneStatus" class="info-text">Not loaded</span>
                 </div>
                 <div class="row">
+                    <button class="btn btn-primary" id="btnPreview" onclick="openBrowserPreview()">▶ Preview (Browser)</button>
+                    <span class="info-text">opens /</span>
+                </div>
+                <div class="row">
                     <label>Script</label>
                     <input type="text" id="scriptNameInput" placeholder="TestComponent" value="TestComponent" style="flex:1;background:#2a2a2a;color:#ddd;border:1px solid #555;border-radius:3px;padding:2px 4px;font-size:11px;">
                 </div>
@@ -188,6 +195,40 @@
                 </div>
             </div>
         </div>
+
+        <!-- Debug View：调用 Engine.changeDebugOption 控制渲染调试视图（单一通道 / 组合光照项 / 纯光照 / CSM 染色） -->
+        <div class="panel-section" id="sec-debugview">
+            <h3 onclick="toggleSection('sec-debugview')">Debug View</h3>
+            <div class="section-body">
+                <div class="row">
+                    <label>Lighting w/ albedo</label>
+                    <input type="checkbox" id="dbgLWA" checked onchange="safeCall('Engine','changeDebugOption','LIGHTING_WITH_BASE_COLOR',this.checked)">
+                </div>
+                <div class="row">
+                    <label>CSM coloration</label>
+                    <input type="checkbox" id="dbgCSM" onchange="safeCall('Engine','changeDebugOption','CSM_LAYER_COLORATION',this.checked)">
+                </div>
+                <div class="row">
+                    <button class="btn btn-primary" onclick="resetDebugView()">Reset (Shaded)</button>
+                </div>
+                <!-- Single: 单选(radio)，同一时刻只看一个通道，按类别分组 -->
+                <div class="row" style="align-items:flex-start;">
+                    <label>Single</label>
+                    <div id="dbgSingleList" style="flex:1;display:flex;flex-direction:column;gap:1px;max-height:220px;overflow:auto;"></div>
+                </div>
+                <!-- Composite: 复选(checkbox)，可多选叠加光照项，按类别分组 -->
+                <div class="row">
+                    <label>Composite</label>
+                    <button class="btn" onclick="setAllComposite(true)">All ON</button>
+                    <button class="btn" onclick="setAllComposite(false)">All OFF</button>
+                </div>
+                <div class="row" style="align-items:flex-start;">
+                    <label>Items</label>
+                    <div id="dbgCompositeList" style="flex:1;display:flex;flex-direction:column;gap:1px;max-height:220px;overflow:auto;"></div>
+                </div>
+            </div>
+        </div>
+        <!-- Debug View END -->
 
         <!-- Camera -->
         <div class="panel-section" id="sec-camera">
@@ -308,36 +349,12 @@
                     <label>Selected</label>
                     <span id="selInfo" class="info-text">none</span>
                 </div>
-            </div>
-        </div>
-
-        <!-- Hierarchy -->
-        <div class="panel-section" id="sec-hierarchy">
-            <h3 onclick="toggleSection('sec-hierarchy')">Hierarchy</h3>
-            <div class="section-body">
                 <div class="row">
-                    <button class="btn" onclick="doCopyNode()">Copy</button>
-                    <button class="btn" onclick="doPasteNode()">Paste</button>
-                    <button class="btn" onclick="doCutNode()">Cut</button>
-                    <button class="btn" onclick="doDuplicateNode()">Duplicate</button>
-                </div>
-                <div class="row">
-                    <label>Parent</label>
-                    <input type="text" id="targetParentPath" placeholder="e.g. Canvas/Parent"
-                           style="flex:1;background:#2a2a2a;color:#ddd;border:1px solid #555;border-radius:3px;padding:2px 4px;font-size:11px;">
-                    <button class="btn" onclick="fillParentFromList()" title="Fill from node list">&#8592;</button>
-                </div>
-                <div class="row">
-                    <button class="btn" onclick="doSetParent()">Set Parent</button>
-                    <button class="btn" onclick="doPasteToParent()">Paste Here</button>
-                </div>
-                <div class="row">
-                    <label>Reorder</label>
-                    <button class="btn" onclick="doReorder(-1)">Up</button>
-                    <button class="btn" onclick="doReorder(1)">Down</button>
-                </div>
-                <div class="row">
-                    <span id="hierarchyStatus" class="info-text">-</span>
+                    <label>Path</label>
+                    <input type="text" id="focusPathInput" placeholder="e.g. Canvas/Node"
+                           style="flex:1;background:#2a2a2a;color:#ddd;border:1px solid #555;border-radius:3px;padding:2px 4px;font-size:11px;"
+                           onkeydown="if(event.key==='Enter')focusByPath()">
+                    <button class="btn" onclick="focusByPath()" title="Select node by path and focus camera">Select + Focus</button>
                 </div>
             </div>
         </div>
@@ -394,7 +411,7 @@
         };
     </script>
     <script type="module">
-        const { default: boot } = await import("/static/web/boot.js");
+        const { default: boot } = await import("/static/web/scene-editor-boot.js");
         await boot();
     </script>
     <script>
@@ -428,6 +445,23 @@
 
         function toggleSection(id) {
             document.getElementById(id).classList.toggle('folded');
+        }
+
+        // 打开浏览器预览（根路径 /，CC_PREVIEW 跑游戏）。默认预览“当前打开的场景”，
+        // 取不到时退回场景输入框里的 UUID/URL，再退回项目默认启动场景。
+        function openBrowserPreview() {
+            let scene = '';
+            try {
+                const ed = window.cli && window.cli.Scene && window.cli.Scene.Editor;
+                const uuid = ed && ed.getCurrentEditorUuid && ed.getCurrentEditorUuid();
+                if (uuid) scene = uuid;
+            } catch (e) { /* ignore */ }
+            if (!scene) {
+                const input = document.getElementById('sceneInput');
+                if (input && input.value.trim()) scene = input.value.trim();
+            }
+            const url = scene ? '/?scene=' + encodeURIComponent(scene) : '/';
+            window.open(url, '_blank');
         }
 
         /* ── Scene ── */
@@ -572,11 +606,34 @@
         window.rotateCam = rotateCam;
 
         function focusSelected() {
-            const uuids = getSelectedUuids();
-            if (uuids.length === 0) { log('No selection to focus', 'status-warn'); return; }
+            // Selection.query() 返回的是节点 path，而 Camera.focus 内部用 EditorExtends.Node.getNode(uuid)
+            // 按 uuid 查节点，直接把 path 传进去会查不到、聚焦不生效。这里先把 path 转成 uuid。
+            const paths = getSelectedUuids();
+            if (paths.length === 0) { log('No selection to focus', 'status-warn'); return; }
+            const EE = (window.cc && window.cc.EditorExtends) || window.EditorExtends;
+            const uuids = paths.map(function (p) {
+                try { const n = EE && EE.Node && EE.Node.getNodeByPath(p); return n ? n.uuid : null; } catch (e) { return null; }
+            }).filter(Boolean);
+            if (uuids.length === 0) { log('Cannot resolve selection path to uuid', 'status-warn'); return; }
             safeCall('Camera', 'focus', uuids);
         }
         window.focusSelected = focusSelected;
+
+        // 输入节点路径 → 按路径选中该节点 + 相机聚焦到该节点
+        // Selection.select 接受 path；Camera.focus 需要 uuid，所以先把 path 转成 uuid。
+        function focusByPath() {
+            const path = (document.getElementById('focusPathInput').value || '').trim();
+            if (!path) { log('No path entered', 'status-warn'); return; }
+            const EE = (window.cc && window.cc.EditorExtends) || window.EditorExtends;
+            let uuid = null;
+            try { const n = EE && EE.Node && EE.Node.getNodeByPath(path); uuid = n ? n.uuid : null; } catch (e) {}
+            if (!uuid) { log('Node not found by path: ' + path, 'status-warn'); return; }
+            safeCall('Selection', 'select', path);
+            safeCall('Camera', 'focus', [uuid]);
+            log('Focus by path: ' + path);
+            setTimeout(refreshState, 100);
+        }
+        window.focusByPath = focusByPath;
 
         /* ── Gizmo ── */
         const tools = ['position', 'rotation', 'scale', 'rect', 'view'];
@@ -668,133 +725,6 @@
                 }
             }
         }
-
-        /* ── Hierarchy ── */
-        function getSelectedPaths() {
-            try {
-                if (window.cli.Scene && window.cli.Scene.Selection) {
-                    return window.cli.Scene.Selection.query() || [];
-                }
-            } catch(e) {}
-            return [];
-        }
-
-        function hStatus(msg, cls) {
-            const el = document.getElementById('hierarchyStatus');
-            el.textContent = msg;
-            el.className = 'info-text ' + (cls || '');
-        }
-
-        function hRefresh() {
-            try { window.cli.Scene.Engine.repaintInEditMode(); } catch(_) {}
-            refreshNodeList();
-            setTimeout(refreshState, 200);
-        }
-
-        function fillParentFromList() {
-            const sel = document.getElementById('nodeList');
-            const opt = sel.options[sel.selectedIndex];
-            if (opt && opt.textContent) {
-                document.getElementById('targetParentPath').value = opt.textContent;
-            }
-        }
-        window.fillParentFromList = fillParentFromList;
-
-        async function doCopyNode() {
-            const paths = getSelectedPaths();
-            if (paths.length === 0) { hStatus('No selection', 'status-warn'); return; }
-            try {
-                const result = await window.cli.Scene.Node.copyNode({ paths });
-                hStatus('Copied ' + (result ? result.length : 0) + ' node(s)', 'status-ok');
-                log('copyNode: ' + paths.join(', '), 'status-ok');
-            } catch(e) { hStatus('Copy failed: ' + e.message, 'status-err'); log('copyNode error: ' + e.message, 'status-err'); }
-        }
-        window.doCopyNode = doCopyNode;
-
-        async function doPasteNode() {
-            try {
-                const result = await window.cli.Scene.Node.pasteNode({});
-                console.log('[Hierarchy] pasteNode result:', result);
-                hStatus('Pasted ' + result.length + ' node(s)', 'status-ok');
-                log('pasteNode: ' + result.join(', '), 'status-ok');
-                hRefresh();
-            } catch(e) { console.error('[Hierarchy] pasteNode error:', e); hStatus('Paste failed: ' + e.message, 'status-err'); log('pasteNode error: ' + e.message, 'status-err'); }
-        }
-        window.doPasteNode = doPasteNode;
-
-        async function doPasteToParent() {
-            const parentPath = document.getElementById('targetParentPath').value.trim().replace(/\/+$/, '');
-            try {
-                const params = {};
-                if (parentPath) params.parentPath = parentPath;
-                const result = await window.cli.Scene.Node.pasteNode(params);
-                hStatus('Pasted ' + result.length + ' to ' + (parentPath || 'root'), 'status-ok');
-                log('pasteNode → ' + (parentPath || '/') + ': ' + result.join(', '), 'status-ok');
-                hRefresh();
-            } catch(e) { hStatus('Paste failed: ' + e.message, 'status-err'); log('pasteNode error: ' + e.message, 'status-err'); }
-        }
-        window.doPasteToParent = doPasteToParent;
-
-        async function doCutNode() {
-            const paths = getSelectedPaths();
-            if (paths.length === 0) { hStatus('No selection', 'status-warn'); return; }
-            try {
-                await window.cli.Scene.Node.cutNode({ paths });
-                hStatus('Cut ' + paths.length + ' node(s)', 'status-ok');
-                log('cutNode: ' + paths.join(', '), 'status-ok');
-                safeCall('Selection', 'clear');
-                hRefresh();
-            } catch(e) { hStatus('Cut failed: ' + e.message, 'status-err'); log('cutNode error: ' + e.message, 'status-err'); }
-        }
-        window.doCutNode = doCutNode;
-
-        async function doDuplicateNode() {
-            const paths = getSelectedPaths();
-            if (paths.length === 0) { hStatus('No selection', 'status-warn'); return; }
-            try {
-                const result = await window.cli.Scene.Node.duplicateNode({ paths });
-                hStatus('Duplicated → ' + result.join(', '), 'status-ok');
-                log('duplicateNode: ' + result.join(', '), 'status-ok');
-                hRefresh();
-            } catch(e) { hStatus('Duplicate failed: ' + e.message, 'status-err'); log('duplicateNode error: ' + e.message, 'status-err'); }
-        }
-        window.doDuplicateNode = doDuplicateNode;
-
-        async function doSetParent() {
-            const paths = getSelectedPaths();
-            const parentPath = document.getElementById('targetParentPath').value.trim();
-            if (paths.length === 0) { hStatus('No selection', 'status-warn'); return; }
-            if (!parentPath) { hStatus('Enter parent path', 'status-warn'); return; }
-            try {
-                const result = await window.cli.Scene.Node.setParent({ paths, parentPath });
-                hStatus('Moved ' + result.length + ' → ' + parentPath, 'status-ok');
-                log('setParent → ' + parentPath + ': ' + result.join(', '), 'status-ok');
-                hRefresh();
-            } catch(e) { hStatus('Move failed: ' + e.message, 'status-err'); log('setParent error: ' + e.message, 'status-err'); }
-        }
-        window.doSetParent = doSetParent;
-
-        async function doReorder(delta) {
-            const paths = getSelectedPaths();
-            if (paths.length !== 1) { hStatus('Select exactly 1 node', 'status-warn'); return; }
-            const nodePath = paths[0];
-            const parts = nodePath.split('/');
-            const parentPath = parts.slice(0, -1).join('/') || '/';
-            try {
-                const EN = (cc && cc.EditorExtends) || window.EditorExtends;
-                const node = EN.Node.getNodeByPath(nodePath);
-                if (!node || !node.parent) { hStatus('Node has no parent', 'status-warn'); return; }
-                const from = node.getSiblingIndex();
-                const to = from + delta;
-                if (to < 0 || to >= node.parent.children.length) { hStatus('Already at edge', 'status-warn'); return; }
-                const result = await window.cli.Scene.Node.reorder({ path: parentPath, from, to });
-                hStatus('Reordered ' + from + ' → ' + to, result ? 'status-ok' : 'status-warn');
-                log('reorder ' + parentPath + ': ' + from + ' → ' + to, 'status-ok');
-                hRefresh();
-                refreshNodeList();
-            } catch(e) { hStatus('Reorder failed: ' + e.message, 'status-err'); log('reorder error: ' + e.message, 'status-err'); }
-        }
-        window.doReorder = doReorder;
 
         /* ── State Refresh ── */
         function refreshState() {
@@ -947,8 +877,87 @@
 
         // Expose all handlers globally
         window.safeCall = safeCall;
+        // Debug View：构建单一通道(radio)/组合光照项(checkbox)分组控件，调用 Engine.changeDebugOption
+        (function initDebugViewTest() {
+            // Single 调试模式：单选(radio)，同一时刻只看一个通道；value = DebugViewSingleType 数值。
+            // 分组与 cocos-editor debug-view.ts 一致。
+            var SINGLE_GROUPS = [
+                { title: '', items: [[0, 'Disable all 禁用 (NONE)']] },
+                { title: 'Model Info 模型信息', items: [
+                    [1, 'Vertex colors 顶点色'], [2, 'World normal 世界法线'], [3, 'World tangent 世界切线'],
+                    [4, 'World position 世界坐标'], [5, 'Mirrored normal 镜像法线'], [6, 'Front face 正面着色'],
+                    [7, 'UV0'], [8, 'UV1'], [9, 'Lightmap UV 光照图UV'], [10, 'Proj depth Z 投影深度Z'], [11, 'Linear depth W 线性深度W'] ] },
+                { title: 'Material Info 材质信息', items: [
+                    [12, 'Pixel normal 世界像素法线'], [13, 'Pixel tangent 世界像素切线'], [14, 'Pixel binormal 世界像素副法线'],
+                    [15, 'Base color 固有色'], [16, 'Diffuse color 漫反射颜色'], [17, 'Specular color 镜面反射颜色'],
+                    [18, 'Opacity 透明度'], [19, 'Metallic 金属度'], [20, 'Roughness 粗糙度'], [21, 'Specular intensity 镜面反射强度'], [22, 'IOR 折射率'] ] },
+                { title: 'Lighting Info 光照信息', items: [
+                    [23, 'Direct diffuse 直接光漫反射'], [24, 'Direct specular 直接光镜面反射'], [25, 'Direct lighting 直接光'],
+                    [26, 'Ambient diffuse 环境光漫反射'], [27, 'Ambient specular 环境光镜面反射'], [28, 'Ambient lighting 环境光'],
+                    [29, 'Emissive 自发光'], [30, 'Light map 光照图'], [31, 'Shadows 阴影'], [32, 'AO 环境光遮蔽'] ] },
+                { title: 'Adv Lighting 高级光照信息', items: [
+                    [33, 'Fresnel 菲涅尔'], [34, 'Direct transmit diffuse'], [35, 'Direct transmit specular'],
+                    [36, 'Ambient transmit diffuse'], [37, 'Ambient transmit specular'], [38, 'Transmit lighting'],
+                    [39, 'Direct TRT'], [40, 'Ambient TRT'], [41, 'TRT lighting'] ] },
+                { title: 'Misc 杂项信息', items: [[42, 'Fog factor 雾因子']] },
+            ];
+            // Composite 组合项：复选(checkbox)，可多选叠加；key = DebugViewCompositeType 数值。
+            var COMPOSITE_GROUPS = [
+                { title: 'Lighting 光照', items: [
+                    [0, 'Direct diffuse 直接光漫反射'], [1, 'Direct specular 直接光镜面反射'], [2, 'Ambient diffuse 环境光漫反射'],
+                    [3, 'Ambient specular 环境光镜面反射'], [4, 'Emissive 自发光'], [5, 'Light map 光照图'], [6, 'Shadows 阴影'], [7, 'AO 环境光遮蔽'] ] },
+                { title: 'Misc 杂项信息', items: [[8, 'Normal map'], [9, 'Fog factor 雾因子'], [10, 'Tone mapping'], [11, 'Gamma correction']] },
+                { title: 'Adv Lighting 高级光照信息', items: [[12, 'Fresnel 菲涅尔'], [13, 'Transmit diffuse'], [14, 'Transmit specular'], [15, 'TRT'], [16, 'TT']] },
+            ];
+
+            function groupHeader(title) {
+                if (!title) { return ''; }
+                return '<div style="color:#8a8a8a;font-size:10px;margin:4px 0 1px;border-bottom:1px solid #3a3a3a;">' + title + '</div>';
+            }
+            function renderGroups(container, groups, buildItem) {
+                if (!container) { return; }
+                var html = '';
+                groups.forEach(function (g) {
+                    html += groupHeader(g.title);
+                    g.items.forEach(function (it) { html += buildItem(it[0], it[1]); });
+                });
+                container.innerHTML = html;
+            }
+
+            var singleList = document.getElementById('dbgSingleList');
+            renderGroups(singleList, SINGLE_GROUPS, function (value, label) {
+                return '<label style="display:flex;align-items:center;gap:4px;font-size:11px;">' +
+                    '<input type="radio" name="dbgSingle" value="' + value + '"' + (value === 0 ? ' checked' : '') +
+                    ' onchange="safeCall(\'Engine\',\'changeDebugOption\',\'single\',' + value + ')">' + value + ' ' + label + '</label>';
+            });
+
+            var compList = document.getElementById('dbgCompositeList');
+            renderGroups(compList, COMPOSITE_GROUPS, function (key, label) {
+                return '<label style="display:flex;align-items:center;gap:4px;font-size:11px;">' +
+                    '<input type="checkbox" checked data-comp="' + key + '"' +
+                    ' onchange="safeCall(\'Engine\',\'changeDebugOption\',\'composite\',{key:' + key + ',value:this.checked})">' + key + ' ' + label + '</label>';
+            });
+
+            window.setAllComposite = function (on) {
+                safeCall('Engine', 'changeDebugOption', 'composite', { key: 10000, value: on });
+                if (compList) { compList.querySelectorAll('input[data-comp]').forEach(function (c) { c.checked = on; }); }
+            };
+
+            window.resetDebugView = function () {
+                safeCall('Engine', 'changeDebugOption', 'single', 0);
+                safeCall('Engine', 'changeDebugOption', 'composite', { key: 10000, value: true });
+                safeCall('Engine', 'changeDebugOption', 'LIGHTING_WITH_BASE_COLOR', true);
+                safeCall('Engine', 'changeDebugOption', 'CSM_LAYER_COLORATION', false);
+                if (singleList) { var r = singleList.querySelector('input[value="0"]'); if (r) { r.checked = true; } }
+                var lwa = document.getElementById('dbgLWA'); if (lwa) { lwa.checked = true; }
+                var csm = document.getElementById('dbgCSM'); if (csm) { csm.checked = false; }
+                if (compList) { compList.querySelectorAll('input[data-comp]').forEach(function (c) { c.checked = true; }); }
+            };
+        })();
+        // Debug View END
         window.togglePanel = togglePanel;
         window.toggleSection = toggleSection;
+        window.openBrowserPreview = openBrowserPreview;
     </script>
 </body>
 </html>

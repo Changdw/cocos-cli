@@ -49,6 +49,7 @@ class AssetManager extends EventEmitter {
     outputExportData = assetOperation.outputExportData.bind(assetOperation);
     createAssetByType = assetOperation.createAssetByType.bind(assetOperation);
     updateUserData = assetOperation.updateUserData.bind(assetOperation);
+    updateUserDataByPath = assetOperation.updateUserDataByPath.bind(assetOperation);
     querySerializedData = serializedData.querySerializedData;
     saveSerializedData = serializedData.saveSerializedData;
     queryMaterial = materialService.queryMaterial;
@@ -367,6 +368,7 @@ export interface TypedAssetManager extends EventEmitter {
     outputExportData: typeof assetOperation.outputExportData;
     createAssetByType: typeof assetOperation.createAssetByType;
     updateUserData: typeof assetOperation.updateUserData;
+    updateUserDataByPath: typeof assetOperation.updateUserDataByPath;
     querySerializedData: typeof serializedData.querySerializedData;
     saveSerializedData: typeof serializedData.saveSerializedData;
     queryMaterial: typeof materialService.queryMaterial;

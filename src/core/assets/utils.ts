@@ -1,7 +1,7 @@
 'use strict';
 
 import { Asset, VirtualAsset, queryUUID, Utils as dbUtils, queryAsset as dbQueryAsset, queryPath } from '@cocos/asset-db/index';
-import { extname, isAbsolute, join, relative, resolve } from 'path';
+import { extname, isAbsolute, join, resolve } from 'path';
 import { readFile, readJSON } from 'fs-extra';
 import type { Asset as CCAsset, Details } from 'cc';
 import type { CCON } from 'cc/editor/serialization';
@@ -11,6 +11,7 @@ import { IAsset, IExportData, ISerializedOptions, SerializedAsset } from './@typ
 import { DeleteAssetOptions } from './@types/public';
 import { removeAssetSource } from './manager/filesystem';
 import { MissingClass } from '../engine/editor-extends/missing-reporter/missing-class-reporter';
+export { pathToDbUrlIfAssetDBPath } from './asset-db-url';
 
 export function url2path(url: string) {
     if (isAbsolute(url)) {
@@ -22,42 +23,6 @@ export function url2path(url: string) {
     }
 
     return Utils.Path.resolveToRaw(url);
-}
-
-export function pathToDbUrlIfAssetDBPath(pathOrUrlOrUUID: string, assetDBInfo: Record<string, { name: string; target: string }>) {
-    if (!pathOrUrlOrUUID || pathOrUrlOrUUID.startsWith('db://')) {
-        return pathOrUrlOrUUID;
-    }
-
-    if (!isAbsolute(pathOrUrlOrUUID)) {
-        const normalizedRelativePath = pathOrUrlOrUUID
-            .replace(/\\/g, '/')
-            .replace(/^\.\/+/, '')
-            .replace(/\/+$/, '');
-        const [dbName, ...relativeParts] = normalizedRelativePath.split('/').filter(Boolean);
-        const dbInfo = dbName && assetDBInfo[dbName];
-
-        if (dbInfo) {
-            return relativeParts.length ? `db://${dbInfo.name}/${relativeParts.join('/')}` : `db://${dbInfo.name}`;
-        }
-
-        return pathOrUrlOrUUID;
-    }
-
-    const matchedDBInfo = Object.values(assetDBInfo)
-        .filter((info) => info?.target && Utils.Path.contains(info.target, pathOrUrlOrUUID))
-        .sort((a, b) => Utils.Path.normalize(b.target).length - Utils.Path.normalize(a.target).length)[0];
-
-    if (!matchedDBInfo) {
-        return pathOrUrlOrUUID;
-    }
-
-    const relativePath = relative(
-        Utils.Path.normalize(matchedDBInfo.target),
-        Utils.Path.normalize(pathOrUrlOrUUID),
-    ).replace(/\\/g, '/');
-
-    return relativePath ? `db://${matchedDBInfo.name}/${relativePath}` : `db://${matchedDBInfo.name}`;
 }
 
 export function dirnameForDbUrlOrPath(pathOrUrlOrUUID: string) {

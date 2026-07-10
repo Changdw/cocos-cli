@@ -95,6 +95,9 @@ export async function startup(options: {
     await Rpc.startup({ serverURL });
     await initLocalI18n();
 
+    // Spine 版本：dev-cli 引擎同时编入 spine-3.8 与 spine-4.2，按项目 includeModules 选定。
+    // 必须在 game.init（spine WASM 实例化 + spine-define patch）之前写入全局，供 spine-instantiate-dynamic 读取。
+    (globalThis as any)._CC_SPINE_VERSION = features.includes('spine-4.2') ? '4.2' : '3.8';
     cc.physics.selector.runInEditor = true;
     await cc.game.init(config);
 
@@ -145,5 +148,56 @@ export async function startup(options: {
             operation: DecoratorService.Operation,
             engine: DecoratorService.Engine,
         });
+    }
+
+    await setupBrowserInvokeChannel(serverURL);
+}
+
+/**
+ * 建立主进程 → 浏览器场景的反向调用通道。
+ *
+ * web 预览下主进程无法通过 RPC 直接调浏览器 service（浏览器是 setWebTransport 客户端、未 register），
+ * 改用 socket.io：主进程 emit('scene:invoke', {module, method, args}) → 这里派发到对应场景 service。
+ * 放在场景 bundle 里（而非某个宿主页如 scene-editor.ejs），保证 cocos-cli 预览与 PinK 等所有宿主都生效；
+ * socket.io 客户端从服务端托管的 /socket.io/socket.io.js 动态加载，不依赖宿主页。
+ */
+async function setupBrowserInvokeChannel(serverURL: string) {
+    try {
+        await new Promise<void>((resolve) => {
+            if ((globalThis as any).io) {
+                resolve();
+                return;
+            }
+            const s = document.createElement('script');
+            s.src = `${serverURL}/socket.io/socket.io.js`;
+            s.onload = () => resolve();
+            s.onerror = () => resolve();
+            document.head.appendChild(s);
+        });
+        const io = (globalThis as any).io;
+        if (!io) {
+            console.warn('[engine-bootstrap] socket.io client unavailable, skip browser-invoke channel');
+            return;
+        }
+        const socket = io(serverURL);
+        const invoke = (module: string, method: string, args?: any[]) => {
+            try {
+                const svc = (DecoratorService as any)[module];
+                if (svc && typeof svc[method] === 'function') {
+                    svc[method](...(args || []));
+                }
+            } catch (e) {
+                console.warn('[scene:invoke] failed:', e);
+            }
+        };
+        socket.on('scene:invoke', (msg: { module?: string; method?: string; args?: any[] }) => {
+            if (msg && msg.module && msg.method) {
+                invoke(msg.module, msg.method, msg.args);
+            }
+        });
+        // 连接建立时同步一次设计分辨率（首次进入 / 断线重连时补齐错过的变更）
+        socket.on('connect', () => invoke('Engine', 'syncDesignResolution', []));
+    } catch (e) {
+        console.warn('[engine-bootstrap] setup browser-invoke channel failed:', e);
     }
 }

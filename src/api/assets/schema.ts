@@ -171,7 +171,7 @@ export const SchemaSerializedAssetProperty: z.ZodType<any> = z.lazy(() => z.obje
     readonly: z.boolean().optional().describe('Whether property is read-only'), // 是否只读
     visible: z.boolean().optional().describe('Whether property is visible'), // 是否可见
     isArray: z.boolean().optional().describe('Whether property value is an array'), // 是否数组
-    enumList: z.array(z.any()).optional().describe('Enum option list'), // 枚举选项列表
+    enumList: z.array(z.unknown()).optional().describe('Enum option list'), // 枚举选项列表
     optionalTypes: z.array(z.string()).optional().describe('Optional concrete types for variable type properties'), // 可变类型的可选类型列表
     elementTypeData: z.lazy(() => SchemaSerializedAssetProperty).optional().describe('Default dump data for array elements'), // 数组元素默认 dump
 }).passthrough().describe('Creator-compatible serialized asset IProperty dump'));
@@ -342,6 +342,9 @@ export type TUpdateUserDataOptions = z.infer<typeof SchemaUpdateUserDataOptions>
 export type TUserDataHandler = z.infer<typeof SchemaUserDataHandler>;
 
 // Update Asset User Data related Schema // Update Asset User Data 相关 Schema
+export const SchemaUpdateAssetUserData = z.record(z.string(), z.any()).describe('Complete asset userData object to replace the existing userData'); // 用于整体替换现有 userData 的完整资源 userData 对象
+export type TUpdateAssetUserData = z.infer<typeof SchemaUpdateAssetUserData>;
+
 export const SchemaUpdateAssetUserDataPath = z.string().min(1).describe('User data path, separated by dots, e.g. "texture.wrapMode"'); // 用户数据路径，使用点号分隔，如 "texture.wrapMode"
 export type TUpdateAssetUserDataPath = z.infer<typeof SchemaUpdateAssetUserDataPath>;
 
@@ -401,7 +404,6 @@ export const SchemaAssetPropertySchema: z.ZodType<any> = z.lazy(() => z.object({
     order: z.number().optional().describe('Display order'), // 展示顺序
     properties: z.record(z.string(), SchemaAssetPropertySchema).optional().describe('Nested object properties'), // 嵌套对象属性
     items: z.union([SchemaAssetPropertySchema, z.array(SchemaAssetPropertySchema)]).optional().describe('Array item schema'), // 数组元素 schema
-    raw: z.any().optional().describe('Original legacy userDataConfig item for debugging only'), // 原始旧配置，仅用于调试
 }).describe('Standardized asset import property schema')); // 标准化资源导入属性 schema
 
 export const SchemaAssetPropertySchemaResult = z.record(z.string(), SchemaAssetPropertySchema).describe('Asset import property schema map, key is property name'); // 资源导入属性 schema 映射

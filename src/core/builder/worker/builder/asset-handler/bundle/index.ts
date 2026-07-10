@@ -147,6 +147,7 @@ export class BundleManager extends BuildTaskBase implements IBundleManager {
      */
     static async initStaticBundleConfig() {
         const bundleConfig: Record<string, CustomBundleConfig> = (await builderConfig.getProject('bundleConfig.custom')) || {};
+        const platformConfigs = pluginManager.queryBundleConfig();
         if (!bundleConfig.default) {
             bundleConfig.default = DefaultBundleConfig;
         }
@@ -155,7 +156,11 @@ export class BundleManager extends BuildTaskBase implements IBundleManager {
             const configs = bundleConfig[ID].configs;
             res[ID] = {};
             Object.keys(configs).forEach((platformType) => {
-                const platformOption = transformPlatformSettings(configs[platformType as BundlePlatformType], pluginManager.bundleConfigs);
+                if (!platformConfigs[platformType]) {
+                    // 平台可能被关闭，这里需要容错
+                    return;
+                }
+                const platformOption = transformPlatformSettings(configs[platformType as BundlePlatformType], platformConfigs[platformType].platformConfigs);
                 Object.assign(res[ID], platformOption);
             });
         });
@@ -471,7 +476,14 @@ export class BundleManager extends BuildTaskBase implements IBundleManager {
     private async initBundleRootAssets() {
         this.updateProcess('Init bundle root assets start...');
         if (this.bundleMap[INTERNAL]) {
-            const internalAssets = await queryPreloadAssetList(this.options.includeModules, this.options.engineInfo.typescript.path);
+            const enginePath = this.options.engineInfo.typescript.path;
+            // 预览用完整引擎，会初始化所有子系统（例如即便项目只用 2D 物理，3D PhysicsSystem 仍会构造并
+            // 加载其默认材质 default-physics-material）。因此预览下内置资源不按 includeModules 裁剪，
+            // 取「全部」feature 的 dependentAssets，与场景编辑器 Engine.queryInternalAssetList / 编辑器内置包
+            // 行为一致；否则会漏掉未选模块的内置资源，运行时报 "Failed to load builtinMaterial"。
+            const internalAssets = this.options.preview
+                ? await queryAllPreloadAssetList(enginePath)
+                : await queryPreloadAssetList(this.options.includeModules, enginePath);
             // 添加引擎依赖的预加载内置资源/脚本到 internal 包内
             console.debug(`Query preload assets/scripts from cc.config.json`);
             internalAssets.forEach((uuid) => {
@@ -939,6 +951,17 @@ async function queryPreloadAssetList(features: string[], enginePath: string) {
     preloadAssets.length = 0;
     traversalDependencies(features, featuresInJson);
     return Array.from(new Set(preloadAssets));
+}
+
+/**
+ * 查询「全部」内置预加载资源（不按 includeModules 裁剪）。
+ * 预览使用完整引擎，任何子系统都可能初始化并加载其内置资源，需保证全部可用，
+ * 与场景编辑器 Engine.queryInternalAssetList 行为一致。
+ */
+async function queryAllPreloadAssetList(enginePath: string) {
+    const ccConfigJson = await readJSON(join(enginePath, 'cc.config.json'));
+    const featureNames = Object.keys(ccConfigJson.features || {});
+    return queryPreloadAssetList(featureNames, enginePath);
 }
 
 /**
