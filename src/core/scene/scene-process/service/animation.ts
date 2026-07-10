@@ -562,6 +562,8 @@ export class AnimationService extends BaseService<Record<string, any>> implement
         const session = requireAnimationSession(this._session);
         const state = await this._getAnimationState(session.clipUuid);
         const rootNode = this._getSessionRootNode();
+        const propertyMetadataContext = createAnimationPropertyCurveMetadataContext(rootNode);
+        const savedSnapshot = captureAnimationClipSnapshot(state.clip, propertyMetadataContext);
         ensureClipEvents(state.clip);
         this._markSelfSavedClipRefresh(session.clipUuid);
         let saved = false;
@@ -576,9 +578,11 @@ export class AnimationService extends BaseService<Record<string, any>> implement
             throw error;
         }
         if (saved) {
+            await this._restoreCurrentClipAfterSelfSave(session.clipUuid, state.clip, savedSnapshot, propertyMetadataContext);
+            const currentState = await this._getAnimationState(session.clipUuid);
             const animComp = queryAnimationComponent(rootNode);
             if (animComp instanceof Animation) {
-                rebindAnimationComponentClip(animComp, state.clip);
+                rebindAnimationComponentClip(animComp, currentState.clip);
             }
             this._markSelfSavedClipRefresh(session.clipUuid);
             if (options.saveScene === true) {
@@ -663,6 +667,26 @@ export class AnimationService extends BaseService<Record<string, any>> implement
         await this._restoreClipSnapshotWithStateRecreation(uuid, clip, snapshot, true);
         await this.setTime({ time: this._curEditTime });
         this._broadcastClipChanged('undo-redo');
+    }
+
+    private async _restoreCurrentClipAfterSelfSave(
+        uuid: string,
+        clip: AnimationClip,
+        snapshot: IAnimationClipSnapshot,
+        propertyMetadataContext: ReturnType<typeof createAnimationPropertyCurveMetadataContext>,
+    ): Promise<void> {
+        const currentState = this._animationStates.get(uuid);
+        if (!currentState || currentState.clip !== clip) {
+            return;
+        }
+
+        const currentSnapshot = captureAnimationClipSnapshot(clip, propertyMetadataContext);
+        if (animationClipSnapshotsEqual(currentSnapshot, snapshot)) {
+            return;
+        }
+
+        await this._restoreClipSnapshotWithStateRecreation(uuid, clip, snapshot, true);
+        await this.setTime({ time: this._curEditTime });
     }
 
     private async _restoreClipSnapshotWithStateRecreation(
