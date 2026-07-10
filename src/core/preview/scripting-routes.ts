@@ -3,6 +3,12 @@ import path, { join } from 'path';
 import { pathExists, stat, readFile } from 'fs-extra';
 import { GlobalPaths } from '../../global';
 import { readFileSync } from 'fs';
+import {
+    deriveGraphicsConfigFromCustomPipeline,
+    hasOwnConfigKey,
+    mergeGraphicsConfigWithModules,
+    normalizeIncludeModulesWithGraphics,
+} from '../engine/graphics-config';
 
 function sendQuickPackChunk(res: Response, filePath: string): void {
     // QuickPack may emit chunks under project temp paths used by smoke workspaces.
@@ -285,14 +291,25 @@ export const scriptingRoutes = [
                     const engineCfg = json?.engine;
                     if (engineCfg) {
                         // 与 Engine.syncConfig 的解析一致：优先 engine.includeModules，
-                        // 否则取选中的模块配置 engine.configs[globalConfigKey].includeModules。
-                        let disk = engineCfg.includeModules;
-                        if (!disk && engineCfg.configs) {
+                        // 否则取选中的模块配置 engine.configs[globalConfigKey].includeModules，
+                        // 最后把 Graphics 兼容配置规范化为构建/预览实际消费的模块列表。
+                        let diskModules = Array.isArray(engineCfg.includeModules)
+                            ? engineCfg.includeModules
+                            : undefined;
+                        if (!diskModules && engineCfg.configs) {
                             const key = engineCfg.globalConfigKey || Object.keys(engineCfg.configs)[0];
-                            disk = engineCfg.configs?.[key]?.includeModules;
+                            const selectedModules = engineCfg.configs?.[key]?.includeModules;
+                            diskModules = Array.isArray(selectedModules) ? selectedModules : undefined;
                         }
-                        if (Array.isArray(disk)) {
-                            modules = disk;
+                        const baseModules = diskModules ?? modules;
+                        if (hasOwnConfigKey(engineCfg, 'graphics')) {
+                            const graphics = mergeGraphicsConfigWithModules(baseModules, engineCfg.graphics);
+                            modules = normalizeIncludeModulesWithGraphics(baseModules, graphics);
+                        } else if (hasOwnConfigKey(engineCfg, 'customPipeline')) {
+                            const graphics = deriveGraphicsConfigFromCustomPipeline(engineCfg.customPipeline, baseModules);
+                            modules = normalizeIncludeModulesWithGraphics(baseModules, graphics);
+                        } else if (diskModules) {
+                            modules = diskModules;
                         }
                     }
                 }

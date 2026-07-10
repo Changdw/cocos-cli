@@ -37,6 +37,10 @@ function tryFindNode(nodes: ICocosConfigurationNode[], id: string): ICocosConfig
     return nodes.find((item) => item.id === id);
 }
 
+function countPropertyOccurrences(nodes: ICocosConfigurationNode[], key: string): number {
+    return nodes.filter((node) => Object.prototype.hasOwnProperty.call(node.properties, key)).length;
+}
+
 async function loadFreshRuntime(): Promise<IMetadataRuntime> {
     jest.resetModules();
     try {
@@ -135,6 +139,31 @@ describe('configuration metadata', () => {
         expect(macroCustomItemSchema?.type).toBe('object');
         expect(macroCustomItemSchema?.properties?.key?.type).toBe('string');
         expect(macroCustomItemSchema?.properties?.value?.type).toBe('boolean');
+    });
+
+    it('should expose Graphics metadata without duplicating CUSTOM_PIPELINE_NAME', async () => {
+        const runtime = await loadFreshRuntime();
+        await runtime.project.open(TestGlobalEnv.projectRoot);
+        await runtime.Engine.init(TestGlobalEnv.engineRoot);
+
+        const nodes = await runtime.getMetadata();
+        const engineGraphicsNode = findNode(nodes, 'engine.graphics');
+        const engineRenderingNode = findNode(nodes, 'engine.rendering');
+        const engineMacroNode = findNode(nodes, 'engine.macroConfig');
+        const pipelineProperty = findProperty(engineGraphicsNode, 'engine.graphics.pipeline');
+        const pipelineNameProperty = findProperty(engineGraphicsNode, 'engine.macroConfig.CUSTOM_PIPELINE_NAME');
+        const postProcessProperty = findProperty(engineGraphicsNode, 'engine.graphics.custom-pipeline-post-process');
+
+        expect(pipelineProperty.type).toBe('string');
+        expect(pipelineProperty.enum).toEqual(['custom-pipeline', 'legacy-pipeline']);
+        expect(pipelineProperty.default).toBe(runtime.Engine.getConfig(true).graphics?.pipeline);
+        expect(pipelineNameProperty.type).toBe('string');
+        expect(pipelineNameProperty.default).toBe(runtime.Engine.getConfig(true).macroConfig?.CUSTOM_PIPELINE_NAME);
+        expect(postProcessProperty.type).toBe('boolean');
+        expect(postProcessProperty.default).toBe(runtime.Engine.getConfig(true).graphics?.['custom-pipeline-post-process']);
+        expect(engineMacroNode.properties['engine.macroConfig.CUSTOM_PIPELINE_NAME']).toBeUndefined();
+        expect(engineRenderingNode.properties['engine.customPipeline']).toBeUndefined();
+        expect(countPropertyOccurrences(nodes, 'engine.macroConfig.CUSTOM_PIPELINE_NAME')).toBe(1);
     });
 
     it('should only expose builder platform metadata after the corresponding platform plugin has registered', async () => {

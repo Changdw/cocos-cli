@@ -2850,6 +2850,7 @@ export declare interface IEngineCachePaths {
 export declare interface IEngineConfig extends IEngineModuleConfig {
     physicsConfig: IPhysicsConfig_2;
     macroConfig?: Record<string, string | number | boolean>;
+    graphics?: IEngineGraphicsConfig;
     sortingLayers: { id: number, name: string, value: number }[];
     customLayers: { name: string, value: number }[];
     renderPipeline?: string;
@@ -2873,6 +2874,11 @@ export declare interface IEngineFeatureQuery {
     getUnitsOfFeatures(features: string[]): string[];
     filterEngineModules(features: string[]): string[];
 }
+export declare interface IEngineGraphicsConfig {
+    pipeline?: IEngineGraphicsPipeline;
+    'custom-pipeline-post-process'?: boolean;
+}
+export declare type IEngineGraphicsPipeline = 'custom-pipeline' | 'legacy-pipeline';
 export declare interface IEngineModuleConfig {
     includeModules: string[];
     flags?: IFlags;
@@ -7242,6 +7248,7 @@ export declare interface IDisplayModuleItem extends IFeatureItem {
 export declare interface IEngineConfig extends IEngineModuleConfig {
     physicsConfig: IPhysicsConfig;
     macroConfig?: Record<string, string | number | boolean>;
+    graphics?: IEngineGraphicsConfig;
     sortingLayers: { id: number, name: string, value: number }[];
     customLayers: { name: string, value: number }[];
     renderPipeline?: string;
@@ -7253,6 +7260,11 @@ export declare interface IEngineConfig extends IEngineModuleConfig {
     splashScreen: ISplashSetting;
     downloadMaxConcurrency: number;
 }
+export declare interface IEngineGraphicsConfig {
+    pipeline?: IEngineGraphicsPipeline;
+    'custom-pipeline-post-process'?: boolean;
+}
+export declare type IEngineGraphicsPipeline = 'custom-pipeline' | 'legacy-pipeline';
 export declare interface IEngineModuleConfig {
     includeModules: string[];
     flags?: IFlags;
@@ -7814,6 +7826,8 @@ export declare namespace Engine {
         IDesignResolution,
         IEngineModuleConfig,
         IEngineModuleProjectConfig,
+        IEngineGraphicsPipeline,
+        IEngineGraphicsConfig,
         IEngineConfig,
         IEngineProjectConfig,
         IInitEngineInfo,
@@ -8199,6 +8213,7 @@ export declare interface IDisplayModuleItem extends IFeatureItem {
 export declare interface IEngineConfig extends IEngineModuleConfig {
     physicsConfig: IPhysicsConfig;
     macroConfig?: Record<string, string | number | boolean>;
+    graphics?: IEngineGraphicsConfig;
     sortingLayers: { id: number, name: string, value: number }[];
     customLayers: { name: string, value: number }[];
     renderPipeline?: string;
@@ -8210,6 +8225,11 @@ export declare interface IEngineConfig extends IEngineModuleConfig {
     splashScreen: ISplashSetting;
     downloadMaxConcurrency: number;
 }
+export declare interface IEngineGraphicsConfig {
+    pipeline?: IEngineGraphicsPipeline;
+    'custom-pipeline-post-process'?: boolean;
+}
+export declare type IEngineGraphicsPipeline = 'custom-pipeline' | 'legacy-pipeline';
 export declare interface IEngineModuleConfig {
     includeModules: string[];
     flags?: IFlags;

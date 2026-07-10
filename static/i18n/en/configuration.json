@@ -217,6 +217,24 @@
         "description": "Whether deprecated features are disabled"
       }
     },
+    "graphics": {
+      "title": "Graphics",
+      "pipeline": {
+        "title": "Render Pipeline",
+        "options": {
+          "custom": "Render Pipeline (New)",
+          "legacy": "Render Pipeline (Legacy)"
+        }
+      },
+      "pipelineName": {
+        "title": "Pipeline Name",
+        "description": "Custom render pipeline name, backed by engine.macroConfig.CUSTOM_PIPELINE_NAME."
+      },
+      "customPipelinePostProcess": {
+        "title": "Post Process Module",
+        "description": "Whether to enable the custom pipeline post process module."
+      }
+    },
     "rendering": {
       "title": "Rendering",
       "renderPipeline": {

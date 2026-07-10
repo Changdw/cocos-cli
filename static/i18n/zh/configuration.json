@@ -217,6 +217,24 @@
         "description": "是否禁用废弃特性"
       }
     },
+    "graphics": {
+      "title": "图形",
+      "pipeline": {
+        "title": "渲染管线",
+        "options": {
+          "custom": "Render Pipeline (New)",
+          "legacy": "Render Pipeline (Legacy)"
+        }
+      },
+      "pipelineName": {
+        "title": "Pipeline Name",
+        "description": "自定义渲染管线名称，对应 engine.macroConfig.CUSTOM_PIPELINE_NAME。"
+      },
+      "customPipelinePostProcess": {
+        "title": "Post Process Module",
+        "description": "是否启用自定义管线后处理模块。"
+      }
+    },
     "rendering": {
       "title": "渲染",
       "renderPipeline": {

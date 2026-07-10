@@ -100,9 +100,17 @@ export interface IEngineModuleProjectConfig extends IEngineModuleConfig {
     name: string;
 }
 
+export type IEngineGraphicsPipeline = 'custom-pipeline' | 'legacy-pipeline';
+
+export interface IEngineGraphicsConfig {
+    pipeline?: IEngineGraphicsPipeline;
+    'custom-pipeline-post-process'?: boolean;
+}
+
 export interface IEngineConfig extends IEngineModuleConfig {
     physicsConfig: IPhysicsConfig;
     macroConfig?: Record<string, string | number | boolean>;
+    graphics?: IEngineGraphicsConfig;
     sortingLayers: { id: number, name: string, value: number }[];
     customLayers: { name: string, value: number }[];
     renderPipeline?: string;
