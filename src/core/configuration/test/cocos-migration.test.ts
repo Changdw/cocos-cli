@@ -1,7 +1,6 @@
 import { CocosMigrationManager, CocosMigration } from '../migration';
 import { getMigrationList } from '../migration/register-migration';
 import type { IMigrationTarget } from '../migration';
-import { getMigrationList } from '../migration/register-migration';
 
 jest.mock('../migration/cocos-migration', () => ({
     CocosMigration: {
