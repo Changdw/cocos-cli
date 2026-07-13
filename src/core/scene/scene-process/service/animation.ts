@@ -445,9 +445,10 @@ export class AnimationService extends BaseService<Record<string, any>> implement
 
         const rootNode = this._getSessionRootNode();
         const state = await this._getAnimationState(session.clipUuid);
+        const clip = state.clip;
         const propertyMetadataContext = createAnimationPropertyCurveMetadataContext(rootNode);
         const shouldRecordUndo = options.recordUndo !== false;
-        const before = captureAnimationClipSnapshot(state.clip, propertyMetadataContext);
+        const before = captureAnimationClipSnapshot(clip, propertyMetadataContext);
         const appliedOperations: IAnimationOperation[] = [];
         let shouldSyncDuration = false;
         let shouldRestoreOnFailure = false;
@@ -455,7 +456,7 @@ export class AnimationService extends BaseService<Record<string, any>> implement
             const inputFailure = validateAnimationOperation(inputOperation, session.clipUuid);
             if (inputFailure) {
                 if (shouldRestoreOnFailure) {
-                    await this._restoreFailedOperationSnapshot(state.clip, before, rootNode);
+                    await this._restoreFailedOperationSnapshot(clip, before, rootNode);
                 }
                 return inputFailure;
             }
@@ -466,7 +467,7 @@ export class AnimationService extends BaseService<Record<string, any>> implement
                     reason: `Method '${inputOperation.type}' is not allowed in skeleton animation.`,
                 } as IAnimationOperationResult;
                 if (shouldRestoreOnFailure) {
-                    await this._restoreFailedOperationSnapshot(state.clip, before, rootNode);
+                    await this._restoreFailedOperationSnapshot(clip, before, rootNode);
                 }
                 return skeletonFailure;
             }
@@ -479,7 +480,7 @@ export class AnimationService extends BaseService<Record<string, any>> implement
             });
             if (isAnimationOperationResult(normalized)) {
                 if (shouldRestoreOnFailure) {
-                    await this._restoreFailedOperationSnapshot(state.clip, before, rootNode);
+                    await this._restoreFailedOperationSnapshot(clip, before, rootNode);
                 }
                 return normalized;
             }
@@ -488,7 +489,7 @@ export class AnimationService extends BaseService<Record<string, any>> implement
             const failure = validateAnimationOperation(operation, session.clipUuid);
             if (failure) {
                 if (shouldRestoreOnFailure) {
-                    await this._restoreFailedOperationSnapshot(state.clip, before, rootNode);
+                    await this._restoreFailedOperationSnapshot(clip, before, rootNode);
                 }
                 return failure;
             }
@@ -496,14 +497,15 @@ export class AnimationService extends BaseService<Record<string, any>> implement
             let result = false;
             shouldRestoreOnFailure = true;
             try {
-                result = await applyClipOperation(state, operation, {
+                await this._resetAnimationStatePreservingClip(session.clipUuid, clip, propertyMetadataContext);
+                result = await applyClipOperation(clip, operation, {
                     rootNode,
                     rootPath: session.rootPath,
                     queryPropertyMetadata: propertyMetadataContext.queryPropertyMetadata,
                 });
             } catch (error) {
                 const normalizedError = error instanceof Error ? error : new Error(String(error));
-                await this._restoreFailedOperationSnapshot(state.clip, before, rootNode);
+                await this._restoreFailedOperationSnapshot(clip, before, rootNode);
                 return {
                     state: 'failure',
                     result: false,
@@ -516,7 +518,7 @@ export class AnimationService extends BaseService<Record<string, any>> implement
                     result: false,
                     reason: `call method ${operation.type} failed`,
                 } as IAnimationOperationResult;
-                await this._restoreFailedOperationSnapshot(state.clip, before, rootNode);
+                await this._restoreFailedOperationSnapshot(clip, before, rootNode);
                 return failureResult;
             }
             appliedOperations.push(operation);
@@ -524,12 +526,12 @@ export class AnimationService extends BaseService<Record<string, any>> implement
         }
 
         if (shouldSyncDuration) {
-            syncAnimationClipDuration(state.clip);
+            syncAnimationClipDuration(clip);
         }
-        this._animationStates.reset(session.clipUuid);
-        this._animationStates.create(session.clipUuid, state.clip);
+        await this._resetAnimationStatePreservingClip(session.clipUuid, clip, propertyMetadataContext);
+        this._animationStates.create(session.clipUuid, clip);
         await this.setTime({ time: this._curEditTime });
-        const after = shouldRecordUndo ? captureAnimationClipSnapshot(state.clip, propertyMetadataContext) : null;
+        const after = shouldRecordUndo ? captureAnimationClipSnapshot(clip, propertyMetadataContext) : null;
         if (before && after && !animationClipSnapshotsEqual(before, after)) {
             const undoCommand = new AnimationClipSnapshotCommand({
                 clipUuid: session.clipUuid,
@@ -567,6 +569,8 @@ export class AnimationService extends BaseService<Record<string, any>> implement
         const session = requireAnimationSession(this._session);
         const state = await this._getAnimationState(session.clipUuid);
         const rootNode = this._getSessionRootNode();
+        const propertyMetadataContext = createAnimationPropertyCurveMetadataContext(rootNode);
+        const savedSnapshot = captureAnimationClipSnapshot(state.clip, propertyMetadataContext);
         ensureClipEvents(state.clip);
         this._markSelfSavedClipRefresh(session.clipUuid);
         let saved = false;
@@ -581,9 +585,11 @@ export class AnimationService extends BaseService<Record<string, any>> implement
             throw error;
         }
         if (saved) {
+            await this._restoreCurrentClipAfterSelfSave(session.clipUuid, state.clip, savedSnapshot, propertyMetadataContext);
+            const currentState = await this._getAnimationState(session.clipUuid);
             const animComp = queryAnimationComponent(rootNode);
             if (animComp instanceof Animation) {
-                rebindAnimationComponentClip(animComp, state.clip);
+                rebindAnimationComponentClip(animComp, currentState.clip);
             }
             this._markSelfSavedClipRefresh(session.clipUuid);
             if (options.saveScene === true) {
@@ -646,6 +652,23 @@ export class AnimationService extends BaseService<Record<string, any>> implement
         await this._playback.stopCurrent();
     }
 
+    private async _resetAnimationStatePreservingClip(
+        uuid: string,
+        clip: AnimationClip,
+        options = createAnimationPropertyCurveMetadataContext(this._getSessionRootNode()),
+    ): Promise<void> {
+        if (!this._animationStates.get(uuid)) {
+            return;
+        }
+
+        // AnimationState.destroy() may touch curves it initialized. Preserve the
+        // current clip data around reset so state cleanup cannot wipe existing or
+        // newly edited keyframes.
+        const snapshot = captureAnimationClipSnapshot(clip, options);
+        this._animationStates.reset(uuid);
+        await restoreAnimationClipSnapshot(clip, snapshot);
+    }
+
     private async _restoreFailedOperationSnapshot(clip: AnimationClip, snapshot: IAnimationClipSnapshot, _rootNode: Node): Promise<void> {
         const uuid = clipUuid(clip);
         try {
@@ -668,6 +691,26 @@ export class AnimationService extends BaseService<Record<string, any>> implement
         await this._restoreClipSnapshotWithStateRecreation(uuid, clip, snapshot, true);
         await this.setTime({ time: this._curEditTime });
         this._broadcastClipChanged('undo-redo');
+    }
+
+    private async _restoreCurrentClipAfterSelfSave(
+        uuid: string,
+        clip: AnimationClip,
+        snapshot: IAnimationClipSnapshot,
+        propertyMetadataContext: ReturnType<typeof createAnimationPropertyCurveMetadataContext>,
+    ): Promise<void> {
+        const currentState = this._animationStates.get(uuid);
+        if (!currentState || currentState.clip !== clip) {
+            return;
+        }
+
+        const currentSnapshot = captureAnimationClipSnapshot(clip, propertyMetadataContext);
+        if (animationClipSnapshotsEqual(currentSnapshot, snapshot)) {
+            return;
+        }
+
+        await this._restoreClipSnapshotWithStateRecreation(uuid, clip, snapshot, true);
+        await this.setTime({ time: this._curEditTime });
     }
 
     private async _restoreClipSnapshotWithStateRecreation(

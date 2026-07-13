@@ -277,6 +277,63 @@ describe('AnimationService enter', () => {
         expect(currentClip.events).toEqual([]);
     });
 
+    it('restores the current clip snapshot when self save mutates the editing clip', async () => {
+        const { Animation, AnimationClip } = require('cc');
+        const service = new AnimationService() as any;
+        const currentClip = new AnimationClip();
+        currentClip._uuid = 'clip-uuid';
+        currentClip.name = 'Current';
+        currentClip.events = [{ frame: 0, func: 'before-save', params: ['ok'] }];
+        const animComp = new Animation();
+        animComp.clips = [currentClip];
+        animComp.defaultClip = currentClip;
+        const rootNode = {
+            uuid: 'root-uuid',
+            getComponent: jest.fn((ctor) => ctor === Animation ? animComp : null),
+        };
+
+        service._session = {
+            clipUuid: 'clip-uuid',
+            rootUuid: rootNode.uuid,
+            rootPath: 'Canvas/AnimatedRoot',
+            undoBaseline: { commandId: null, generation: 0 },
+            globalDirtyAtEnter: false,
+        };
+        service._getSessionRootNode = jest.fn(() => rootNode);
+        service._getAnimationState = jest.fn(async () => ({ clip: currentClip }));
+        service._animationStates.get = jest.fn(() => ({ clip: currentClip }));
+        service._animationStates.reset = jest.fn();
+        service._animationStates.create = jest.fn();
+        service._restoreClipSnapshotWithStateRecreation = jest.fn(async (uuid: string, clip: any, snapshot: any) => {
+            service._animationStates.reset(uuid);
+            const restoredEvents = snapshot.events.map((event: any) => ({
+                frame: event.frame,
+                func: event.func,
+                params: event.params,
+            }));
+            clip.events = restoredEvents;
+            clip._events = restoredEvents;
+            service._animationStates.create(uuid, clip);
+        });
+        service.setTime = jest.fn(async () => true);
+        saveAnimationServiceClipMock.mockImplementationOnce(async () => {
+            currentClip.events = [];
+            return true;
+        });
+
+        await expect(service.save()).resolves.toBe(true);
+
+        expect(service._restoreClipSnapshotWithStateRecreation).toHaveBeenCalledWith('clip-uuid', currentClip, expect.objectContaining({
+            events: [{ frame: 0, func: 'before-save', params: ['ok'] }],
+        }), true);
+        expect(service._animationStates.reset).toHaveBeenCalledWith('clip-uuid');
+        expect(service._animationStates.create).toHaveBeenCalledWith('clip-uuid', currentClip);
+        expect(service.setTime).toHaveBeenCalledWith({ time: 0 });
+        expect(animComp.clips).toEqual([currentClip]);
+        expect(animComp.defaultClip).toBe(currentClip);
+        expect(currentClip.events).toEqual([{ frame: 0, func: 'before-save', params: ['ok'] }]);
+    });
+
     it('ignores a current clip refresh that started before saving the current clip', async () => {
         const { Animation, AnimationClip, assetManager } = require('cc');
         const service = new AnimationService() as any;

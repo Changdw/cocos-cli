@@ -1,7 +1,7 @@
 import fse from 'fs-extra';
 import { existsSync, readdirSync, statSync } from 'fs';
 import { EngineInfo } from './@types/public';
-import type { IEngineConfig, IEngineProjectConfig, IInitEngineInfo } from './@types/config';
+import type { IEngineConfig, IEngineProjectConfig, IInitEngineInfo, IJointTextureLayoutPreviewResult } from './@types/config';
 import { IModuleConfig, ModuleRenderConfig } from './@types/modules';
 import { join } from 'path';
 import { cloneDeep, merge } from 'lodash';
@@ -21,6 +21,10 @@ import {
     mergeGraphicsConfigWithModules,
     normalizeIncludeModulesWithGraphics,
 } from './graphics-config';
+import {
+    queryJointTextureLayoutPreview as createJointTextureLayoutPreview,
+    resolveCustomJointTextureLayouts,
+} from './joint-texture-layout';
 
 /**
  * 整合 engine 的一些编译、配置读取等功能
@@ -33,6 +37,7 @@ export interface IEngine {
     initEngine(info: IInitEngineInfo): Promise<this>;
     queryRenderConfig(): ModuleRenderConfig;
     queryLocalizedRenderConfig(): ModuleRenderConfig;
+    queryJointTextureLayoutPreview(): Promise<IJointTextureLayoutPreviewResult>;
     queryLayerBuiltin(): Promise<{ name: string; value: number }[]>;
     querySortingLayerBuiltin(): Promise<ReadonlyArray<{ id: number; name: string; value: number }>>;
 }
@@ -414,9 +419,10 @@ class EngineManager implements IEngine {
         await this.initEditorExtensions();
 
         const modules = this.getConfig().includeModules || [];
-        const { physicsConfig, macroConfig, customLayers, sortingLayers, highQuality, renderPipeline } = this.getConfig();
+        const { physicsConfig, macroConfig, customLayers, sortingLayers, highQuality, renderPipeline, customJointTextureLayouts } = this.getConfig();
         const bundles = assetManager.queryAssets({ isBundle: true }).map((item: any) => item.meta?.userData?.bundleName ?? item.name);
         const builtinAssets = info.serverURL && await this.queryInternalAssetList(this.getInfo().typescript.path);
+        const resolvedCustomJointTextureLayouts = await resolveCustomJointTextureLayouts(customJointTextureLayouts);
         const defaultConfig = {
             debugMode: cc.debug.DebugMode.WARN,
             overrideSettings: {
@@ -443,6 +449,9 @@ class EngineManager implements IEngine {
                     renderMode: 3,
                     renderPipeline,
                     highQualityMode: highQuality,
+                },
+                animation: {
+                    customJointTextureLayouts: resolvedCustomJointTextureLayouts,
                 },
                 physics: {
                     ...physicsConfig,
@@ -490,9 +499,10 @@ class EngineManager implements IEngine {
     }
 
     async getGameConfig(serverURL: string, importBase: string, nativeBase: string, isPreview?: boolean) {
-        const { physicsConfig, macroConfig, customLayers, sortingLayers, highQuality, renderPipeline, customPipeline } = this.getConfig();
+        const { physicsConfig, macroConfig, customLayers, sortingLayers, highQuality, renderPipeline, customPipeline, customJointTextureLayouts } = this.getConfig();
         const bundles = assetManager.queryAssets({ isBundle: true }).map((item: any) => item.meta?.userData?.bundleName ?? item.name);
         const builtinAssets = serverURL && await this.queryInternalAssetList(this.getInfo().typescript.path);
+        const resolvedCustomJointTextureLayouts = await resolveCustomJointTextureLayouts(customJointTextureLayouts);
         return {
             debugMode: cc.debug.DebugMode.WARN,
             overrideSettings: {
@@ -522,6 +532,9 @@ class EngineManager implements IEngine {
                     customPipeline,
                     highQualityMode: highQuality,
                     ...(customPipeline ? { effectSettingsPath: `${serverURL}/scripting/engine/effect-settings` } : {}),
+                },
+                animation: {
+                    customJointTextureLayouts: resolvedCustomJointTextureLayouts,
                 },
                 physics: {
                     ...physicsConfig,
@@ -575,6 +588,11 @@ class EngineManager implements IEngine {
             throw new Error('Engine not init');
         }
         return getLocalizedEngineRenderConfig(this._info.typescript.path);
+    }
+
+    async queryJointTextureLayoutPreview(): Promise<IJointTextureLayoutPreviewResult> {
+        const { customJointTextureLayouts } = this.getConfig();
+        return createJointTextureLayoutPreview(customJointTextureLayouts);
     }
 
     async queryLayerBuiltin() {

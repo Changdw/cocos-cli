@@ -246,13 +246,48 @@ export function createEngineMetadataNodes(options: IEngineMetadataOptions): ICoc
                 minimum: 1,
                 title: 'i18n:configuration.engine.rendering.downloadMaxConcurrency.title',
             },
-            'engine.customJointTextureLayouts': {
-                type: 'array',
-                default: options.defaultConfig.customJointTextureLayouts,
-                title: 'i18n:configuration.engine.rendering.customJointTextureLayouts.title',
-                description: 'i18n:configuration.engine.rendering.customJointTextureLayouts.description',
-            },
         }, 6),
+
+        createNode('engine.jointTextureLayout', 'i18n:configuration.engine.jointTextureLayout.title', 'engine', {
+            'engine.customJointTextureLayouts': arraySchema(objectSchema({
+                textureLength: {
+                    type: 'number',
+                    default: 0,
+                    minimum: 0,
+                    title: 'i18n:configuration.engine.jointTextureLayout.customJointTextureLayouts.textureLength.title',
+                    description: 'i18n:configuration.engine.jointTextureLayout.customJointTextureLayouts.textureLength.description',
+                },
+                contents: arraySchema(objectSchema({
+                    skeleton: {
+                        type: 'string',
+                        default: '',
+                        title: 'i18n:configuration.engine.jointTextureLayout.customJointTextureLayouts.contents.skeleton.title',
+                        description: 'i18n:configuration.engine.jointTextureLayout.customJointTextureLayouts.contents.skeleton.description',
+                    },
+                    clips: arraySchema({
+                        type: 'string',
+                        default: '',
+                        title: 'i18n:configuration.engine.jointTextureLayout.customJointTextureLayouts.contents.clips.itemTitle',
+                    }, {
+                        title: 'i18n:configuration.engine.jointTextureLayout.customJointTextureLayouts.contents.clips.title',
+                        description: 'i18n:configuration.engine.jointTextureLayout.customJointTextureLayouts.contents.clips.description',
+                    }),
+                }, {
+                    title: 'i18n:configuration.engine.jointTextureLayout.customJointTextureLayouts.contents.itemTitle',
+                    required: ['skeleton', 'clips'],
+                }), {
+                    title: 'i18n:configuration.engine.jointTextureLayout.customJointTextureLayouts.contents.title',
+                    description: 'i18n:configuration.engine.jointTextureLayout.customJointTextureLayouts.contents.description',
+                }),
+            }, {
+                title: 'i18n:configuration.engine.jointTextureLayout.customJointTextureLayouts.itemTitle',
+                required: ['textureLength', 'contents'],
+            }), {
+                default: options.defaultConfig.customJointTextureLayouts,
+                title: 'i18n:configuration.engine.jointTextureLayout.customJointTextureLayouts.title',
+                description: 'i18n:configuration.engine.jointTextureLayout.customJointTextureLayouts.description',
+            }),
+        }, 7),
 
         createNode('engine.macroConfig', 'i18n:configuration.engine.macroConfig.title', 'engine', {
             ...prefixProperties('engine.macroConfig', macroProperties),
@@ -273,7 +308,7 @@ export function createEngineMetadataNodes(options: IEngineMetadataOptions): ICoc
                 title: 'i18n:configuration.engine.macroConfig.macroCustom.title',
                 description: 'i18n:configuration.engine.macroConfig.macroCustom.description',
             }),
-        }, 7),
+        }, 8),
 
         createNode('engine.customLayers', 'i18n:configuration.engine.layers.customLayers.title', 'engine', {
             'engine.customLayers': {
@@ -282,7 +317,7 @@ export function createEngineMetadataNodes(options: IEngineMetadataOptions): ICoc
                 title: 'i18n:configuration.engine.layers.customLayers.title',
                 description: 'i18n:configuration.engine.layers.customLayers.description',
             },
-        }, 8),
+        }, 9),
 
         createNode('engine.sortingLayers', 'i18n:configuration.engine.layers.sortingLayers.title', 'engine', {
             'engine.sortingLayers': {
@@ -291,7 +326,7 @@ export function createEngineMetadataNodes(options: IEngineMetadataOptions): ICoc
                 title: 'i18n:configuration.engine.layers.sortingLayers.title',
                 description: 'i18n:configuration.engine.layers.sortingLayers.description',
             },
-        }, 9),
+        }, 10),
     ];
 }
 

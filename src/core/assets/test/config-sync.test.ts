@@ -8,9 +8,11 @@ interface IAssetConfigRuntime {
     configurationManager: typeof import('../../configuration').configurationManager;
     project: typeof import('../../project').default;
     Engine: typeof import('../../engine').Engine;
+    initAssetDB: typeof import('../index').initAssetDB;
     assetConfig: typeof import('../asset-config').default;
     assetDBManager: typeof import('../manager/asset-db').default;
     assetHandlerManager: typeof import('../manager/asset-handler').default;
+    scriptConfig: typeof import('../../scripting/shared/query-shared-settings').scriptConfig;
 }
 
 const configPath = join(TestGlobalEnv.projectRoot, 'cocos.config.json');
@@ -36,22 +38,39 @@ function writeProjectImportConfig(importConfig: Record<string, unknown>) {
     writeJSONSync(configPath, nextConfig, { spaces: 4 });
 }
 
+function writeProjectScriptConfig(scriptConfig: Record<string, unknown>) {
+    const nextConfig = JSON.parse(JSON.stringify(originalConfig));
+    nextConfig.script = {
+        ...nextConfig.script,
+        ...scriptConfig,
+    };
+    writeJSONSync(configPath, nextConfig, { spaces: 4 });
+}
+
+function waitForAsyncListeners(): Promise<void> {
+    return new Promise((resolve) => setImmediate(resolve));
+}
+
 async function loadFreshRuntime(): Promise<IAssetConfigRuntime> {
     jest.resetModules();
     const { configurationManager } = require('../../configuration') as typeof import('../../configuration');
     const project = (require('../../project') as typeof import('../../project')).default;
     const { Engine } = require('../../engine') as typeof import('../../engine');
+    const { initAssetDB } = require('../index') as typeof import('../index');
     const assetConfig = (require('../asset-config') as typeof import('../asset-config')).default;
     const assetDBManager = (require('../manager/asset-db') as typeof import('../manager/asset-db')).default;
     const assetHandlerManager = (require('../manager/asset-handler') as typeof import('../manager/asset-handler')).default;
+    const { scriptConfig } = require('../../scripting/shared/query-shared-settings') as typeof import('../../scripting/shared/query-shared-settings');
 
     return {
         configurationManager,
         project,
         Engine,
+        initAssetDB,
         assetConfig,
         assetDBManager,
         assetHandlerManager,
+        scriptConfig,
     };
 }
 
@@ -112,5 +131,60 @@ describe('asset import config sync', () => {
 
         expect(existsSync(configuredGuideFile)).toBe(true);
         expect(existsSync(legacyGuideFile)).toBe(false);
+    });
+
+    it('should sync project script sortingPlugin after script config registers', async () => {
+        const sortingPlugin = ['plugin-uuid-a', 'plugin-uuid-b'];
+        writeProjectScriptConfig({ sortingPlugin });
+
+        const runtime = await loadFreshRuntime();
+        await runtime.configurationManager.initialize(TestGlobalEnv.projectRoot);
+        await runtime.project.open(TestGlobalEnv.projectRoot);
+        await runtime.Engine.init(TestGlobalEnv.engineRoot);
+        await runtime.assetConfig.init();
+
+        expect(runtime.assetConfig.data.sortingPlugin).toEqual([]);
+
+        await runtime.scriptConfig.init();
+        await waitForAsyncListeners();
+
+        expect(runtime.assetConfig.data.sortingPlugin).toEqual(sortingPlugin);
+    });
+
+    it('should load script sortingPlugin when initializing asset-db without explicit scripting init', async () => {
+        const sortingPlugin = ['plugin-uuid-a', 'plugin-uuid-b'];
+        writeProjectScriptConfig({ sortingPlugin });
+
+        const runtime = await loadFreshRuntime();
+        await runtime.configurationManager.initialize(TestGlobalEnv.projectRoot);
+        await runtime.project.open(TestGlobalEnv.projectRoot);
+        await runtime.Engine.init(TestGlobalEnv.engineRoot);
+        await ensureDir(join(TestGlobalEnv.projectRoot, 'library'));
+        await runtime.initAssetDB();
+
+        expect(runtime.assetConfig.data.sortingPlugin).toEqual(sortingPlugin);
+    });
+
+    it('should keep runtime sortingPlugin in sync when configuration changes', async () => {
+        const runtime = await loadFreshRuntime();
+        await runtime.configurationManager.initialize(TestGlobalEnv.projectRoot);
+        await runtime.project.open(TestGlobalEnv.projectRoot);
+        await runtime.Engine.init(TestGlobalEnv.engineRoot);
+        await runtime.assetConfig.init();
+        await runtime.scriptConfig.init();
+
+        await runtime.configurationManager.set('script.sortingPlugin', ['plugin-uuid-c']);
+        await waitForAsyncListeners();
+
+        expect(runtime.assetConfig.data.sortingPlugin).toEqual(['plugin-uuid-c']);
+
+        await runtime.scriptConfig.setProject('sortingPlugin', ['plugin-uuid-d']);
+        await runtime.configurationManager.save(true);
+
+        expect(runtime.assetConfig.data.sortingPlugin).toEqual(['plugin-uuid-d']);
+
+        await runtime.configurationManager.remove('script.sortingPlugin');
+
+        expect(runtime.assetConfig.data.sortingPlugin).toEqual([]);
     });
 });

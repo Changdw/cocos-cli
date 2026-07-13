@@ -43,4 +43,13 @@ describe('cocos config schema', () => {
 
         expect(overwriteSettings.additionalProperties?.$ref).toBe('#/definitions/BundleConfigItem');
     });
+
+    it('allows script sortingPlugin as a UUID string array', () => {
+        const schema = generateSchema();
+        const scriptConfigRef = schema.properties.script.$ref;
+        const scriptConfig = resolveDefinition(schema, scriptConfigRef);
+
+        expect(scriptConfig.properties.sortingPlugin.type).toBe('array');
+        expect(scriptConfig.properties.sortingPlugin.items.type).toBe('string');
+    });
 });

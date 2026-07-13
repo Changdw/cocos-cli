@@ -2676,6 +2676,11 @@ export declare interface ICocosConfigurationPropertySchema {
     items?: ICocosConfigurationPropertySchema | ICocosConfigurationPropertySchema[];
     additionalProperties?: boolean | ICocosConfigurationPropertySchema;
     required?: string[];
+    ui?: 'asset-picker' | string;
+    assetType?: string;
+    valueField?: string;
+    displayFields?: string[];
+    query?: Record<string, unknown>;
 }
 export declare interface ICollisionMatrix {
     [x: string]: number;
@@ -3391,6 +3396,14 @@ export declare interface IRedirectInfo {
     type: string;
     uuid: string;
 }
+export declare interface IResolvedChunkContent {
+    skeleton: number;
+    clips: number[];
+}
+export declare interface IResolvedCustomJointTextureLayout {
+    textureLength: number;
+    contents: IResolvedChunkContent[];
+}
 export declare interface IScriptInfo {
     file: string;
     uuid: string;
@@ -3484,7 +3497,7 @@ export declare interface ISettings {
     };
     splashScreen?: ISplashSetting;
     animation: {
-        customJointTextureLayouts?: ICustomJointTextureLayout[];
+        customJointTextureLayouts?: IResolvedCustomJointTextureLayout[];
     };
     profiling?: {
         showFPS: boolean;
@@ -7133,6 +7146,11 @@ export declare interface ICocosConfigurationPropertySchema {
     items?: ICocosConfigurationPropertySchema | ICocosConfigurationPropertySchema[];
     additionalProperties?: boolean | ICocosConfigurationPropertySchema;
     required?: string[];
+    ui?: 'asset-picker' | string;
+    assetType?: string;
+    valueField?: string;
+    displayFields?: string[];
+    query?: Record<string, unknown>;
 }
 export declare interface IConfiguration {
     [key: string]: any;
@@ -7296,6 +7314,24 @@ export declare interface IInitEngineInfo {
     writablePath: string;
     serverURL?: string;
 }
+export declare interface IJointTextureLayoutDeviceTip {
+    level: JointTextureLayoutDeviceTipLevel;
+    message: string;
+}
+export declare interface IJointTextureLayoutPreviewItem {
+    index: number;
+    textureLength: number;
+    calculatedTextureLength: number;
+    fallbackTextureLength?: number;
+    resolvedLayout: IResolvedCustomJointTextureLayout | null;
+    tip: IJointTextureLayoutDeviceTip;
+    missingAssets: string[];
+}
+export declare interface IJointTextureLayoutPreviewResult {
+    layouts: IJointTextureLayoutPreviewItem[];
+    resolvedLayouts: IResolvedCustomJointTextureLayout[];
+    missingAssets: string[];
+}
 export declare interface IModuleConfig {
     moduleTreeDump: {
         default: IModules;
@@ -7340,6 +7376,14 @@ export declare interface IPhysicsMaterial {
     spinningFriction: number;
     restitution: number;
 }
+export declare interface IResolvedChunkContent {
+    skeleton: number;
+    clips: number[];
+}
+export declare interface IResolvedCustomJointTextureLayout {
+    textureLength: number;
+    contents: IResolvedChunkContent[];
+}
 export declare interface ISplashBackgroundColor {
     x: number;
     y: number;
@@ -7368,6 +7412,7 @@ export declare interface IVec3Like {
     y: number;
     z: number;
 }
+export declare type JointTextureLayoutDeviceTipLevel = 'valid' | 'warning' | 'error';
 export declare type MacroItem = {
     key: string;
     value: boolean;
@@ -7384,6 +7429,7 @@ export declare interface ModuleRenderConfig {
     version: string;
     migrationScript?: string;
 }
+export declare function queryJointTextureLayoutPreview(): Promise<IJointTextureLayoutPreviewResult>;
 export declare function queryLayerBuiltin(): Promise<{
     name: string;
     value: number;
@@ -7807,6 +7853,7 @@ export declare namespace Engine {
         getInfo,
         getConfig,
         getRenderConfig,
+        queryJointTextureLayoutPreview,
         initEngine,
         startEngineCompilation,
         queryLayerBuiltin,
@@ -7820,6 +7867,12 @@ export declare namespace Engine {
         IPhysicsMaterial,
         ICustomJointTextureLayout,
         IChunkContent,
+        IResolvedCustomJointTextureLayout,
+        IResolvedChunkContent,
+        JointTextureLayoutDeviceTipLevel,
+        IJointTextureLayoutDeviceTip,
+        IJointTextureLayoutPreviewItem,
+        IJointTextureLayoutPreviewResult,
         MacroItem,
         ISplashBackgroundColor,
         ISplashSetting,
@@ -8155,6 +8208,11 @@ export declare interface ICocosConfigurationPropertySchema {
     items?: ICocosConfigurationPropertySchema | ICocosConfigurationPropertySchema[];
     additionalProperties?: boolean | ICocosConfigurationPropertySchema;
     required?: string[];
+    ui?: 'asset-picker' | string;
+    assetType?: string;
+    valueField?: string;
+    displayFields?: string[];
+    query?: Record<string, unknown>;
 }
 export declare interface ICollisionMatrix {
     [x: string]: number;
@@ -8277,6 +8335,24 @@ export declare interface IInitEngineInfo {
     nativeBase: string;
     writablePath: string;
     serverURL?: string;
+}
+export declare interface IJointTextureLayoutDeviceTip {
+    level: JointTextureLayoutDeviceTipLevel;
+    message: string;
+}
+export declare interface IJointTextureLayoutPreviewItem {
+    index: number;
+    textureLength: number;
+    calculatedTextureLength: number;
+    fallbackTextureLength?: number;
+    resolvedLayout: IResolvedCustomJointTextureLayout | null;
+    tip: IJointTextureLayoutDeviceTip;
+    missingAssets: string[];
+}
+export declare interface IJointTextureLayoutPreviewResult {
+    layouts: IJointTextureLayoutPreviewItem[];
+    resolvedLayouts: IResolvedCustomJointTextureLayout[];
+    missingAssets: string[];
 }
 export declare interface ImageAssetUserData {
     type: ImageImportType;
@@ -8425,6 +8501,14 @@ export declare interface IRedirectInfo {
     type: string;
     uuid: string;
 }
+export declare interface IResolvedChunkContent {
+    skeleton: number;
+    clips: number[];
+}
+export declare interface IResolvedCustomJointTextureLayout {
+    textureLength: number;
+    contents: IResolvedChunkContent[];
+}
 export declare interface ISocketConfig {
     connection: (socket: any) => void;
     disconnect: (socket: any) => void;
@@ -8504,6 +8588,7 @@ export declare interface IVirtualAssetUserData {
     [key: string]: any;
 }
 export declare type JavaScriptAssetUserData = ScriptModuleUserData | PluginScriptUserData;
+export declare type JointTextureLayoutDeviceTipLevel = 'valid' | 'warning' | 'error';
 export declare interface JsonAssetUserData {
     json5?: boolean;
 }
@@ -8826,6 +8911,7 @@ export declare type QueryAssetType = 'asset' | 'script' | 'all';
 export declare function queryAssetUserDataConfig(urlOrUuidOrPath: string): Promise<false | Record<string, IUerDataConfigItem> | undefined>;
 export declare function queryAssetUsers(uuidOrUrl: string, type?: QueryAssetType): Promise<string[]>;
 export declare function queryCreateMap(): Promise<ICreateMenuInfo[]>;
+export declare function queryJointTextureLayoutPreview(): Promise<IJointTextureLayoutPreviewResult>;
 export declare function queryLayerBuiltin(): Promise<{
     name: string;
     value: number;

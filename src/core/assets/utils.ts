@@ -275,6 +275,7 @@ export async function getRawInstanceFromImportFile(path: string, assetInfo: { uu
     result.asset = deserializedAsset;
     result.detail = deserializeDetails;
     // this.depend[asset.uuid] = [...new Set(deserializeDetails.uuidList)] as string[];
+    return result;
 }
 
 async function transformCCON(path: string) {
