@@ -281,7 +281,7 @@ export async function getPreviewSettings<P extends Platform>(options?: IBuildTas
     // TODO 预览 settings 的排队之类的
     const { BuildTask } = await import('./worker/builder/index');
     const buildTask = new BuildTask(buildOptions.taskId || 'v', buildOptions as unknown as IBuildTaskOption<Platform>);
-    console.time('Get settings.js in preview');
+    const previewSettingsStart = Date.now();
 
     // 拿出 settings 信息
     const settings = await buildTask.getPreviewSettings();
@@ -296,7 +296,7 @@ export async function getPreviewSettings<P extends Platform>(options?: IBuildTas
         }
         script2library[removeDbHeader(asset.url).replace(/.ts$/, '.js')] = asset.library + '.js';
     }
-    console.timeEnd('Get settings.js in preview');
+    console.log(`Get settings.js in preview: ${Date.now() - previewSettingsStart}ms`);
     // 返回数据
     return {
         settings,

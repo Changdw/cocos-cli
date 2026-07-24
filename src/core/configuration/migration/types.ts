@@ -10,7 +10,7 @@ export type CocosCreatorConfigScope = 'local' | 'project' | 'global';
 /**
  * Cli 配置范围
  */
-export type CocosCLIConfigScope = 'project'; // 'local' | 'project' | 'global';
+export type CocosCLIConfigScope = 'project' | 'local';
 
 /**
  * 迁移目标配置

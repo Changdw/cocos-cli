@@ -42,7 +42,7 @@ export default async function gameBoot() {
     // browser:reload 监听在服务端 settings 首次就绪时整页刷新自愈：届时 settings.js 返回 200、programming
     // facet 早已就绪，system.js 必可用，正常 boot。
     if (window.__previewSettingsFailed || !window._CCSettings) {
-        console.warn('[Game Preview] backend not ready (settings unavailable); skip boot, awaiting server-driven reload.');
+        console.info('[Game Preview Warning] backend not ready (settings unavailable); skip boot, awaiting server-driven reload.');
         return;
     }
 

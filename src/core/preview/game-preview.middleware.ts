@@ -53,7 +53,7 @@ export const gamePreviewResourceRoutes = [
                 // 初始化未完成即请求预览：返回可重试的 503，让 IDE/浏览器稍后重试，
                 // 而不是返回缺 builtinAssets 的坏 settings 或裸 500。
                 if (err instanceof PreviewNotReadyError) {
-                    console.warn(`[preview-settings] not ready, ask client to retry (scene=${req.query.scene ?? ''})`);
+                    console.info(`[preview-settings Warning] not ready, ask client to retry (scene=${req.query.scene ?? ''})`);
                     // 关键自愈触发点：确有预览页因未就绪而 boot 失败（settings.js 503）。据此标记待自愈，
                     // 待 settings 首次真正可用时由 live-reload 广播 browser:reload 把该页刷新救回，无需手动刷新。
                     // 以「确实发生过 503」为依据比依赖 socket 连接时序更可靠（规避异步就绪探测跨越初始化完成

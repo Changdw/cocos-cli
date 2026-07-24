@@ -96,13 +96,29 @@ export class SceneWorker {
                 };
 
                 // 监听就绪消息
+                let listenerPromise: Promise<void> | null = null;
+                const failStartup = (error: unknown) => {
+                    console.error('注册场景进程监听器失败:', error);
+                    this._process?.off('message', onReady);
+                    this._process?.off('error', onError);
+                    this._process?.off('exit', onEarlyExit);
+                    if (this._process) {
+                        this._process.kill('SIGTERM');
+                        this._process = null;
+                    }
+                    resolveOnce(false);
+                };
+
                 const onReady = (msg: any) => {
                     if (msg === SceneReadyChannel) {
                         console.log('Scene process start.');
                         this._process?.off('message', onReady);
                         this._process?.off('error', onError);
                         this._process?.off('exit', onEarlyExit);
-                        resolveOnce(true);
+                        void (listenerPromise ?? Promise.resolve()).then(
+                            () => resolveOnce(true),
+                            failStartup,
+                        );
                     }
                 };
 
@@ -126,7 +142,8 @@ export class SceneWorker {
 
                 // 启动RPC和注册监听器
                 Rpc.startup(this._process);
-                this.registerListener();
+                listenerPromise = this.registerListener();
+                listenerPromise.catch(failStartup);
 
             } catch (error) {
                 console.error('创建场景进程失败:', error);

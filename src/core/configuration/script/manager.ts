@@ -55,12 +55,13 @@ export interface IConfigurationManager {
     migrateFromProject(projectPath: string): Promise<IConfiguration>;
 
     /**
-     * 保存项目配置
-     * @param force 是否强制保存，默认为 false
+     * Save project or local configuration.
+     * @param forceOrScope boolean force flag, or a scope shorthand such as save('local').
+     * @param scope target scope when the first argument is a force flag. Defaults to 'project'.
      */
-    save(force?: boolean): Promise<void>;
+    save(forceOrScope?: boolean | ConfigurationScope, scope?: ConfigurationScope): Promise<void>;
 
-    getConfigPath(): Promise<string>;
+    getConfigPath(scope?: ConfigurationScope): Promise<string>;
 }
 
 export class ConfigurationManager extends EventEmitter implements IConfigurationManager {
@@ -69,12 +70,27 @@ export class ConfigurationManager extends EventEmitter implements IConfiguration
     static name = 'cocos.config.json';
     static SchemaPathSource = join(__dirname, '../../../../dist/cocos.config.schema.json');
     static relativeSchemaPath = `./temp/${path.basename(ConfigurationManager.SchemaPathSource)}`;
+    // 配置文件已移到 settings/ 目录，$schema 相对引用需回退一级
+    static schemaRef = `../temp/${path.basename(ConfigurationManager.SchemaPathSource)}`;
+    private static readonly legacyLocalConfigPaths = [
+        'builder.common',
+        'builder.platforms.web-desktop',
+        'builder.platforms.web-mobile',
+        'scene.camera',
+        'scene.gizmo',
+        'scene.sceneView',
+        'scene.camera-infos',
+        'scene.camera-uuids',
+    ];
 
     private initialized: boolean = false;
     private projectPath: string = '';
-    private configPath: string = '';
+    private configPath: string = '';        // project(committed): <project>/settings/cocos.config.json
+    private localConfigPath: string = '';   // local(personal): <project>/profiles/cocos.config.json
     private projectConfig: IConfiguration = {};
+    private localConfig: IConfiguration = {};
     private saveQueue: Promise<void> = Promise.resolve();
+    private localSaveQueue: Promise<void> = Promise.resolve();
 
     private _version: string = '0.0.0';
     get version(): string {
@@ -100,7 +116,8 @@ export class ConfigurationManager extends EventEmitter implements IConfiguration
         configurationRegistry.on(MessageType.UnRegistry, this.onUnRegistryConfigurationBind);
 
         this.projectPath = projectPath;
-        this.configPath = path.join(projectPath, ConfigurationManager.name);
+        this.configPath = path.join(projectPath, 'settings', ConfigurationManager.name);
+        this.localConfigPath = path.join(projectPath, 'profiles', ConfigurationManager.name);
         const schemaPath = path.join(projectPath, ConfigurationManager.relativeSchemaPath);
         await this.load();
         try {
@@ -123,15 +140,23 @@ export class ConfigurationManager extends EventEmitter implements IConfiguration
 
     private onRegistryConfiguration(instance: IBaseConfiguration): void {
         if (!this.configurationMap.has(instance.moduleName)) {
-            // 从 projectConfig 中获取现有配置并初始化到配置实例中
+            // 从 projectConfig / localConfig 中获取现有配置并初始化到配置实例中
             const existingConfig = this.projectConfig[instance.moduleName];
             if (existingConfig && typeof existingConfig === 'object') {
-                // 将现有配置设置到配置实例的 configs 中
                 this.initializeConfigFromProject(instance, existingConfig);
             }
+            const existingLocal = this.localConfig[instance.moduleName];
+            if (existingLocal && typeof existingLocal === 'object') {
+                this.initializeConfigFromLocal(instance, existingLocal);
+            }
 
-            const bind = async (configInstance: IBaseConfiguration) => {
-                this.projectConfig[configInstance.moduleName] = configInstance.getAll();
+            const bind = async (configInstance: IBaseConfiguration, scope: ConfigurationScope = 'project') => {
+                if (scope === 'local') {
+                    this.localConfig[configInstance.moduleName] = configInstance.getAll('local');
+                    await this.save(false, 'local');
+                    return;
+                }
+                this.projectConfig[configInstance.moduleName] = configInstance.getAll('project');
                 await this.save();
             };
             instance.on(MessageType.Save, bind);
@@ -142,7 +167,6 @@ export class ConfigurationManager extends EventEmitter implements IConfiguration
     private onUnRegistryConfiguration(instances: IBaseConfiguration): void {
         const bind = this.configurationMap.get(instances.moduleName);
         if (bind) {
-            // TODO 是否需要删除
             instances.off(MessageType.Save, bind);
             this.configurationMap.delete(instances.moduleName);
         }
@@ -162,6 +186,18 @@ export class ConfigurationManager extends EventEmitter implements IConfiguration
         }
         // 直接设置 configs 属性
         instance.configs = utils.deepMerge({}, existingConfig);
+    }
+
+    /**
+     * 从 local(个人/本机)配置初始化配置实例
+     * @private
+     */
+    private initializeConfigFromLocal(instance: IBaseConfiguration, existingConfig: Record<string, any>): void {
+        if (!('localConfigs' in instance) || typeof (instance as any).localConfigs !== 'object') {
+            const instanceType = instance.constructor?.name || 'Unknown';
+            throw new Error(`配置实例必须是 BaseConfiguration 类型，但收到的是 ${instanceType}`);
+        }
+        (instance as any).localConfigs = utils.deepMerge({}, existingConfig);
     }
 
     /**
@@ -185,9 +221,66 @@ export class ConfigurationManager extends EventEmitter implements IConfiguration
      */
     public async migrateFromProject(projectPath: string): Promise<IConfiguration> {
         const list = await CocosMigrationManager.migrate(projectPath);
-        this.projectConfig = utils.deepMerge(this.projectConfig, list.project) as IConfiguration;
+        this.projectConfig = utils.deepMerge(this.projectConfig, list.project || {}) as IConfiguration;
+        this.localConfig = utils.deepMerge(this.localConfig, list.local || {}) as IConfiguration;
         await this.save();
+        await this.save(false, 'local');
         return this.projectConfig;
+    }
+
+    private splitLegacyConfigScopes(config: IConfiguration): { project: IConfiguration; local: IConfiguration } {
+        const project = utils.deepMerge({}, config) as IConfiguration;
+        const local: IConfiguration = {};
+
+        for (const dotPath of ConfigurationManager.legacyLocalConfigPaths) {
+            const value = utils.getByDotPath(config, dotPath);
+            if (value === undefined) {
+                continue;
+            }
+            utils.setByDotPath(local, dotPath, value);
+            this.removeByDotPathAndPrune(project, dotPath);
+        }
+
+        return { project, local };
+    }
+
+    private removeByDotPathAndPrune(target: IConfiguration, dotPath: string): boolean {
+        if (!target || !dotPath) {
+            return false;
+        }
+
+        const keys = dotPath.split('.');
+        const lastKey = keys.pop();
+        if (!lastKey) {
+            return false;
+        }
+
+        let current: any = target;
+        const ancestors: { parent: any; key: string }[] = [];
+        for (const key of keys) {
+            if (!current || typeof current !== 'object' || Array.isArray(current)) {
+                return false;
+            }
+            ancestors.push({ parent: current, key });
+            current = current[key];
+        }
+
+        if (!current || typeof current !== 'object' || Array.isArray(current) || !(lastKey in current)) {
+            return false;
+        }
+
+        delete current[lastKey];
+
+        for (let i = ancestors.length - 1; i >= 0; i--) {
+            const { parent, key } = ancestors[i];
+            const value = parent[key];
+            if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length > 0) {
+                break;
+            }
+            delete parent[key];
+        }
+
+        return true;
     }
 
     /**
@@ -288,28 +381,87 @@ export class ConfigurationManager extends EventEmitter implements IConfiguration
     }
 
     /**
-     * 加载项目配置
+     * 加载项目配置（settings/ 提交层）与 local 配置（profiles/ 个人层）
      */
     private async load(): Promise<void> {
+        // project(committed): settings/cocos.config.json; legacy root config is relocated once and then removed.
+        let localConfigLoaded = false;
         try {
             if (await fse.pathExists(this.configPath)) {
                 this.projectConfig = await fse.readJSON(this.configPath);
                 this.projectConfig.version && (this.version = this.projectConfig.version);
-                newConsole.debug(`[Configuration] 已加载项目配置: ${this.configPath}`, this.projectConfig);
+                newConsole.debug(`[Configuration] 已加载项目配置: ${this.configPath}`);
             } else {
                 newConsole.debug(`[Configuration] 项目配置文件不存在，将创建新文件: ${this.configPath}`);
-                // 创建默认配置文件
                 await this.save();
+            }
+
+            const legacyPath = path.join(this.projectPath, ConfigurationManager.name);
+            if (await fse.pathExists(legacyPath)) {
+                this.localConfig = await this.readLocalConfig();
+                localConfigLoaded = true;
+                await this.relocateLegacyRootConfig(legacyPath);
             }
         } catch (error) {
             newConsole.error(`[Configuration] 加载项目配置失败: ${this.configPath} - ${error}`);
         }
+
+        // local(personal): profiles/cocos.config.json
+        if (localConfigLoaded) {
+            return;
+        }
+        this.localConfig = await this.readLocalConfig();
+    }
+
+    private async readLocalConfig(): Promise<IConfiguration> {
+        try {
+            return await fse.pathExists(this.localConfigPath)
+                ? await fse.readJSON(this.localConfigPath)
+                : {};
+        } catch (error) {
+            newConsole.error(`[Configuration] 加载 local 配置失败: ${this.localConfigPath} - ${error}`);
+            return {};
+        }
+    }
+
+    private async relocateLegacyRootConfig(legacyPath: string): Promise<void> {
+        const legacyConfig = await fse.readJSON(legacyPath);
+        const { project, local } = this.splitLegacyConfigScopes(legacyConfig);
+        this.projectConfig = utils.deepMerge(project, this.projectConfig) as IConfiguration;
+        this.localConfig = utils.deepMerge(local, this.localConfig) as IConfiguration;
+        this.projectConfig.version && (this.version = this.projectConfig.version);
+
+        await this.save(true);
+        await this.save(true, 'local');
+        await fse.remove(legacyPath);
+        newConsole.debug(`[Configuration] 已将根配置拆分到 settings/ 与 profiles/ 并删除根文件: ${legacyPath}`);
     }
 
     /**
-     * 保存项目配置
+     * Save project or local configuration.
      */
-    public async save(force: boolean = false): Promise<void> {
+    public async save(forceOrScope: boolean | ConfigurationScope = false, scope: ConfigurationScope = 'project'): Promise<void> {
+        const { force, resolvedScope } = this.normalizeSaveOptions(forceOrScope, scope);
+        if (resolvedScope === 'local') {
+            return this.saveLocalConfig(force);
+        }
+        return this.saveProjectConfig(force);
+    }
+
+    private normalizeSaveOptions(forceOrScope: boolean | ConfigurationScope, scope: ConfigurationScope): { force: boolean; resolvedScope: ConfigurationScope } {
+        if (typeof forceOrScope === 'string') {
+            return {
+                force: false,
+                resolvedScope: forceOrScope,
+            };
+        }
+        return {
+            force: forceOrScope,
+            resolvedScope: scope,
+        };
+    }
+
+    private async saveProjectConfig(force: boolean = false): Promise<void> {
         if (!force && !Object.keys(this.projectConfig).length) {
             return;
         }
@@ -321,10 +473,11 @@ export class ConfigurationManager extends EventEmitter implements IConfiguration
                     // 确保目录存在
                     await fse.ensureDir(path.dirname(this.configPath));
                     this.projectConfig.version = this.version;
-                    this.projectConfig.$schema = ConfigurationManager.relativeSchemaPath;
+
+                    this.projectConfig.$schema = ConfigurationManager.schemaRef;
                     // 保存配置文件（带重试：见 writeConfigWithRetry）
                     await this.writeConfigWithRetry();
-                    this.emit(MessageType.Save, this.projectConfig);
+                    this.emit(MessageType.Save, this.projectConfig, 'project');
                     newConsole.debug(`[Configuration] 已保存项目配置: ${this.configPath}`);
                 } catch (error) {
                     newConsole.error(`[Configuration] 保存项目配置失败: ${this.configPath} - ${error}`);
@@ -337,7 +490,31 @@ export class ConfigurationManager extends EventEmitter implements IConfiguration
     }
 
     /**
-     * 把项目配置写入磁盘，对 Windows 上的瞬时文件锁错误做有界重试。
+     * 保存 local(个人/本机)配置到 profiles/cocos.config.json
+     */
+    private async saveLocalConfig(force: boolean = false): Promise<void> {
+        if (!force && !Object.keys(this.localConfig).length) {
+            return;
+        }
+        const nextSave = this.localSaveQueue
+            .catch(() => undefined)
+            .then(async () => {
+                try {
+                    await fse.ensureDir(path.dirname(this.localConfigPath));
+                    this.localConfig.version = ConfigurationManager.VERSION;
+                    await fse.writeJSON(this.localConfigPath, this.localConfig, { spaces: 4 });
+                    this.emit(MessageType.Save, this.localConfig, 'local');
+                    newConsole.debug(`[Configuration] 已保存 local 配置: ${this.localConfigPath}`);
+                } catch (error) {
+                    newConsole.error(`[Configuration] 保存 local 配置失败: ${this.localConfigPath} - ${error}`);
+                    throw error;
+                }
+            });
+        this.localSaveQueue = nextSave;
+        return nextSave;
+    }
+
+    /* 把项目配置写入磁盘，对 Windows 上的瞬时文件锁错误做有界重试。
      *
      * cocos.config.json 是配置真相源，多处会直接读盘：预览路由（scripting-routes.ts 读碰撞分组 /
      * 设计分辨率 / includeModules）、场景进程（scene/index.ts）等，且场景子进程是独立 fork 的引擎进程。
@@ -376,10 +553,10 @@ export class ConfigurationManager extends EventEmitter implements IConfiguration
         throw lastError;
     }
 
-    public async getConfigPath(): Promise<string> {
+    public async getConfigPath(scope: ConfigurationScope = 'project'): Promise<string> {
         try {
             await this.ensureInitialized();
-            return this.configPath;
+            return scope === 'local' ? this.localConfigPath : this.configPath;
         } catch (error) {
             throw new Error(`[Configuration] Failed to get configuration file path: ${error}`);
         }
@@ -389,7 +566,9 @@ export class ConfigurationManager extends EventEmitter implements IConfiguration
         this.initialized = false;
         this.projectPath = '';
         this.configPath = '';
+        this.localConfigPath = '';
         this.projectConfig = {};
+        this.localConfig = {};
         this.version = '0.0.0';
         this.configurationMap.clear();
     }

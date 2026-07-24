@@ -1,5 +1,5 @@
 {
-    "$schema": "./temp/cocos.config.schema.json",
+    "$schema": "../temp/cocos.config.schema.json",
     "version": "1.0.0",
     "builder": {
         "platforms": {
@@ -1201,51 +1201,6 @@
         "fbx": {
             "legacyFbxImporter": {
                 "visible": true
-            }
-        }
-    },
-    "scene": {
-        "gizmo": {
-            "is2D": false,
-            "is3DIcon": false,
-            "iconSize": 2,
-            "transformToolName": "position",
-            "viewMode": "select",
-            "pivot": "pivot",
-            "coordinate": "local",
-            "toolsVisibility3d": true,
-            "gridVisible": true,
-            "gridColor": [
-                166,
-                166,
-                166,
-                255
-            ],
-            "originAxis2D": {
-                "x": true,
-                "y": true,
-                "z": false
-            },
-            "originAxis3D": {
-                "x": true,
-                "y": false,
-                "z": true
-            },
-            "rectSnapConfig": {
-                "enableSnapping": true,
-                "snapThreshold": 4
-            },
-            "snapConfigs": {
-                "position": {
-                    "x": 1,
-                    "y": 1,
-                    "z": 1
-                },
-                "rotation": 1,
-                "scale": 1,
-                "isPositionSnapEnabled": false,
-                "isRotationSnapEnabled": false,
-                "isScaleSnapEnabled": false
             }
         }
     }

@@ -384,7 +384,7 @@ export class GizmoService extends BaseService<IGizmoEvents> implements IGizmoSer
         try {
             const rpc = Rpc.getInstance();
             const snapData = this.transformToolData.snapConfigs.getPureDataObject();
-            await rpc.request('sceneConfigInstance', 'set', ['gizmo.snapConfigs', snapData]);
+            await rpc.request('sceneConfigInstance', 'set', ['gizmo.snapConfigs', snapData, 'local']);
         } catch {
             // Config persistence not available
         }
@@ -394,7 +394,7 @@ export class GizmoService extends BaseService<IGizmoEvents> implements IGizmoSer
     async initFromConfig(): Promise<void> {
         try {
             const rpc = Rpc.getInstance();
-            const config: any = await rpc.request('sceneConfigInstance', 'get', ['gizmo']);
+            const config: any = await rpc.request('sceneConfigInstance', 'get', ['gizmo', 'local']);
             if (config) {
                 if (config.is2D !== undefined) this.is2D = config.is2D;
                 if (config.is3DIcon !== undefined) this.setIconGizmo3D(config.is3DIcon);
@@ -427,7 +427,7 @@ export class GizmoService extends BaseService<IGizmoEvents> implements IGizmoSer
     async saveConfig(): Promise<void> {
         try {
             const rpc = Rpc.getInstance();
-            const current = await rpc.request('sceneConfigInstance', 'get', ['gizmo']) as Record<string, any> ?? {};
+            const current = await rpc.request('sceneConfigInstance', 'get', ['gizmo', 'local']) as Record<string, any> ?? {};
             const gizmoConfig = {
                 ...current,
                 is2D: this.is2D,
@@ -444,7 +444,7 @@ export class GizmoService extends BaseService<IGizmoEvents> implements IGizmoSer
                 originAxis2D: this.queryOriginAxes2D(),
                 originAxis3D: this.queryOriginAxes3D(),
             };
-            await rpc.request('sceneConfigInstance', 'set', ['gizmo', gizmoConfig]);
+            await rpc.request('sceneConfigInstance', 'set', ['gizmo', gizmoConfig, 'local']);
         } catch {
             // Config persistence not available
         }

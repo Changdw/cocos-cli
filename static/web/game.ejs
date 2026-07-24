@@ -112,7 +112,7 @@
         // settings.js 返回 200、programming facet 早已就绪（facet 在脚本初始化阶段创建，早于 settings
         // 所需的资源冷导入完成），system.js 必可用，正常 boot。
         if (window.__previewSettingsFailed) {
-            console.warn('[Game Preview] backend not ready (settings.js failed); skip boot, awaiting server-driven reload.');
+            console.info('[Game Preview Warning] backend not ready (settings.js failed); skip boot, awaiting server-driven reload.');
         } else {
             const { default: gameBoot } = await import('/static/web/game-boot.js');
             await gameBoot();

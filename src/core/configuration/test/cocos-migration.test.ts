@@ -51,6 +51,20 @@ describe('CocosMigrationManager', () => {
             expect(map.get('project')?.[0]).toBe(t1);
             expect(map.get('project')?.[1]).toBe(t2);
         });
+
+        it('should register local source migrations to local scope by default', () => {
+            const target: IMigrationTarget = {
+                sourceScope: 'local',
+                pluginName: 'pkgLocal',
+                migrate: async () => ({ local: true })
+            };
+
+            CocosMigrationManager.register(target);
+
+            const map = CocosMigrationManager.migrationTargets;
+            expect(map.get('local')?.[0]).toBe(target);
+            expect(map.get('project')).toBeUndefined();
+        });
     });
 
     describe('migrate', () => {
@@ -82,7 +96,6 @@ describe('CocosMigrationManager', () => {
             };
             const t3: IMigrationTarget = {
                 sourceScope: 'local',
-                targetScope: 'project',
                 pluginName: 'pkgC',
                 migrate: async () => ({})
             };
@@ -103,7 +116,8 @@ describe('CocosMigrationManager', () => {
 
                 expect(mockMigrate).toHaveBeenCalledTimes(3);
                 expect(res).toEqual({
-                    project: { a: { x: 1, y: 2 }, p: 2, g: { k: 3 } }
+                    project: { a: { x: 1, y: 2 }, p: 2 },
+                    local: { g: { k: 3 } },
                 });
             } finally {
                 // Restore original method

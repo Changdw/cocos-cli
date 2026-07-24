@@ -4,6 +4,7 @@ import { serviceManager } from './service/service-manager';
 import { Service as DecoratorService } from './service/core/decorator';
 import { messageManager } from './service/message';
 import { initLocalI18n } from './i18n';
+import { CUSTOM_PIPELINE_MODULE } from '../../engine/graphics-config';
 
 import './service';
 
@@ -29,6 +30,13 @@ export async function startup(options: {
     const config = await defaultConfig.json();
     const modules = await fetch(`${serverURL}/scripting/engine/modules`);
     const features = (await modules.json()) as string[];
+    config.overrideSettings = config.overrideSettings || {};
+    config.overrideSettings.rendering = config.overrideSettings.rendering || {};
+    const customPipeline = features.includes(CUSTOM_PIPELINE_MODULE);
+    config.overrideSettings.rendering.customPipeline = customPipeline;
+    if (customPipeline && !config.overrideSettings.rendering.effectSettingsPath) {
+        config.overrideSettings.rendering.effectSettingsPath = `${serverURL}/scripting/engine/effect-settings`;
+    }
 
     serviceManager.initialize(serverURL);
 

@@ -422,7 +422,7 @@ function resolveIncludeModulesFromEngineConfig(
 }
 
 /**
- * Fill `options.includeModules` from the project engine config (cocos.config.json) when it is empty,
+ * Fill `options.includeModules` from the project engine config (settings/cocos.config.json) when it is empty,
  * so the preview path produces the same `includeModules` as a formal build (checkProjectSetting).
  * Does not override an already non-empty `includeModules`.
  */

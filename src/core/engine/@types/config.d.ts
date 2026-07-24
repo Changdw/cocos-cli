@@ -169,6 +169,7 @@ export interface IInitEngineInfo {
     nativeBase: string;
     writablePath: string;
     serverURL?: string;
+    enableCustomPipeline?: boolean;
 }
 
 interface CCEModuleConfig {

@@ -784,7 +784,7 @@ export class ComponentService extends BaseService<IComponentEvents> implements I
     }
 
     async queryComponents(): Promise<Array<{ name: string; cid: string; path: string }>> {
-        // TODO: 需要根据 cocos.config.json 的 include modules 是否包含 3d 做过滤
+        // TODO: 需要根据 settings/cocos.config.json 的 include modules 是否包含 3d 做过滤
         // 参考 app/builtin/scene/source/script/3d/manager/scene/scene-manager.ts
         const menus = EditorExtends.Component.getMenus();
         if (menus.length > 0) {

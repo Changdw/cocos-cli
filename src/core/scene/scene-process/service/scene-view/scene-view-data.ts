@@ -47,7 +47,7 @@ class SceneViewData extends EventEmitter {
     async initFromConfig(): Promise<void> {
         try {
             const rpc = Rpc.getInstance();
-            const config = await rpc.request('sceneConfigInstance', 'get', ['sceneView']) as { sceneLightOn?: boolean } | undefined;
+            const config = await rpc.request('sceneConfigInstance', 'get', ['sceneView', 'local']) as { sceneLightOn?: boolean } | undefined;
             if (typeof config?.sceneLightOn === 'boolean') {
                 this._isSceneLightOn = config.sceneLightOn;
             }
@@ -61,7 +61,7 @@ class SceneViewData extends EventEmitter {
             const rpc = Rpc.getInstance();
             await rpc.request('sceneConfigInstance', 'set', ['sceneView', {
                 sceneLightOn: this._isSceneLightOn,
-            }]);
+            }, 'local']);
         } catch {
             // Config persistence not available
         }

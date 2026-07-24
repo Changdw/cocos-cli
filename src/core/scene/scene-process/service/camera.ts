@@ -133,11 +133,11 @@ export class CameraService extends BaseService<ICameraEvents> implements ICamera
     async initFromConfig(): Promise<void> {
         try {
             const rpc = Rpc.getInstance();
-            const config = await rpc.request('sceneConfigInstance', 'get', ['camera']) as ICameraConfig | undefined;
+            const config = await rpc.request('sceneConfigInstance', 'get', ['camera', 'local']) as ICameraConfig | undefined;
             if (config) {
                 this._applyConfig(config, false);
             }
-            const gizmoConfig = await rpc.request('sceneConfigInstance', 'get', ['gizmo']) as Partial<IGizmoConfig> | undefined;
+            const gizmoConfig = await rpc.request('sceneConfigInstance', 'get', ['gizmo', 'local']) as Partial<IGizmoConfig> | undefined;
             if (gizmoConfig) {
                 this._applyGizmoDisplay(gizmoConfig);
             }
@@ -153,8 +153,8 @@ export class CameraService extends BaseService<ICameraEvents> implements ICamera
     async loadCameraInfos(): Promise<void> {
         try {
             const rpc = Rpc.getInstance();
-            const cameraInfos = await rpc.request('sceneConfigInstance', 'get', ['camera-infos']);
-            const cameraUuids = await rpc.request('sceneConfigInstance', 'get', ['camera-uuids']);
+            const cameraInfos = await rpc.request('sceneConfigInstance', 'get', ['camera-infos', 'local']);
+            const cameraUuids = await rpc.request('sceneConfigInstance', 'get', ['camera-uuids', 'local']);
             this._cameraInfos = (cameraInfos as Record<string, any>) || {};
             this._cameraUuids = (cameraUuids as string[]) || [];
         } catch {
@@ -232,7 +232,7 @@ export class CameraService extends BaseService<ICameraEvents> implements ICamera
     private async _saveConfig(): Promise<void> {
         try {
             const rpc = Rpc.getInstance();
-            await rpc.request('sceneConfigInstance', 'set', ['camera', this.queryConfig()]);
+            await rpc.request('sceneConfigInstance', 'set', ['camera', this.queryConfig(), 'local']);
         } catch {
             // Config persistence not available
         }
@@ -299,7 +299,7 @@ export class CameraService extends BaseService<ICameraEvents> implements ICamera
         Service.Engine.repaintInEditMode();
         if (persist) {
             const rpc = Rpc.getInstance();
-            void rpc.request('sceneConfigInstance', 'set', ['gizmo.gridVisible', value]).catch(() => {});
+            void rpc.request('sceneConfigInstance', 'set', ['gizmo.gridVisible', value, 'local']).catch(() => {});
         }
     }
 
@@ -452,8 +452,8 @@ export class CameraService extends BaseService<ICameraEvents> implements ICamera
         if (write) {
             try {
                 const rpc = Rpc.getInstance();
-                await rpc.request('sceneConfigInstance', 'set', ['camera-infos', this._cameraInfos]);
-                await rpc.request('sceneConfigInstance', 'set', ['camera-uuids', this._cameraUuids]);
+                await rpc.request('sceneConfigInstance', 'set', ['camera-infos', this._cameraInfos, 'local']);
+                await rpc.request('sceneConfigInstance', 'set', ['camera-uuids', this._cameraUuids, 'local']);
             } catch {
                 // persistence not available
             }

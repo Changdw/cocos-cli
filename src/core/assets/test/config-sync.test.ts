@@ -15,7 +15,7 @@ interface IAssetConfigRuntime {
     scriptConfig: typeof import('../../scripting/shared/query-shared-settings').scriptConfig;
 }
 
-const configPath = join(TestGlobalEnv.projectRoot, 'cocos.config.json');
+const configPath = join(TestGlobalEnv.projectRoot, 'settings', 'cocos.config.json');
 const originalConfig = readJSONSync(configPath);
 const legacyTemplateRoot = join(TestGlobalEnv.projectRoot, '.creator', 'asset-template');
 

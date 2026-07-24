@@ -47,3 +47,6 @@ e2e/reports/
 src/i18n/types/generated.d.ts
 CLAUDE.md
 config.local.json
+
+# 个人/本机配置（local 作用域），不进版本库
+profiles/cocos.config.json

@@ -7119,10 +7119,10 @@ export { }
 
 exports[`DTS API compatibility configuration.d.ts should match snapshot 1`] = `
 "import { EventEmitter } from 'events';
-export declare type ConfigurationScope = 'default' | 'project';
+export declare type ConfigurationScope = 'default' | 'project' | 'local';
 export declare type EventEmitterMethods = Pick<EventEmitter, 'on' | 'off' | 'once' | 'emit'>;
 export declare function get<T>(key: string, scope?: ConfigurationScope): Promise<T>;
-export declare function getConfigPath(): Promise<string>;
+export declare function getConfigPath(scope?: ConfigurationScope): Promise<string>;
 export declare function getMetadata(): Promise<ICocosConfigurationNode[]>;
 export declare interface IBaseConfiguration extends EventEmitterMethods {
     moduleName: string;
@@ -7132,7 +7132,7 @@ export declare interface IBaseConfiguration extends EventEmitterMethods {
     getAll(scope?: ConfigurationScope): Record<string, any> | undefined;
     set<T>(key: string, value: T, scope?: ConfigurationScope): Promise<boolean>;
     remove(key: string, scope?: ConfigurationScope): Promise<boolean>;
-    save(): Promise<boolean>;
+    save(scope?: ConfigurationScope): Promise<boolean>;
 }
 export declare interface ICocosConfigurationNode {
     id: string;
@@ -7168,10 +7168,10 @@ export declare interface IConfiguration {
 export declare function init(projectPath: string): Promise<void>;
 export declare function migrate(): Promise<void>;
 export declare function migrateFromProject(): Promise<IConfiguration>;
-export declare function onDidSave(callback: () => void): () => void;
+export declare function onDidSave(callback: () => void, scope?: ConfigurationScope): () => void;
 export declare function reload(): Promise<void>;
 export declare function remove(key: string, scope?: ConfigurationScope): Promise<boolean>;
-export declare function save(force?: boolean): Promise<void>;
+export declare function save(force?: boolean, scope?: ConfigurationScope): Promise<void>;
 export declare function set<T>(key: string, value: T, scope?: ConfigurationScope): Promise<boolean>;
 export { }
 "
@@ -7323,6 +7323,7 @@ export declare interface IInitEngineInfo {
     nativeBase: string;
     writablePath: string;
     serverURL?: string;
+    enableCustomPipeline?: boolean;
 }
 export declare interface IJointTextureLayoutDeviceTip {
     level: JointTextureLayoutDeviceTipLevel;
@@ -7825,7 +7826,7 @@ export declare namespace Configuration {
         ICocosConfigurationPropertySchema
     }
 }
-export declare type ConfigurationScope = 'default' | 'project';
+export declare type ConfigurationScope = 'default' | 'project' | 'local';
 export declare function createAsset(options: CreateAssetOptions): Promise<IAssetInfo>;
 export declare function createAssetByType(ccType: ISupportCreateType, dirOrUrl: string, baseName: string, options?: CreateAssetByTypeOptions): Promise<IAssetInfo>;
 export declare interface CreateAssetByTypeOptions extends AssetOperationOption {
@@ -7975,7 +7976,7 @@ export declare function generateThumbnail(urlOrUUIDOrPath: string, size?: Thumbn
 export declare function get<T>(key: string, scope?: ConfigurationScope): Promise<T>;
 export declare function get_2(): Promise<Project_2>;
 export declare function getConfig(useDefault?: boolean): Promise<IEngineConfig>;
-export declare function getConfigPath(): Promise<string>;
+export declare function getConfigPath(scope?: ConfigurationScope): Promise<string>;
 export declare function getInfo(): Promise<EngineInfo>;
 export declare function getInfo_2(): Promise<ProjectInfo>;
 export declare function getMetadata(): Promise<ICocosConfigurationNode[]>;
@@ -8190,7 +8191,7 @@ export declare interface IBaseConfiguration extends EventEmitterMethods {
     getAll(scope?: ConfigurationScope): Record<string, any> | undefined;
     set<T>(key: string, value: T, scope?: ConfigurationScope): Promise<boolean>;
     remove(key: string, scope?: ConfigurationScope): Promise<boolean>;
-    save(): Promise<boolean>;
+    save(scope?: ConfigurationScope): Promise<boolean>;
 }
 export declare interface IChunkContent {
     skeleton: null | string;
@@ -8345,6 +8346,7 @@ export declare interface IInitEngineInfo {
     nativeBase: string;
     writablePath: string;
     serverURL?: string;
+    enableCustomPipeline?: boolean;
 }
 export declare interface IJointTextureLayoutDeviceTip {
     level: JointTextureLayoutDeviceTipLevel;
@@ -8745,7 +8747,7 @@ export declare function onCompileStart(listener: (e: {
     taskId?: string;
 }) => void): () => void;
 export declare function onDBReady(listener: (dbInfo: IAssetDBInfo) => void): () => void;
-export declare function onDidSave(callback: () => void): () => void;
+export declare function onDidSave(callback: () => void, scope?: ConfigurationScope): () => void;
 export declare function onPackBuildEnd(listener: (e: {
     targetName: string;
 }) => void): () => void;
@@ -8953,7 +8955,7 @@ export declare interface RtSpriteFrameAssetUserData {
     width?: number;
     height?: number;
 }
-export declare function save(force?: boolean): Promise<void>;
+export declare function save(force?: boolean, scope?: ConfigurationScope): Promise<void>;
 export declare function saveAsset(pathOrUrlOrUUID: string, data: string | Buffer): Promise<IAssetInfo>;
 export declare function saveMaterial(uuidOrUrlOrPath: string, dump: MaterialDump): Promise<void>;
 export declare function saveSerializedData(uuidOrUrlOrPath: string, patch: SerializedAssetPatch): Promise<SerializedAssetQueryResult>;
