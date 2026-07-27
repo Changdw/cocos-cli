@@ -8,6 +8,7 @@ import { TransformToolData, ISnapConfigData } from './gizmo/transform-tool';
 import GizmoDefines from './gizmo/gizmo-defines';
 import GizmoBase from './gizmo/base/gizmo-base';
 import GizmoOperation from './gizmo/gizmo-operation';
+import { getEditorNodeByPath, getEditorNodeByUuid, getEditorNodePath } from './gizmo/utils/editor-node';
 import { create3DNode } from './gizmo/utils/engine-utils';
 import { rectTransformSnapping } from './gizmo/utils/rect-transform-snapping';
 import WorldAxisController from './gizmo/controller/world-axis';
@@ -132,18 +133,15 @@ function walkNodeComponent(node: Node, callback: (comp: Component) => void): voi
 }
 
 function getNodeByPath(path: string): Node | null {
-    const EditorExtends = (cc as any).EditorExtends || (globalThis as any).EditorExtends;
-    return EditorExtends?.Node?.getNodeByPath?.(path) ?? null;
+    return getEditorNodeByPath(path);
 }
 
 function getNodeByUuid(uuid: string): Node | null {
-    const EditorExtends = (cc as any).EditorExtends || (globalThis as any).EditorExtends;
-    return EditorExtends?.Node?.getNode?.(uuid) ?? null;
+    return getEditorNodeByUuid(uuid);
 }
 
 function getNodePath(node: Node): string {
-    const EditorExtends = (cc as any).EditorExtends || (globalThis as any).EditorExtends;
-    return EditorExtends?.Node?.getNodePath?.(node) ?? '';
+    return getEditorNodePath(node);
 }
 const SceneGizmoLayer = Layers.Enum.SCENE_GIZMO;
 
@@ -161,6 +159,7 @@ export class GizmoService extends BaseService<IGizmoEvents> implements IGizmoSer
     private _gizmoOperation!: GizmoOperation;
     private _iconVisible = false;
     private _selection: string[] = [];
+    private _hasEditorOpened = false;
 
     // Pool: Map<className, GizmoBase[]> — 与 cocos-editor GizmoPool 一致
     private _componentPool: Map<string, GizmoBase[]> = new Map();
@@ -359,6 +358,10 @@ export class GizmoService extends BaseService<IGizmoEvents> implements IGizmoSer
         // 与 cocos-editor TransformGizmoManager.__listenEvents 一致：snap 配置变更持久化
         this._listenSnapEvents();
 
+        // 与 cocos-editor GizmoManager.init 一致：gizmo 配置只在服务初始化时恢复。
+        // 打开/重载场景时会强制切回 position，避免异步配置读取覆盖场景打开流程。
+        void this.initFromConfig();
+
         // 与 cocos-editor GizmoManager.init 一致：监听相机投影变化
         try {
             (Service as any).Camera?.controller?.on?.('projection-changed', (projection: number) => {
@@ -399,8 +402,10 @@ export class GizmoService extends BaseService<IGizmoEvents> implements IGizmoSer
                 if (config.is2D !== undefined) this.is2D = config.is2D;
                 if (config.is3DIcon !== undefined) this.setIconGizmo3D(config.is3DIcon);
                 if (config.iconSize !== undefined) this.setIconGizmoSize(config.iconSize);
-                if (config.transformToolName !== undefined) this.transformToolName = config.transformToolName;
-                if (config.viewMode !== undefined) this.viewMode = config.viewMode;
+                if (!this._hasEditorOpened) {
+                    if (config.transformToolName !== undefined) this.transformToolName = config.transformToolName;
+                    if (config.viewMode !== undefined) this.viewMode = config.viewMode;
+                }
                 if (config.pivot !== undefined) this.setPivot(config.pivot);
                 if (config.coordinate !== undefined) this.setCoordinate(config.coordinate);
                 if (config.toolsVisibility3d !== undefined) {
@@ -877,23 +882,44 @@ export class GizmoService extends BaseService<IGizmoEvents> implements IGizmoSer
         });
     }
 
-    private _rebindSelectedGizmos(): void {
-        const selectedPaths = Service.Selection?.query?.() ?? [];
+    private _reselectCurrentSelection(): void {
+        const selectedPaths = Array.from(new Set(Service.Selection?.query?.() ?? []));
         this._selection.length = 0;
+        Service.Selection?.clear?.();
         for (const path of selectedPaths) {
-            this.onSelectionSelect(path);
+            if (!getNodeByPath(path)) {
+                continue;
+            }
+            Service.Selection?.select?.(path);
         }
     }
 
     // ── 编辑器生命周期（由 BaseService 事件钩子调用）───────────────────────────
 
+    refreshSelectedGizmos(): void {
+        const selectedPaths = Service.Selection?.query?.() ?? [];
+        let refreshed = false;
+        for (const path of selectedPaths) {
+            const node = getNodeByPath(path);
+            if (node) {
+                this.onNodeChanged(node);
+                refreshed = true;
+            }
+        }
+        if (refreshed) {
+            Service.Engine?.repaintInEditMode?.();
+        }
+    }
+
     onEditorOpened(): void {
+        this._hasEditorOpened = true;
         this.clearAllGizmos();
+        // 与 Creator onSceneOpened 一致：场景加载后 active 才可靠，每次打开都回到移动工具。
+        this.transformToolName = 'position';
         this._showIconGizmosForScene();
-        this.initFromConfig();
         // 编辑器打开/重载后节点和组件对象可能已重建，保留选择路径并重新挂到新组件上。
-        this._rebindSelectedGizmos();
-        // Camera.onEditorOpened 有 200ms 延迟的 defaultFocus，需要等它完成后再显示世界坐标轴
+        this._reselectCurrentSelection();
+        // Camera.onEditorOpened 会异步恢复视图；延后一帧再补注册并刷新世界坐标轴。
         setTimeout(() => {
             // init 阶段编辑器相机还不存在，registerCameraMovedEvent 静默失败，此处补注册
             this._worldAxisController?.registerCameraMovedEvent();

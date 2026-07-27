@@ -28,14 +28,14 @@ export class PrefabEditor extends BaseEditor {
         // 获取预制体标识符
         const identifier = this.getIdentifier(asset);
         // 加载预制体资源
-        this.virtualScene = await sceneUtils.runScene(new Scene(`virtual-scene-${asset.uuid}`));
+        const virtualScene = new Scene(`virtual-scene-${asset.uuid}`);
         const prefabAsset = await sceneUtils.loadAny<Prefab>(identifier.assetUuid);
 
         // 实例化预制体
         const instance = instantiate(prefabAsset);
         editorPrefabUtils.preparePrefabRootForEditing(instance);
-        this.virtualScene.addChild(instance);
-        await this.ensurePreviewCanvasForUI(instance);
+        await this.mountPrefabInstanceForPreview(virtualScene, instance);
+        this.virtualScene = await sceneUtils.runScene(virtualScene);
 
         // 设置当前打开的预制体
         this.setCurrentOpen({
@@ -110,6 +110,16 @@ export class PrefabEditor extends BaseEditor {
         Prefab._utils.applyTargetOverrides(this.entity.instance);
         await this.ensurePreviewCanvasForUI(this.entity.instance);
         return this.encode(undefined, this._lastOpenOptions);
+    }
+
+    private async mountPrefabInstanceForPreview(scene: Scene, instance: Node): Promise<void> {
+        if (!this.shouldUsePreviewCanvas(instance)) {
+            scene.addChild(instance);
+            return;
+        }
+
+        const canvasNode = await createShouldHideInHierarchyCanvasNode(scene);
+        instance.parent = canvasNode;
     }
 
     private async ensurePreviewCanvasForUI(instance: Node): Promise<void> {

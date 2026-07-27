@@ -7,6 +7,7 @@ import { GizmoMouseEvent } from './utils/defines';
 import { getRaycastResults, raycast, RaycastResults } from './utils/engine-utils';
 import { getRaycastResultNodes, getRegionNodes } from './utils/node-utils';
 import { getSelectNode } from './utils/selection-utils';
+import { getEditorNodeByPath, getEditorNodePath } from './utils/editor-node';
 
 function getService(): any {
     try {
@@ -26,13 +27,11 @@ function getServiceProp(name: string): any {
 }
 
 function getNodeByPath(path: string): Node | null {
-    const EditorExtends = (cc as any).EditorExtends || (globalThis as any).EditorExtends;
-    return EditorExtends?.Node?.getNodeByPath?.(path) ?? null;
+    return getEditorNodeByPath(path);
 }
 
 function getNodePath(node: Node): string {
-    const EditorExtends = (cc as any).EditorExtends || (globalThis as any).EditorExtends;
-    return EditorExtends?.Node?.getNodePath?.(node) ?? '';
+    return getEditorNodePath(node);
 }
 
 /**

@@ -73,8 +73,8 @@ function createPrefabRoot(name: string, options?: { hasCanvas?: boolean; hasUI?:
     };
 }
 
-async function openPrefabWith(prefabRoot: any, scene = new MockScene('virtual-scene')): Promise<{ editor: PrefabEditor; scene: MockScene; }> {
-    (sceneUtils.runScene as jest.Mock).mockResolvedValue(scene);
+async function openPrefabWith(prefabRoot: any): Promise<{ editor: PrefabEditor; scene: MockScene; }> {
+    (sceneUtils.runScene as jest.Mock).mockImplementation(async (scene: MockScene) => scene);
     (sceneUtils.loadAny as jest.Mock).mockResolvedValue({});
     (instantiate as unknown as jest.Mock).mockReturnValue(prefabRoot);
     const editor = new PrefabEditor();
@@ -86,6 +86,7 @@ async function openPrefabWith(prefabRoot: any, scene = new MockScene('virtual-sc
         url: 'db://assets/LabelPrefab.prefab',
     } as never);
 
+    const scene = (sceneUtils.runScene as jest.Mock).mock.calls[0][0] as MockScene;
     return { editor, scene };
 }
 
@@ -105,15 +106,27 @@ describe('PrefabEditor preview Canvas', () => {
     });
 
     it('hosts a UI prefab without its own Canvas under an editor-only Canvas when opened', async () => {
-        const scene = new MockScene('virtual-scene');
         const previewCanvas = { name: 'should_hide_in_hierarchy' };
         const prefabRoot = createPrefabRoot('LabelPrefab');
 
         createShouldHideInHierarchyCanvasNode.mockResolvedValue(previewCanvas);
 
-        await openPrefabWith(prefabRoot, scene);
+        const { scene } = await openPrefabWith(prefabRoot);
 
         expect(createShouldHideInHierarchyCanvasNode).toHaveBeenCalledWith(scene);
+        expect(prefabRoot.parent).toBe(previewCanvas);
+    });
+
+    it('mounts the prefab hierarchy before running the virtual scene', async () => {
+        const previewCanvas = { name: 'should_hide_in_hierarchy' };
+        const prefabRoot = createPrefabRoot('LabelPrefab');
+
+        createShouldHideInHierarchyCanvasNode.mockResolvedValue(previewCanvas);
+
+        await openPrefabWith(prefabRoot);
+
+        expect(createShouldHideInHierarchyCanvasNode.mock.invocationCallOrder[0])
+            .toBeLessThan((sceneUtils.runScene as jest.Mock).mock.invocationCallOrder[0]);
         expect(prefabRoot.parent).toBe(previewCanvas);
     });
 

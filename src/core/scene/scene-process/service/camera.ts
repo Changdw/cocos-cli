@@ -105,28 +105,56 @@ export class CameraService extends BaseService<ICameraEvents> implements ICamera
 
             this.refresh();
 
-            const scene = (cc as any).director?.getScene();
-            const uuid = scene?.uuid || '';
+            const uuid = this._getCurrentViewUuid();
             if (this._currentUuid !== uuid) {
                 this._currentUuid = uuid;
                 this._controllerFirstChange = false;
             }
 
             this._detachSceneCameras();
+            void this._restoreCameraView();
 
-            setTimeout(async () => {
-                try {
-                    // 每次打开场景都重新加载相机视角记忆，避免复用 CameraService 时取到上一个场景的数据
-                    await this.loadCameraInfos();
-                    this._controller.updateGrid();
-                    this.defaultFocus(this._currentUuid);
-                    Service.Engine.repaintInEditMode();
-                } catch (e) {
-                    console.warn('[Camera] deferred grid update failed:', e);
-                }
-            }, 200);
         } catch (e) {
             console.warn('[Camera] onEditorOpened failed:', e);
+        }
+    }
+
+    private async _restoreCameraView(): Promise<void> {
+        const uuid = this._currentUuid;
+        try {
+            await this.loadCameraInfos();
+            if (uuid !== this._currentUuid) {
+                return;
+            }
+            this._controller.updateGrid();
+            this.defaultFocus(uuid);
+            this._refreshSelectedGizmos();
+            Service.Engine.repaintInEditMode();
+        } catch (e) {
+            console.warn('[Camera] restore camera view failed:', e);
+        }
+    }
+
+    private _getCurrentViewUuid(): string {
+        try {
+            const editorUuid = (Service.Editor as unknown as { getCurrentEditorUuid?: () => string | null })
+                .getCurrentEditorUuid?.();
+            if (editorUuid) {
+                return editorUuid;
+            }
+        } catch {
+            // Editor service may not be registered in early init or isolated tests.
+        }
+        const scene = (cc as any).director?.getScene?.();
+        return scene?.uuid || '';
+    }
+
+    private _refreshSelectedGizmos(): void {
+        try {
+            (Service.Gizmo as unknown as { refreshSelectedGizmos?: () => void })
+                .refreshSelectedGizmos?.();
+        } catch {
+            // Selection/Gizmo may not be registered while opening isolated editor views.
         }
     }
 
