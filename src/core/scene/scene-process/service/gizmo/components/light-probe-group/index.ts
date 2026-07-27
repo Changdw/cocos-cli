@@ -2,6 +2,7 @@
 
 import { Color, js, LightProbeGroup, Node, Quat, Vec3 } from 'cc';
 import GizmoBase from '../../base/gizmo-base';
+import IconGizmoBase from '../../base/gizmo-icon';
 import BoxController from '../../controller/box';
 import ControllerUtils from '../../utils/controller-utils';
 import { addMeshToNode, create3DNode, getModel, setMeshColor } from '../../utils/engine-utils';
@@ -312,10 +313,19 @@ class LightProbeGroupComponentGizmo extends GizmoBase<LightProbeGroup> {
     }
 }
 
+class LightProbeGroupIconGizmo extends IconGizmoBase<LightProbeGroup> {
+    public disableOnSelected = true;
+
+    createController() {
+        super.createController();
+        this._controller.setTextureByUUID('9e0cc8d3-a76b-4bee-b53e-f3abab91c4b8@6c48a');
+    }
+}
+
 export const name = js.getClassName(LightProbeGroup);
 // 仅选中 LightProbeGroup 节点时显示；选中“使用探针的物体”时的四面体见 utils/light-probe-tetra。
 export const SelectGizmo = LightProbeGroupComponentGizmo;
-export const IconGizmo = null;
+export const IconGizmo = LightProbeGroupIconGizmo;
 export const PersistentGizmo = null;
 
-registerGizmo(name, { SelectGizmo });
+registerGizmo(name, { SelectGizmo, IconGizmo });

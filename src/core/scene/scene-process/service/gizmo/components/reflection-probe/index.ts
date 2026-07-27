@@ -2,6 +2,7 @@
 
 import { Color, js, Quat, ReflectionProbe, Vec3 } from 'cc';
 import GizmoBase from '../../base/gizmo-base';
+import IconGizmoBase from '../../base/gizmo-icon';
 import BoxController from '../../controller/box';
 import { registerGizmo } from '../../gizmo-defines';
 
@@ -110,10 +111,19 @@ class ReflectionProbeComponentGizmo extends GizmoBase<ReflectionProbe> {
     }
 }
 
+class ReflectionProbeIconGizmo extends IconGizmoBase<ReflectionProbe> {
+    public disableOnSelected = true;
+
+    createController() {
+        super.createController();
+        this._controller.setTextureByUUID('dee6f7cc-ba21-4091-948f-4f508495f260@6c48a');
+    }
+}
+
 export const name = js.getClassName(ReflectionProbe);
 // 仅选中 ReflectionProbe 节点时显示影响盒（对齐 Creator 的选中态；图标/预览球后续再加）。
 export const SelectGizmo = ReflectionProbeComponentGizmo;
-export const IconGizmo = null;
+export const IconGizmo = ReflectionProbeIconGizmo;
 export const PersistentGizmo = null;
 
-registerGizmo(name, { SelectGizmo });
+registerGizmo(name, { SelectGizmo, IconGizmo });
