@@ -15,6 +15,7 @@ import type {
     IAnimationTargetOptions,
 } from '../../../common';
 import { createClipDump } from './clip-dump';
+import { normalizePath } from './property-curve-track';
 import type { IPropertyCurveMetadataContext } from './property-curve';
 import { ACTIVE_PROPERTY, DEFAULT_PROPERTIES } from './property-menu';
 import { queryAnimationPropertyMetadata, queryComponentAnimableProperties } from './property-metadata';
@@ -27,6 +28,9 @@ import {
 } from './scene-node';
 import { IAnimationSession } from './types';
 import { clipUuid } from './utils';
+
+
+export { upgradeUntypedAnimationTracks } from './untyped-animation-track';
 
 export function assertAnimationEditorOpened(editorRoot: Node | null): asserts editorRoot is Node {
     if (!editorRoot) {
@@ -117,18 +121,15 @@ export function isCurrentAnimationSessionClipQuery(
     if (!hasTarget) {
         return true;
     }
-    const sessionRootPath = normalizeTargetPath(session.rootPath);
-    const optionRootPath = normalizeTargetPath(options.rootPath || '');
-    const optionNodePath = normalizeTargetPath(options.nodePath || '');
+    const sessionRootPath = normalizePath(session.rootPath);
+    const optionRootPath = normalizePath(options.rootPath || '');
+    const optionNodePath = normalizePath(options.nodePath || '');
     return options.rootUuid === session.rootUuid
         || (options.rootPath !== undefined && optionRootPath === sessionRootPath)
         || options.nodeUuid === session.rootUuid
         || (options.nodePath !== undefined && optionNodePath === sessionRootPath);
 }
 
-function normalizeTargetPath(path: string): string {
-    return String(path || '').replace(/^\/+|\/+$/g, '');
-}
 
 export function queryAnimationServiceProperties(node: Node, root: Node | null): IAnimationPropertyInfo[] {
     const isChild = Boolean(root && root !== node);
