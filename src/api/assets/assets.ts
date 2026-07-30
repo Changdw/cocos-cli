@@ -409,7 +409,7 @@ export class AssetsApi {
             const assetInfo = await assetManager.reimportAsset(pathOrUrlOrUUID);
             ret.data = assetInfo;
         } catch (e) {
-            ret.code = COMMON_STATUS.FAIL;
+            ret.code = getCommonErrorStatus(e);
             console.error(e);
             ret.reason = e instanceof Error ? e.message + e.stack : String(e);
         }

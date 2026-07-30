@@ -11,6 +11,7 @@ const mockQueryAssetInfos = jest.fn();
 const mockQueryUrl = jest.fn();
 const mockAssetQueryUrl = jest.fn();
 const mockRefresh = jest.fn(async (_pathOrUrlOrUUID: string) => 0);
+const mockReimport = jest.fn();
 const mockAddTask = jest.fn(async (func: Function, args: any[]) => await func(...args));
 const mockGetCreateMenuByName = jest.fn();
 const mockCreateAssetByHandler = jest.fn();
@@ -27,7 +28,7 @@ jest.mock('fs-extra', () => ({
 
 jest.mock('@cocos/asset-db', () => ({
     refresh: (pathOrUrlOrUUID: string) => mockRefresh(pathOrUrlOrUUID),
-    reimport: jest.fn(),
+    reimport: (...args: any[]) => mockReimport(...args),
     queryUrl: (...args: any[]) => mockQueryUrl(...args),
     Asset: class {},
 }));
@@ -199,6 +200,61 @@ describe('asset operation filesystem bridge', () => {
         expect(reimport).toHaveBeenCalledTimes(1);
         expect(reimport).toHaveBeenCalledWith('6fa5fbad-0d32-4b63-95d8-24507665775c@6c48a');
         expect(result).toBe(subAsset.meta.userData);
+    });
+
+    it('reimportAsset waits for a busy asset and retries the latest disk content', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const asset = {
+            init: false,
+            imported: true,
+            invalid: false,
+            source: 'D:/project/assets/Game.ts',
+            waitInit: jest.fn(async () => {
+                asset.init = true;
+            }),
+        };
+        mockReimport.mockResolvedValueOnce(null).mockResolvedValueOnce(asset);
+        mockQueryAsset.mockReturnValue(asset);
+
+        const result = await assetOperation.reimportAsset('game-script-uuid');
+
+        expect(mockReimport).toHaveBeenNthCalledWith(1, 'game-script-uuid');
+        expect(asset.waitInit).toHaveBeenCalledTimes(1);
+        expect(mockReimport).toHaveBeenNthCalledWith(2, 'game-script-uuid');
+        expect(result).toEqual({ source: asset.source });
+    });
+
+    it('reimportAsset still reports a genuinely missing asset', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        mockReimport.mockResolvedValue(null);
+        mockQueryAsset.mockReturnValue(null);
+
+        await expect(assetOperation.reimportAsset('missing-asset-uuid'))
+            .rejects.toThrow('无法找到资源 missing-asset-uuid');
+    });
+
+    it('reimportAsset times out instead of waiting forever for a busy asset', async () => {
+        jest.useFakeTimers();
+        try {
+            const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+            const asset = {
+                init: false,
+                waitInit: jest.fn(() => new Promise<void>(() => undefined)),
+            };
+            mockReimport.mockResolvedValue(null);
+            mockQueryAsset.mockReturnValue(asset);
+
+            const result = assetOperation.reimportAsset('busy-asset-uuid');
+            const rejection = expect(result).rejects.toThrow(
+                'Reimport asset busy-asset-uuid timed out waiting for the current import to finish'
+            );
+            await jest.advanceTimersByTimeAsync(10_000);
+
+            await rejection;
+            expect(asset.waitInit).toHaveBeenCalledTimes(1);
+        } finally {
+            jest.useRealTimers();
+        }
     });
 
     it('updateUserDataByPath updates sub asset userData through composite uuid with one reimport', async () => {

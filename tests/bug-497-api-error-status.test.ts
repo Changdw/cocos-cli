@@ -5,6 +5,7 @@ const mockCreateAsset = jest.fn();
 const mockCreateAssetByType = jest.fn();
 const mockImportAsset = jest.fn();
 const mockSaveAsset = jest.fn();
+const mockReimportAsset = jest.fn();
 const mockQueryPath = jest.fn();
 const mockQueryUrl = jest.fn();
 const mockQueryLinesInFile = jest.fn();
@@ -33,6 +34,7 @@ jest.mock('../src/core/assets', () => ({
         createAssetByType: (...args: unknown[]) => mockCreateAssetByType(...args),
         importAsset: (...args: unknown[]) => mockImportAsset(...args),
         saveAsset: (...args: unknown[]) => mockSaveAsset(...args),
+        reimportAsset: (...args: unknown[]) => mockReimportAsset(...args),
         queryPath: (...args: unknown[]) => mockQueryPath(...args),
         queryUrl: (...args: unknown[]) => mockQueryUrl(...args),
     },
@@ -86,6 +88,7 @@ describe('Bug #497 common API error status codes', () => {
         mockCreateAssetByType.mockReset();
         mockImportAsset.mockReset();
         mockSaveAsset.mockReset();
+        mockReimportAsset.mockReset();
         mockQueryPath.mockReset();
         mockQueryUrl.mockReset();
         mockQueryLinesInFile.mockReset();
@@ -106,6 +109,7 @@ describe('Bug #497 common API error status codes', () => {
         expect(getCommonErrorStatus(new Error('ENOENT: no such file or directory'))).toBe(COMMON_STATUS.NOT_FOUND);
         expect(getCommonErrorStatus(new Error('Asset can not be found: db://assets/missing.scene'))).toBe(COMMON_STATUS.NOT_FOUND);
         expect(getCommonErrorStatus(new Error('can not find asset d:\\cocos\\program\\snake2\\assets\\resources\\Image'))).toBe(COMMON_STATUS.NOT_FOUND);
+        expect(getCommonErrorStatus(new Error('无法找到资源 missing-asset-uuid, 请检查参数是否正确'))).toBe(COMMON_STATUS.NOT_FOUND);
         expect(getCommonErrorStatus(new Error('Invalid scene/prefab asset content: invalid JSON'))).toBe(COMMON_STATUS.BAD_REQUEST);
         expect(getCommonErrorStatus(Object.assign(new Error('Invalid asset reference for property spriteFrame'), {
             code: 'INVALID_ASSET_REFERENCE',
@@ -143,6 +147,16 @@ describe('Bug #497 common API error status codes', () => {
         expect(result.code).toBe(HTTP_STATUS.NOT_FOUND);
         expect(result.data).toBeNull();
         expect(result.reason).toContain('Asset not found');
+    });
+
+    it('returns 404 when reimporting a genuinely missing asset', async () => {
+        mockReimportAsset.mockRejectedValue(new Error('无法找到资源 missing-asset-uuid, 请检查参数是否正确'));
+
+        const result = await new AssetsApi().reimportAsset('missing-asset-uuid');
+
+        expect(result.code).toBe(HTTP_STATUS.NOT_FOUND);
+        expect(result.data).toBeNull();
+        expect(result.reason).toContain('无法找到资源 missing-asset-uuid');
     });
 
     it('returns 400 for asset query parameter errors', async () => {
