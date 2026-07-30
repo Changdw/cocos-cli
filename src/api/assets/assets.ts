@@ -178,7 +178,7 @@ export class AssetsApi {
      */
     @tool('assets-query-asset-info')
     @title('Query Detailed Asset Info') // 查询资源详细信息
-    @description('Query detailed information of an asset based on its URL, UUID, or file path. You can specify the fields to query via the dataKeys parameter to optimize performance. Returned information includes asset name, type, path, UUID, import status, etc.') // 根据资源的 URL、UUID 或文件路径查询资源的详细信息。可以通过 dataKeys 参数指定需要查询的字段，以优化性能。返回的信息包括资源名称、类型、路径、UUID、导入状态等。
+    @description('Query detailed asset information by URL, UUID, or file path. By default the result includes subAssets; use each sub-asset type (for example type === "cc.SpriteFrame") to select the UUID required by a component property. Specify dataKeys, including "subAssets" and "extends", when an explicit field list is needed.') // 根据 URL、UUID 或文件路径查询资源详情；默认包含子资源，可按 type 选择组件属性所需的子资源 UUID
     @result(SchemaAssetInfoResult)
     async queryAssetInfo(
         @param(SchemaUrlOrUUIDOrPath) urlOrUUIDOrPath: TUrlOrUUIDOrPath,
@@ -792,7 +792,7 @@ export class AssetsApi {
      */
     @tool('assets-query-uuid')
     @title('Query Asset UUID') // 查询资源 UUID
-    @description('Query the unique identifier UUID of an asset based on its URL or file path. Supports db:// protocol paths and file system paths.') // 根据资源的 URL 或文件路径查询资源的唯一标识符 UUID。支持 db:// 协议路径和文件系统路径。
+    @description('Query the UUID of the exact asset addressed by a URL or file path. This does not automatically choose a typed sub-asset: querying an image URL returns its parent ImageAsset UUID. Use assets-query-asset-info and inspect subAssets when a component requires cc.SpriteFrame or another specific Asset type.') // 查询 URL 或路径直接指向资源的 UUID；不会自动选择 SpriteFrame 等子资源
     @result(SchemaUUIDResult)
     async queryUUID(@param(SchemaUrlOrPath) urlOrPath: TUrlOrPath): Promise<CommonResultType<TUUIDResult>> {
         const code: HttpStatusCode = COMMON_STATUS.SUCCESS;
