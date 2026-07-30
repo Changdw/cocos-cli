@@ -20,6 +20,24 @@ import EventEmitter from 'events';
 import { mergeMeta } from '../asset-handler/utils';
 import * as lodash from 'lodash';
 
+const REIMPORT_BUSY_TIMEOUT_MS = 10_000;
+
+function waitForAssetInit(asset: IAsset, timeoutMs: number, pathOrUrlOrUUID: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            reject(new Error(`Reimport asset ${pathOrUrlOrUUID} timed out waiting for the current import to finish`));
+        }, timeoutMs);
+
+        asset.waitInit().then(() => {
+            clearTimeout(timer);
+            resolve();
+        }, (error) => {
+            clearTimeout(timer);
+            reject(error);
+        });
+    });
+}
+
 function isScriptAsset(asset: IAsset) {
     const importer = asset.meta?.importer;
     return importer === 'typescript'
@@ -606,11 +624,27 @@ class AssetOperation extends EventEmitter {
         if (pathOrUrlOrUUID.startsWith('db://')) {
             pathOrUrlOrUUID = url2uuid(pathOrUrlOrUUID);
         }
-        const asset = await reimport(pathOrUrlOrUUID);
-        if (!asset) {
-            throw new Error(`无法找到资源 ${pathOrUrlOrUUID}, 请检查参数是否正确`);
+        let asset = await reimport(pathOrUrlOrUUID);
+        let busyDeadline = 0;
+        while (!asset) {
+            const existingAsset = assetQuery.queryAsset(pathOrUrlOrUUID);
+            if (!existingAsset) {
+                throw new Error(`无法找到资源 ${pathOrUrlOrUUID}, 请检查参数是否正确`);
+            }
+            busyDeadline ||= Date.now() + REIMPORT_BUSY_TIMEOUT_MS;
+            const remainingTime = busyDeadline - Date.now();
+            if (remainingTime <= 0) {
+                throw new Error(`Reimport asset ${pathOrUrlOrUUID} timed out waiting for the current import to finish`);
+            }
+            if (!existingAsset.init) {
+                await waitForAssetInit(existingAsset, remainingTime, pathOrUrlOrUUID);
+            }
+            if (Date.now() >= busyDeadline) {
+                throw new Error(`Reimport asset ${pathOrUrlOrUUID} timed out waiting for the current import to finish`);
+            }
+            asset = await reimport(pathOrUrlOrUUID);
         }
-        if (asset && (!asset.imported || asset.invalid)) {
+        if (!asset.imported || asset.invalid) {
             throw asset.importError || new Error(`Reimport asset ${asset.source} failed`);
         }
         return assetQuery.encodeAsset(asset);

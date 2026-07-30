@@ -78,7 +78,7 @@ export function getCommonErrorStatus(error: unknown): CommonStatus {
         return COMMON_STATUS.BAD_REQUEST;
     }
 
-    if (code === 'ENOENT' || /ENOENT|no such file or directory|not found|not exist|cannot find|can not find|can not be found/i.test(message)) {
+    if (code === 'ENOENT' || /ENOENT|no such file or directory|not found|not exist|cannot find|can not find|can not be found|无法找到资源/i.test(message)) {
         return COMMON_STATUS.NOT_FOUND;
     }
 
