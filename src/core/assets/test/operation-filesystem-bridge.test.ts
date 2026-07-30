@@ -3,6 +3,13 @@ export {};
 const mockCopy = jest.fn();
 const mockExistsSync = jest.fn();
 const mockCopyPath = jest.fn();
+const mockCopyAssetSource = jest.fn();
+const mockFinalizeCopy = jest.fn();
+const mockRollbackCopy = jest.fn();
+const mockCopyTransaction = {
+    finalize: mockFinalizeCopy,
+    rollback: mockRollbackCopy,
+};
 const mockMoveAssetSource = jest.fn();
 const mockRenamePath = jest.fn();
 const mockQueryAsset = jest.fn();
@@ -77,6 +84,10 @@ jest.mock('../manager/filesystem', () => ({
     resetFileSystemProvider: jest.fn(),
 }));
 
+jest.mock('../manager/asset-copy', () => ({
+    copyAssetSource: (...args: any[]) => mockCopyAssetSource(...args),
+}));
+
 jest.mock('../manager/asset-db', () => ({
     __esModule: true,
     default: {
@@ -148,6 +159,9 @@ describe('asset operation filesystem bridge', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        mockCopyAssetSource.mockResolvedValue(mockCopyTransaction);
+        mockFinalizeCopy.mockResolvedValue(undefined);
+        mockRollbackCopy.mockResolvedValue(undefined);
         const assetDBManager = require('../manager/asset-db').default as typeof import('../manager/asset-db').default;
         Object.keys(assetDBManager.assetDBInfo).forEach((key) => delete assetDBManager.assetDBInfo[key]);
         mockAssetQueryUrl.mockImplementation((value: string) => {
@@ -321,6 +335,130 @@ describe('asset operation filesystem bridge', () => {
         expect(mockCopyPath).toHaveBeenCalledWith(source, target, { overwrite: true });
         expect(mockCopy).not.toHaveBeenCalled();
         expect(result).toEqual([assetInfo]);
+    });
+
+    it('copyAsset should delegate source and meta copying and return the imported copy', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const source = 'D:/project/assets/source.png';
+        const target = 'D:/project/assets/source-001.png';
+        const sourceAsset = {
+            source,
+            _parent: null,
+        };
+        const copiedAsset = {
+            source: target,
+            imported: true,
+            invalid: false,
+        };
+
+        setAssetDBInfo();
+        mockQueryAsset.mockImplementation((value: string) => value === target ? copiedAsset : sourceAsset);
+        mockExistsSync.mockImplementation((path: string) => path === source);
+        mockCopyAssetSource.mockResolvedValue(mockCopyTransaction);
+        jest.spyOn(assetOperation as any, '_refreshAsset').mockResolvedValue(0);
+
+        const result = await assetOperation.copyAsset(source, target, { overwrite: true });
+
+        expect(mockCopyAssetSource).toHaveBeenCalledWith(source, target, { overwrite: true });
+        expect(mockFinalizeCopy).toHaveBeenCalledTimes(1);
+        expect(mockRollbackCopy).not.toHaveBeenCalled();
+        expect(result).toEqual({ source: target });
+    });
+
+    it('copyAsset should resolve a rename conflict before copying metadata', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const source = 'D:/project/assets/source.png';
+        const requestedTarget = source;
+        const renamedTarget = 'D:/project/assets/source-001.png';
+        const sourceAsset = {
+            source,
+            _parent: null,
+        };
+        const copiedAsset = {
+            source: renamedTarget,
+            imported: true,
+            invalid: false,
+        };
+
+        setAssetDBInfo();
+        mockQueryAsset.mockImplementation((value: string) => value === renamedTarget ? copiedAsset : sourceAsset);
+        mockExistsSync.mockImplementation((path: string) => path === source);
+        mockCopyAssetSource.mockResolvedValue(mockCopyTransaction);
+        jest.spyOn(assetOperation as any, '_checkOverwrite').mockReturnValue(renamedTarget);
+        jest.spyOn(assetOperation as any, '_refreshAsset').mockResolvedValue(0);
+
+        await assetOperation.copyAsset(source, requestedTarget, { rename: true });
+
+        expect(mockCopyAssetSource).toHaveBeenCalledWith(source, renamedTarget, { rename: true });
+    });
+
+    it('copyAsset should reject replacing an AssetDB root', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const source = 'D:/project/internal/source.png';
+        const target = 'D:/project/assets';
+        mockQueryAsset.mockReturnValue({ source, _parent: null });
+        mockExistsSync.mockImplementation((path: string) => path === source || path === target);
+        setAssetDBInfo(target);
+
+        await expect(assetOperation.copyAsset(source, 'db://assets', { overwrite: true }))
+            .rejects.toThrow('Cannot copy an asset over an AssetDB root');
+
+        expect(mockCopyAssetSource).not.toHaveBeenCalled();
+    });
+
+    it('copyAsset should reject replacing an ancestor of the source asset', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const target = 'D:/project/assets/folder';
+        const source = `${target}/child/source.png`;
+        mockQueryAsset.mockReturnValue({ source, _parent: null });
+        mockExistsSync.mockImplementation((path: string) => path === source || path === target);
+        setAssetDBInfo();
+
+        await expect(assetOperation.copyAsset(source, target, { overwrite: true }))
+            .rejects.toThrow('Cannot copy an asset into or over itself');
+
+        expect(mockCopyAssetSource).not.toHaveBeenCalled();
+    });
+
+    it('copyAsset should roll back the filesystem transaction when refresh fails', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const source = 'D:/project/assets/source.png';
+        const target = 'D:/project/assets/source-001.png';
+        const sourceAsset = {
+            source,
+            _parent: null,
+        };
+
+        setAssetDBInfo();
+        mockQueryAsset.mockReturnValue(sourceAsset);
+        mockExistsSync.mockImplementation((path: string) => path === source);
+        const refresh = jest.spyOn(assetOperation as any, '_refreshAsset')
+            .mockRejectedValueOnce(new Error('refresh failed'))
+            .mockResolvedValueOnce(0);
+
+        await expect(assetOperation.copyAsset(source, target, { overwrite: true })).rejects.toThrow('refresh failed');
+
+        expect(mockRollbackCopy).toHaveBeenCalledTimes(1);
+        expect(mockFinalizeCopy).not.toHaveBeenCalled();
+        expect(refresh).toHaveBeenLastCalledWith(dirname(target), false);
+    });
+
+    it('copyAsset should report backup cleanup failures', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const source = 'D:/project/assets/source.png';
+        const target = 'D:/project/assets/source-001.png';
+        const sourceAsset = { source, _parent: null };
+        const copiedAsset = { source: target, imported: true, invalid: false };
+
+        setAssetDBInfo();
+        mockQueryAsset.mockImplementation((value: string) => value === target ? copiedAsset : sourceAsset);
+        mockExistsSync.mockImplementation((path: string) => path === source);
+        mockFinalizeCopy.mockRejectedValueOnce(new Error('cleanup denied'));
+        jest.spyOn(assetOperation as any, '_refreshAsset').mockResolvedValue(0);
+
+        await expect(assetOperation.copyAsset(source, target)).rejects.toThrow('cleanup denied');
+
+        expect(mockRollbackCopy).not.toHaveBeenCalled();
     });
 
     it('refreshAsset should normalize an absolute asset-db path before refreshing', async () => {

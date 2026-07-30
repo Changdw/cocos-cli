@@ -392,6 +392,34 @@ export class AssetsApi {
     }
 
     /**
+     * Copy Asset // 复制资源
+     */
+    @tool('assets-copy-asset')
+    @title('Copy Asset') // 复制资源
+    @description('Copy an existing main asset to a new location together with its complete metadata. The copied asset receives new UUIDs while preserving importer settings, userData, subMetas, and internal references. Supports overwrite or automatic rename on conflicts.') // 将现有主资源及其完整元数据复制到新位置。副本会获得新 UUID，同时保留导入设置、userData、subMetas 和内部引用。支持冲突时覆盖或自动重命名。
+    @result(SchemaAssetInfoResult)
+    async copyAsset(
+        @param(SchemaUrlOrUUIDOrPath) source: TUrlOrUUIDOrPath,
+        @param(SchemaTargetPath) target: TDirOrDbPath,
+        @param(SchemaAssetOperationOption) options?: TAssetOperationOption
+    ): Promise<CommonResultType<TAssetInfoResult>> {
+        const ret: CommonResultType<TAssetInfoResult> = {
+            code: COMMON_STATUS.SUCCESS,
+            data: null,
+        };
+
+        try {
+            ret.data = await assetManager.copyAsset(source, target, options);
+        } catch (e) {
+            ret.code = getCommonErrorStatus(e);
+            console.error('copy asset fail:', e instanceof Error ? e.message : String(e));
+            ret.reason = e instanceof Error ? e.message : String(e);
+        }
+
+        return ret;
+    }
+
+    /**
      * Reimport Asset // 重新导入资源
      */
     @tool('assets-reimport-asset')

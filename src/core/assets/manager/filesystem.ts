@@ -97,7 +97,7 @@ export async function createDirectoryPath(path: string): Promise<void> {
     await Promise.resolve(provider.createDirectory!(path));
 }
 
-async function deletePath(path: string, options: DeleteAssetOptions = {}): Promise<void> {
+export async function deletePath(path: string, options: DeleteAssetOptions = {}): Promise<void> {
     await Promise.resolve(provider.delete!(path, options));
 }
 
