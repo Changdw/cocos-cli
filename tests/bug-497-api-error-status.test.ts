@@ -13,6 +13,7 @@ const mockReplaceTextInFile = jest.fn();
 const mockNodeQuery = jest.fn();
 const mockNodeDelete = jest.fn();
 const mockComponentQuery = jest.fn();
+const mockComponentSetProperty = jest.fn();
 
 jest.mock('../src/api/decorator/decorator.js', () => ({
     description: () => jest.fn(),
@@ -55,6 +56,7 @@ jest.mock('../src/core/scene', () => ({
         },
         Component: {
             query: (...args: unknown[]) => mockComponentQuery(...args),
+            setProperty: (...args: unknown[]) => mockComponentSetProperty(...args),
         },
     },
 }));
@@ -92,6 +94,7 @@ describe('Bug #497 common API error status codes', () => {
         mockNodeQuery.mockReset();
         mockNodeDelete.mockReset();
         mockComponentQuery.mockReset();
+        mockComponentSetProperty.mockReset();
     });
 
     it('allows client-side business error codes in common results', () => {
@@ -104,6 +107,9 @@ describe('Bug #497 common API error status codes', () => {
         expect(getCommonErrorStatus(new Error('Asset can not be found: db://assets/missing.scene'))).toBe(COMMON_STATUS.NOT_FOUND);
         expect(getCommonErrorStatus(new Error('can not find asset d:\\cocos\\program\\snake2\\assets\\resources\\Image'))).toBe(COMMON_STATUS.NOT_FOUND);
         expect(getCommonErrorStatus(new Error('Invalid scene/prefab asset content: invalid JSON'))).toBe(COMMON_STATUS.BAD_REQUEST);
+        expect(getCommonErrorStatus(Object.assign(new Error('Invalid asset reference for property spriteFrame'), {
+            code: 'INVALID_ASSET_REFERENCE',
+        }))).toBe(COMMON_STATUS.BAD_REQUEST);
         expect(getCommonErrorStatus(new Error('Filename cannot be empty.'))).toBe(COMMON_STATUS.BAD_REQUEST);
         expect(getCommonErrorStatus(new Error('parameter error'))).toBe(COMMON_STATUS.BAD_REQUEST);
         expect(getCommonErrorStatus(new Error('file GameManager.ts already exists, please use overwrite option'))).toBe(COMMON_STATUS.BAD_REQUEST);
@@ -371,5 +377,20 @@ describe('Bug #497 common API error status codes', () => {
 
         expect(result.code).toBe(HTTP_STATUS.NOT_FOUND);
         expect(result.reason).toBe('component not found: Canvas/Missing/cc.Label');
+    });
+
+    it('returns 400 when a component Asset reference fails semantic validation', async () => {
+        mockComponentSetProperty.mockRejectedValue(Object.assign(
+            new Error("Invalid asset reference for property 'spriteFrame': expected cc.SpriteFrame"),
+            { code: 'INVALID_ASSET_REFERENCE' },
+        ));
+
+        const result = await new ComponentApi().setProperty({
+            componentPath: 'Canvas/Coin/cc.Sprite',
+            properties: { spriteFrame: { uuid: 'bad-parent-uuid' } },
+        });
+
+        expect(result.code).toBe(HTTP_STATUS.BAD_REQUEST);
+        expect(result.reason).toContain('expected cc.SpriteFrame');
     });
 });

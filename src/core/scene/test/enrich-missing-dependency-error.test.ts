@@ -100,11 +100,13 @@ describe('enrichMissingDependencyError', () => {
         const msg = await enrichMissingDependencyError(errInfo, OWNER);
         expect(msg).toContain('Detail: some unexpected error format');
         expect(msg).toContain(OWNER);
+        expect(msg).not.toContain('dependent asset is missing');
     });
 
     it('handles empty error message', async () => {
         const msg = await enrichMissingDependencyError('', OWNER);
         expect(msg).toContain('Detail:');
         expect(msg).toContain(OWNER);
+        expect(msg).not.toContain('dependent asset is missing');
     });
 });

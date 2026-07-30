@@ -8,7 +8,7 @@ export async function enrichMissingDependencyError(
 ): Promise<string> {
     const result = DOWNLOAD_FAILED_RE.exec(errInfo);
     if (!result) {
-        return `The asset ${ownerAsset} cannot be loaded because a dependent asset is missing. Detail: ${errInfo}`;
+        return `The asset ${ownerAsset} cannot be loaded. Detail: ${errInfo}`;
     }
     const missingUuid = result[1];
     let assetDesc = missingUuid;
