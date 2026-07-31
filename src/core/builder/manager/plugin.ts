@@ -3,7 +3,7 @@ import { basename, join } from 'path';
 import { checkBuildCommonOptionsByKey, checkBundleCompressionSetting } from '../share/common-options-validator';
 import { NATIVE_PLATFORM, PLATFORMS } from '../share/platforms-options';
 import { validator, validatorManager } from '../share/validator-manager';
-import { checkConfigDefault, defaultMerge, defaultsDeep, getOptionsDefault, resolveToRaw } from '../share/utils';
+import { checkConfigDefault, cloneConfigValue, defaultMerge, defaultsDeep, getOptionsDefault, resolveToRaw } from '../share/utils';
 import { Platform, IDisplayOptions, IBuildTaskOption, IConsoleType, TextureCompressRenderConfig, TextureCompressFullRenderConfig } from '../@types';
 import { IInternalBuildPluginConfig, IPlatformBuildPluginConfig, PlatformBundleConfig, BundleQueryConfig, IBuildStageItem, BuildCheckResult, BuildTemplateConfig, IConfigGroupsInfo, IPlatformConfig, ITextureCompressConfig, IBuildHooksInfo, IBuildCommandOption, MakeRequired, IBuilderConfigItem, IPlatformRegisterInfo, IPluginRegisterInfo, IPackageRegisterInfo, IBuilderRegisterInfo, PlatformBuildSchema, PlatformConfigItem } from '../@types/protected';
 import Utils from '../../base/utils';
@@ -815,11 +815,11 @@ export class PluginManager extends EventEmitter {
      * @param platform
      */
     public async getOptionsByPlatform<P extends Platform | string>(platform: P): Promise<IBuildTaskOption> {
-        const options = await builderConfig.getProject<IBuildTaskOption>(`platforms.${platform}`);
-        const commonOptions = await builderConfig.getProject<IBuildCommandOption>(`common`);
+        const options = cloneConfigValue(await builderConfig.getProject<IBuildTaskOption>(`platforms.${platform}`));
+        const commonOptions = cloneConfigValue(await builderConfig.getProject<IBuildCommandOption>(`common`));
         commonOptions.platform = platform;
         commonOptions.outputName = platform;
-        return Object.assign(commonOptions, options);
+        return Object.assign({}, commonOptions, options);
     }
 
     public getTexturePlatformConfigs(): Record<string, ITextureCompressConfig> {

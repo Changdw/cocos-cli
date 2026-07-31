@@ -2,7 +2,7 @@ import { readJSONSync } from 'fs-extra';
 import i18n from '../base/i18n';
 import { BuildExitCode, BuildStageProgressCallback, IBuildCommandOption, IBuildResultData, IBuildStageOptions, IBuildTaskOption, IBundleBuildOptions, IPreviewSettingsResult, Platform } from './@types/private';
 import { pluginManager } from './manager/plugin';
-import { formatMSTime } from './share/utils';
+import { cloneConfigValue, formatMSTime } from './share/utils';
 import { newConsole } from '../base/console';
 import { basename, extname, isAbsolute, join } from 'path';
 import assetManager from '../assets/manager/asset';
@@ -351,5 +351,5 @@ export function getRegisteredPlatforms() {
 }
 
 export async function queryDefaultBuildConfigByPlatform(platform: Platform) {
-    return await pluginManager.getOptionsByPlatform(platform);
+    return cloneConfigValue(await pluginManager.getOptionsByPlatform(platform));
 }
