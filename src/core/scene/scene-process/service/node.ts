@@ -742,7 +742,7 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
             }
 
             const beforeNodeUuids = this._collectSceneNodeUuidsForUndo();
-            const newUuids = nodeMgr.paste(parentUuid, copiedUuids, params.keepWorldTransform);
+            const newUuids = nodeMgr.paste(parentUuid || root.uuid, copiedUuids, params.keepWorldTransform);
             const newPaths = newUuids.map(uuid => this._getNodePathByUuid(uuid)).filter(Boolean);
             this._undo.recordCreateNodeCommand(beforeNodeUuids, newPaths);
             return newPaths;
