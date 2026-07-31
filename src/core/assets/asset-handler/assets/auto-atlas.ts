@@ -1,5 +1,5 @@
 import { Asset } from '@cocos/asset-db';
-import { createTextureBaseUserDataConfig, makeDefaultTextureBaseAssetUserData } from './texture-base';
+import { createTextureBasePropertySchema, makeDefaultTextureBaseAssetUserData } from './texture-base';
 
 import { getDependUUIDList } from '../utils';
 import { AssetHandler } from '../../@types/protected';
@@ -36,108 +36,101 @@ const AutoAtlasHandler: AssetHandler = {
     assetType: 'cc.SpriteAtlas',
     propertySchemaConfig: {
             maxWidth: {
-                label: 'i18n:importer.property_schema.auto_atlas.max_width',
+                title: 'i18n:importer.property_schema.auto_atlas.max_width',
+                type: 'number',
                 default: defaultAutoAtlasUserData.maxWidth,
-                render: {
-                    ui: 'ui-number-input',
-                    attributes: { min: 1, step: 1 },
-                },
+                minimum: 1,
+                step: 1,
             },
             maxHeight: {
-                label: 'i18n:importer.property_schema.auto_atlas.max_height',
+                title: 'i18n:importer.property_schema.auto_atlas.max_height',
+                type: 'number',
                 default: defaultAutoAtlasUserData.maxHeight,
-                render: {
-                    ui: 'ui-number-input',
-                    attributes: { min: 1, step: 1 },
-                },
+                minimum: 1,
+                step: 1,
             },
             padding: {
-                label: 'i18n:importer.property_schema.auto_atlas.padding',
+                title: 'i18n:importer.property_schema.auto_atlas.padding',
+                type: 'number',
                 default: defaultAutoAtlasUserData.padding,
-                render: {
-                    ui: 'ui-number-input',
-                    attributes: { min: 0, step: 1 },
-                },
+                minimum: 0,
+                step: 1,
             },
             allowRotation: {
-                label: 'i18n:importer.property_schema.auto_atlas.allow_rotation',
+                title: 'i18n:importer.property_schema.auto_atlas.allow_rotation',
+                type: 'boolean',
                 default: defaultAutoAtlasUserData.allowRotation,
-                render: { ui: 'ui-checkbox' },
             },
             forceSquared: {
-                label: 'i18n:importer.property_schema.auto_atlas.force_squared',
+                title: 'i18n:importer.property_schema.auto_atlas.force_squared',
+                type: 'boolean',
                 default: defaultAutoAtlasUserData.forceSquared,
-                render: { ui: 'ui-checkbox' },
             },
             powerOfTwo: {
-                label: 'i18n:importer.property_schema.auto_atlas.power_of_two',
+                title: 'i18n:importer.property_schema.auto_atlas.power_of_two',
+                type: 'boolean',
                 default: defaultAutoAtlasUserData.powerOfTwo,
-                render: { ui: 'ui-checkbox' },
             },
             algorithm: {
-                label: 'i18n:importer.property_schema.auto_atlas.algorithm',
+                title: 'i18n:importer.property_schema.auto_atlas.algorithm',
+                type: 'string',
                 default: defaultAutoAtlasUserData.algorithm,
-                render: {
-                    ui: 'ui-select',
-                    items: [
-                        { label: 'i18n:importer.property_schema.auto_atlas.max_rects', value: 'MaxRects' },
-                    ],
-                },
+                enum: ['MaxRects'],
+                enumDescriptions: ['i18n:importer.property_schema.auto_atlas.max_rects'],
             },
             format: {
-                label: 'i18n:importer.property_schema.auto_atlas.format',
+                title: 'i18n:importer.property_schema.auto_atlas.format',
+                type: 'string',
                 default: defaultAutoAtlasUserData.format,
-                render: {
-                    ui: 'ui-select',
-                    items: [
-                        { label: 'i18n:importer.property_schema.auto_atlas.png', value: 'png' },
-                        { label: 'i18n:importer.property_schema.auto_atlas.jpg', value: 'jpg' },
-                    ],
-                },
+                enum: ['png', 'jpg'],
+                enumDescriptions: [
+                    'i18n:importer.property_schema.auto_atlas.png',
+                    'i18n:importer.property_schema.auto_atlas.jpg',
+                ],
             },
             quality: {
-                label: 'i18n:importer.property_schema.auto_atlas.quality',
+                title: 'i18n:importer.property_schema.auto_atlas.quality',
+                type: 'number',
                 default: defaultAutoAtlasUserData.quality,
-                render: {
-                    ui: 'ui-number-input',
-                    attributes: { min: 0, max: 100, step: 1 },
-                },
+                minimum: 0,
+                maximum: 100,
+                step: 1,
             },
             contourBleed: {
-                label: 'i18n:importer.property_schema.auto_atlas.contour_bleed',
+                title: 'i18n:importer.property_schema.auto_atlas.contour_bleed',
+                type: 'boolean',
                 default: defaultAutoAtlasUserData.contourBleed,
-                render: { ui: 'ui-checkbox' },
             },
             paddingBleed: {
-                label: 'i18n:importer.property_schema.auto_atlas.padding_bleed',
+                title: 'i18n:importer.property_schema.auto_atlas.padding_bleed',
+                type: 'boolean',
                 default: defaultAutoAtlasUserData.paddingBleed,
-                render: { ui: 'ui-checkbox' },
             },
             filterUnused: {
-                label: 'i18n:importer.property_schema.auto_atlas.filter_unused',
+                title: 'i18n:importer.property_schema.auto_atlas.filter_unused',
+                type: 'boolean',
                 default: defaultAutoAtlasUserData.filterUnused,
-                render: { ui: 'ui-checkbox' },
             },
             removeTextureInBundle: {
-                label: 'i18n:importer.property_schema.auto_atlas.remove_texture_in_bundle',
+                title: 'i18n:importer.property_schema.auto_atlas.remove_texture_in_bundle',
+                type: 'boolean',
                 default: defaultAutoAtlasUserData.removeTextureInBundle,
-                render: { ui: 'ui-checkbox' },
             },
             removeImageInBundle: {
-                label: 'i18n:importer.property_schema.auto_atlas.remove_image_in_bundle',
+                title: 'i18n:importer.property_schema.auto_atlas.remove_image_in_bundle',
+                type: 'boolean',
                 default: defaultAutoAtlasUserData.removeImageInBundle,
-                render: { ui: 'ui-checkbox' },
             },
             removeSpriteAtlasInBundle: {
-                label: 'i18n:importer.property_schema.auto_atlas.remove_sprite_atlas_in_bundle',
+                title: 'i18n:importer.property_schema.auto_atlas.remove_sprite_atlas_in_bundle',
+                type: 'boolean',
                 default: defaultAutoAtlasUserData.removeSpriteAtlasInBundle,
-                render: { ui: 'ui-checkbox' },
             },
             textureSetting: {
-                label: 'i18n:importer.property_schema.auto_atlas.texture_setting',
+                title: 'i18n:importer.property_schema.auto_atlas.texture_setting',
                 type: 'object',
                 default: defaultAutoAtlasUserData.textureSetting,
-                itemConfigs: createTextureBaseUserDataConfig(),
+                properties: createTextureBasePropertySchema(),
             },
     },
     createInfo: {

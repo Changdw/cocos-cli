@@ -6,7 +6,7 @@ import { AssetHandler } from '../../@types/protected';
 import { Texture2DAssetUserData } from '../../@types/userDatas';
 import { getDependUUIDList } from '../utils';
 import { makeDefaultTexture2DAssetUserData } from './image/utils';
-import { applyTextureBaseAssetUserData, createTextureBaseUserDataConfig } from './texture-base';
+import { applyTextureBaseAssetUserData, createTextureBasePropertySchema } from './texture-base';
 import { url2uuid } from '../../utils';
 
 export const TextureHandler: AssetHandler = {
@@ -17,23 +17,16 @@ export const TextureHandler: AssetHandler = {
     assetType: 'cc.Texture2D',
 
     propertySchemaConfig: {
-        ...createTextureBaseUserDataConfig(),
+        ...createTextureBasePropertySchema(),
         imageUuidOrDatabaseUri: {
-            label: 'i18n:ENGINE.assets.image.label',
+            title: 'i18n:ENGINE.assets.image.label',
+            type: 'string',
             default: '',
-            render: {
-                ui: 'ui-asset',
-                attributes: {
-                    assetType: 'cc.ImageAsset',
-                },
-            },
         },
         isUuid: {
-            label: 'i18n:importer.property_schema.texture.use_uuid',
+            title: 'i18n:importer.property_schema.texture.use_uuid',
+            type: 'boolean',
             default: true,
-            render: {
-                ui: 'ui-checkbox',
-            },
         },
     },
 

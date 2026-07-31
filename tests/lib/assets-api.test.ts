@@ -148,9 +148,11 @@ describe('lib assets api', () => {
     it('exposes queryPropertySchema and delegates to assetManager', async () => {
         const schema = {
             type: {
-                label: 'Import Type',
-                type: 'enum' as const,
+                title: 'Import Type',
+                type: 'string' as const,
                 default: 'sprite-frame',
+                enum: ['raw', 'sprite-frame'],
+                enumDescriptions: ['Raw', 'Sprite Frame'],
             },
         };
         mockAssetManager.queryPropertySchema.mockResolvedValue(schema);
