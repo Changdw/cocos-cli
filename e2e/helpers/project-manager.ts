@@ -70,13 +70,13 @@ export class E2EProjectManager {
      * 需要清理的 Cocos 项目缓存目录
      */
     private static readonly COCOS_CACHE_DIRS = [
-        'library',    // 编译缓存
-        'temp',       // 临时文件
-        'local',      // 本地数据
-        'build',      // 构建输出
-        'profiles',   // 配置文件
-        'settings',   // 设置
-        'packages',   // 插件包（如果是动态生成的）
+        'library',      // 编译缓存
+        'temp',         // 临时文件
+        'local',        // 本地数据
+        'build',        // 构建输出
+        'profiles',     // 个人/本机配置与本地缓存（local 作用域）
+        'settings/v2',  // Creator 场景缓存（settings/cocos.config.json 为提交层，需保留）
+        'packages',     // 插件包（如果是动态生成的）
     ];
 
     /**
@@ -339,7 +339,8 @@ export class E2EProjectManager {
      * @returns 是否复制
      */
     private shouldCopyFile(src: string, sourceRoot: string): boolean {
-        const relativePath = src.replace(sourceRoot, '').replace(/^[/\\]/, '');
+        // 归一化为正斜杠，保证与 COCOS_CACHE_DIRS（使用 /）在 Windows 下也能匹配
+        const relativePath = src.replace(sourceRoot, '').replace(/^[/\\]/, '').replace(/\\/g, '/');
 
         // 跳过空路径（根目录）
         if (!relativePath) {
@@ -348,9 +349,7 @@ export class E2EProjectManager {
 
         // 不复制 Cocos 缓存目录
         for (const cacheDir of E2EProjectManager.COCOS_CACHE_DIRS) {
-            if (relativePath.startsWith(cacheDir + '/') ||
-                relativePath.startsWith(cacheDir + '\\') ||
-                relativePath === cacheDir) {
+            if (relativePath === cacheDir || relativePath.startsWith(cacheDir + '/')) {
                 return false;
             }
         }

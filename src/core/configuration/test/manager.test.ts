@@ -27,7 +27,11 @@ const mockRegistry = configurationRegistry as jest.Mocked<typeof configurationRe
 describe('ConfigurationManager', () => {
     let manager: ConfigurationManager;
     const projectPath = '/test/project';
-    const configPath = path.join(projectPath, ConfigurationManager.name);
+    const configPath = path.join(projectPath, 'settings', ConfigurationManager.name);
+    const localConfigPath = path.join(projectPath, 'profiles', ConfigurationManager.name);
+    const mockExistingPaths = (...paths: string[]) => {
+        mockFse.pathExists.mockImplementation(async (filePath: string) => paths.includes(filePath));
+    };
 
     beforeEach(() => {
         manager = new ConfigurationManager();
@@ -41,7 +45,9 @@ describe('ConfigurationManager', () => {
         it('should initialize with default values', () => {
             expect(manager['initialized']).toBe(false);
             expect(manager['configPath']).toBe('');
+            expect(manager['localConfigPath']).toBe('');
             expect(manager['projectConfig']).toEqual({});
+            expect(manager['localConfig']).toEqual({});
             expect(manager['version']).toBe('0.0.0');
             expect(manager['configurationMap']).toBeInstanceOf(Map);
         });
@@ -51,7 +57,6 @@ describe('ConfigurationManager', () => {
         it('should initialize successfully with new project and load existing configuration', async () => {
             const { CocosMigrationManager } = require('../migration');
             CocosMigrationManager.migrate.mockResolvedValue({
-                global: {},
                 local: {},
                 project: {},
             });
@@ -64,6 +69,7 @@ describe('ConfigurationManager', () => {
             await manager.initialize(projectPath);
             expect(manager['initialized']).toBe(true);
             expect(manager['configPath']).toBe(configPath);
+            expect(manager['localConfigPath']).toBe(localConfigPath);
             expect(mockRegistry.on).toHaveBeenCalledWith(MessageType.Registry, expect.any(Function));
             expect(mockRegistry.on).toHaveBeenCalledWith(MessageType.UnRegistry, expect.any(Function));
             // 由于 projectConfig 初始为空，save 方法会直接返回，所以不会调用 writeJSON 或 ensureDir
@@ -71,7 +77,7 @@ describe('ConfigurationManager', () => {
 
             // Existing configuration
             const existingConfig = { version: '1.0.0', module1: { key: 'value' } };
-            mockFse.pathExists.mockResolvedValue(true);
+            mockExistingPaths(configPath);
             mockFse.readJSON.mockResolvedValue(existingConfig);
 
             const newManager = new ConfigurationManager();
@@ -80,10 +86,225 @@ describe('ConfigurationManager', () => {
             expect(mockFse.readJSON).toHaveBeenCalledWith(configPath);
         });
 
+        it('should load project and local configuration from separate files', async () => {
+            const projectConfig = { version: '1.0.0', testModule: { projectKey: 'projectValue' } };
+            const localConfig = { testModule: { localKey: 'localValue' } };
+
+            mockFse.pathExists.mockImplementation(async (filePath: string) => {
+                return filePath === configPath || filePath === localConfigPath;
+            });
+            mockFse.readJSON.mockImplementation(async (filePath: string) => {
+                if (filePath === configPath) {
+                    return projectConfig;
+                }
+                if (filePath === localConfigPath) {
+                    return localConfig;
+                }
+                return {};
+            });
+            mockFse.ensureDir.mockResolvedValue(undefined);
+            mockFse.writeJSON.mockResolvedValue(undefined);
+
+            await manager.initialize(projectPath);
+
+            expect(manager['projectConfig']).toEqual(projectConfig);
+            expect(manager['localConfig']).toEqual(localConfig);
+            expect(mockFse.readJSON).toHaveBeenCalledWith(configPath);
+            expect(mockFse.readJSON).toHaveBeenCalledWith(localConfigPath);
+        });
+
+        it('should split legacy root configuration into settings and profiles directories', async () => {
+            const legacyConfigPath = path.join(projectPath, ConfigurationManager.name);
+            const legacyConfig = {
+                version: '1.0.0',
+                testModule: { key: 'value' },
+                builder: {
+                    common: { platform: 'web-desktop' },
+                    platforms: {
+                        'web-desktop': { startScene: 'scene-uuid' },
+                    },
+                    bundleConfig: { foo: true },
+                },
+                scene: {
+                    tick: true,
+                    camera: { fov: 45 },
+                    gizmo: { is2D: true },
+                    sceneView: { sceneLightOn: false },
+                    'camera-infos': { node: { position: [0, 1, 2] } },
+                    'camera-uuids': ['node'],
+                },
+            };
+
+            mockFse.pathExists.mockImplementation(async (filePath: string) => {
+                return filePath === legacyConfigPath;
+            });
+            mockFse.readJSON.mockImplementation(async (filePath: string) => {
+                if (filePath === legacyConfigPath) {
+                    return legacyConfig;
+                }
+                return {};
+            });
+            mockFse.ensureDir.mockResolvedValue(undefined);
+            mockFse.writeJSON.mockResolvedValue(undefined);
+            mockFse.remove.mockResolvedValue(undefined);
+
+            await manager.initialize(projectPath);
+
+            expect(mockFse.writeJSON).toHaveBeenCalledWith(
+                `${configPath}.${process.pid}.tmp`,
+                {
+                    version: '1.0.0',
+                    testModule: { key: 'value' },
+                    builder: {
+                        bundleConfig: { foo: true },
+                    },
+                    scene: {
+                        tick: true,
+                    },
+                    $schema: '../temp/cocos.config.schema.json',
+                },
+                { spaces: 4 }
+            );
+            expect(mockFse.writeJSON).toHaveBeenCalledWith(
+                localConfigPath,
+                {
+                    builder: {
+                        common: { platform: 'web-desktop' },
+                        platforms: {
+                            'web-desktop': { startScene: 'scene-uuid' },
+                        },
+                    },
+                    scene: {
+                        camera: { fov: 45 },
+                        gizmo: { is2D: true },
+                        sceneView: { sceneLightOn: false },
+                        'camera-infos': { node: { position: [0, 1, 2] } },
+                        'camera-uuids': ['node'],
+                    },
+                    version: '1.0.0',
+                },
+                { spaces: 4 }
+            );
+            expect(mockFse.remove).toHaveBeenCalledWith(legacyConfigPath);
+        });
+
+        it('should create a profiles config file when legacy root config has no local keys', async () => {
+            const legacyConfigPath = path.join(projectPath, ConfigurationManager.name);
+            const legacyConfig = {
+                version: '1.0.0',
+                testModule: { key: 'value' },
+                scene: {
+                    tick: true,
+                },
+            };
+
+            mockFse.pathExists.mockImplementation(async (filePath: string) => {
+                return filePath === legacyConfigPath;
+            });
+            mockFse.readJSON.mockImplementation(async (filePath: string) => {
+                if (filePath === legacyConfigPath) {
+                    return legacyConfig;
+                }
+                return {};
+            });
+            mockFse.ensureDir.mockResolvedValue(undefined);
+            mockFse.writeJSON.mockResolvedValue(undefined);
+            mockFse.remove.mockResolvedValue(undefined);
+
+            await manager.initialize(projectPath);
+
+            expect(mockFse.writeJSON).toHaveBeenCalledWith(
+                localConfigPath,
+                {
+                    version: '1.0.0',
+                },
+                { spaces: 4 }
+            );
+            expect(mockFse.remove).toHaveBeenCalledWith(legacyConfigPath);
+        });
+
+        it('should not let legacy root configuration override existing scoped files', async () => {
+            const legacyConfigPath = path.join(projectPath, ConfigurationManager.name);
+            const projectConfig = {
+                version: '1.0.0',
+                builder: {
+                    bundleConfig: { from: 'settings' },
+                },
+                scene: {
+                    tick: false,
+                },
+            };
+            const localConfig = {
+                builder: {
+                    common: { platform: 'web-mobile' },
+                },
+            };
+            const legacyConfig = {
+                version: '0.9.0',
+                builder: {
+                    common: { platform: 'web-desktop', outputName: 'legacy' },
+                    bundleConfig: { from: 'root' },
+                },
+                scene: {
+                    tick: true,
+                    camera: { fov: 60 },
+                },
+                testModule: { fromRoot: true },
+            };
+
+            mockExistingPaths(configPath, localConfigPath, legacyConfigPath);
+            mockFse.readJSON.mockImplementation(async (filePath: string) => {
+                if (filePath === configPath) {
+                    return projectConfig;
+                }
+                if (filePath === localConfigPath) {
+                    return localConfig;
+                }
+                if (filePath === legacyConfigPath) {
+                    return legacyConfig;
+                }
+                return {};
+            });
+            mockFse.ensureDir.mockResolvedValue(undefined);
+            mockFse.writeJSON.mockResolvedValue(undefined);
+            mockFse.remove.mockResolvedValue(undefined);
+
+            await manager.initialize(projectPath);
+
+            expect(mockFse.writeJSON).toHaveBeenCalledWith(
+                `${configPath}.${process.pid}.tmp`,
+                {
+                    version: '1.0.0',
+                    builder: {
+                        bundleConfig: { from: 'settings' },
+                    },
+                    scene: {
+                        tick: false,
+                    },
+                    testModule: { fromRoot: true },
+                    $schema: '../temp/cocos.config.schema.json',
+                },
+                { spaces: 4 }
+            );
+            expect(mockFse.writeJSON).toHaveBeenCalledWith(
+                localConfigPath,
+                {
+                    builder: {
+                        common: { platform: 'web-mobile', outputName: 'legacy' },
+                    },
+                    scene: {
+                        camera: { fov: 60 },
+                    },
+                    version: '1.0.0',
+                },
+                { spaces: 4 }
+            );
+            expect(mockFse.remove).toHaveBeenCalledWith(legacyConfigPath);
+        });
+
         it('should handle errors and not initialize twice', async () => {
             const { CocosMigrationManager } = require('../migration');
             CocosMigrationManager.migrate.mockResolvedValue({
-                global: {},
                 local: {},
                 project: {},
             });
@@ -171,6 +392,11 @@ describe('ConfigurationManager', () => {
             expect(result2).toBe(true);
             expect(mockInstance.set).toHaveBeenCalledWith('testKey', 'testValue', 'default');
 
+            // Set with local scope
+            const result3 = await manager.set('testModule.testKey', 'localValue', 'local');
+            expect(result3).toBe(true);
+            expect(mockInstance.set).toHaveBeenCalledWith('testKey', 'localValue', 'local');
+
             // Invalid key
             await expect(manager.set('testModule.', 'testValue')).rejects.toThrow(
                 '[Configuration] 更新配置失败：Error: 配置键名不能为空'
@@ -200,6 +426,10 @@ describe('ConfigurationManager', () => {
 
         it('should return the config file path after initialization', async () => {
             await expect(manager.getConfigPath()).resolves.toBe(configPath);
+        });
+
+        it('should return the local config file path after initialization', async () => {
+            await expect(manager.getConfigPath('local')).resolves.toBe(localConfigPath);
         });
 
         it('should throw when called before initialization', async () => {
@@ -234,6 +464,11 @@ describe('ConfigurationManager', () => {
             const result2 = await manager.remove('testModule.testKey', 'default');
             expect(result2).toBe(true);
             expect(mockInstance.remove).toHaveBeenCalledWith('testKey', 'default');
+
+            // Remove with local scope
+            const result3 = await manager.remove('testModule.testKey', 'local');
+            expect(result3).toBe(true);
+            expect(mockInstance.remove).toHaveBeenCalledWith('testKey', 'local');
 
             // Invalid key
             await expect(manager.remove('testModule.')).rejects.toThrow(
@@ -291,8 +526,54 @@ describe('ConfigurationManager', () => {
 
             expect(onUnRegistryHandler).toBeDefined();
             await onUnRegistryHandler(mockUnregistryInstance);
-            expect(mockUnregistryInstance.off).toHaveBeenCalled();
+            expect(mockUnregistryInstance.off).toHaveBeenCalledWith(MessageType.Save, expect.any(Function));
             expect(manager['configurationMap'].has('testModule')).toBe(false);
+        });
+
+        it('should save project and local data through separate registry save events', async () => {
+            const mockInstance = {
+                on: jest.fn(),
+                moduleName: 'testModule',
+                getAll: jest.fn((scope) => scope === 'local'
+                    ? { localKey: 'localValue' }
+                    : { projectKey: 'projectValue' }),
+            };
+
+            const onRegistryHandler = mockRegistry.on.mock.calls.find(
+                call => call[0] === MessageType.Registry
+            )?.[1] as Function;
+
+            expect(onRegistryHandler).toBeDefined();
+            await onRegistryHandler(mockInstance);
+
+            const saveHandler = mockInstance.on.mock.calls.find(
+                call => call[0] === MessageType.Save
+            )?.[1] as Function;
+
+            mockFse.writeJSON.mockClear();
+
+            await saveHandler(mockInstance);
+            await saveHandler(mockInstance, 'local');
+
+            expect(mockInstance.getAll).toHaveBeenCalledWith('project');
+            expect(mockInstance.getAll).toHaveBeenCalledWith('local');
+            expect(mockFse.writeJSON).toHaveBeenCalledWith(
+                `${configPath}.${process.pid}.tmp`,
+                {
+                    testModule: { projectKey: 'projectValue' },
+                    version: '1.0.0',
+                    $schema: '../temp/cocos.config.schema.json',
+                },
+                { spaces: 4 }
+            );
+            expect(mockFse.writeJSON).toHaveBeenCalledWith(
+                localConfigPath,
+                {
+                    testModule: { localKey: 'localValue' },
+                    version: '1.0.0',
+                },
+                { spaces: 4 }
+            );
         });
     });
 
@@ -304,13 +585,18 @@ describe('ConfigurationManager', () => {
                 project: {
                     migratedKey: 'migratedValue'
                 },
-                global: {},
-                local: {},
+                local: {
+                    builder: {
+                        common: {
+                            platform: 'web-desktop',
+                        },
+                    },
+                },
             };
             CocosMigrationManager.migrate.mockResolvedValue(migratedConfig);
 
             // Lower version - should migrate
-            mockFse.pathExists.mockResolvedValue(true);
+            mockExistingPaths(configPath);
             mockFse.readJSON.mockResolvedValue({ version: '0.9.0' });
             mockFse.ensureDir.mockResolvedValue(undefined);
             mockFse.writeJSON.mockResolvedValue(undefined);
@@ -320,8 +606,28 @@ describe('ConfigurationManager', () => {
             expect(manager['projectConfig']).toEqual({
                 version: '1.0.0',
                 migratedKey: 'migratedValue',
-                $schema: './temp/cocos.config.schema.json'
+                $schema: '../temp/cocos.config.schema.json'
             });
+            expect(manager['localConfig']).toEqual({
+                builder: {
+                    common: {
+                        platform: 'web-desktop',
+                    },
+                },
+                version: '1.0.0',
+            });
+            expect(mockFse.writeJSON).toHaveBeenCalledWith(
+                localConfigPath,
+                {
+                    builder: {
+                        common: {
+                            platform: 'web-desktop',
+                        },
+                    },
+                    version: '1.0.0',
+                },
+                { spaces: 4 }
+            );
             expect(manager['version']).toBe('1.0.0');
             // Same version - should not migrate (migrate method checks version)
             const newManager = new ConfigurationManager();
@@ -348,11 +654,15 @@ describe('ConfigurationManager', () => {
             manager['projectConfig'] = { version: '1.0.0', test: 'value' };
             await manager['save']();
             expect(mockFse.ensureDir).toHaveBeenCalledWith(path.dirname(configPath));
+            // 采用「写临时文件 + 原子重命名」的方式落盘（见 writeConfigWithRetry），
+            // 因此 writeJSON 写入的是临时路径，随后 move 到最终 configPath。
+            const tmpPath = `${configPath}.${process.pid}.tmp`;
             expect(mockFse.writeJSON).toHaveBeenCalledWith(
-                configPath,
-                { version: '1.0.0', test: 'value', $schema: './temp/cocos.config.schema.json' },
+                tmpPath,
+                { version: '1.0.0', test: 'value', $schema: '../temp/cocos.config.schema.json' },
                 { spaces: 4 }
             );
+            expect(mockFse.move).toHaveBeenCalledWith(tmpPath, configPath, { overwrite: true });
 
             // Handle save errors
             mockFse.writeJSON.mockRejectedValue(new Error('Save error'));
@@ -361,6 +671,19 @@ describe('ConfigurationManager', () => {
             // Static properties
             expect(ConfigurationManager.VERSION).toBe('1.0.0');
             expect(ConfigurationManager.name).toBe('cocos.config.json');
+        });
+
+        it('should save local configuration to profiles directory', async () => {
+            manager['localConfig'] = { test: 'localValue' };
+
+            await manager['save'](true, 'local');
+
+            expect(mockFse.ensureDir).toHaveBeenCalledWith(path.dirname(localConfigPath));
+            expect(mockFse.writeJSON).toHaveBeenCalledWith(
+                localConfigPath,
+                { test: 'localValue', version: '1.0.0' },
+                { spaces: 4 }
+            );
         });
 
         it('should serialize concurrent saves for the same config file', async () => {
@@ -383,6 +706,39 @@ describe('ConfigurationManager', () => {
 
             const firstSave = manager['save']();
             const secondSave = manager['save']();
+
+            await new Promise((resolve) => setImmediate(resolve));
+
+            expect(mockFse.writeJSON).toHaveBeenCalledTimes(1);
+
+            releaseWrite?.();
+
+            await Promise.all([firstSave, secondSave]);
+
+            expect(mockFse.writeJSON).toHaveBeenCalledTimes(2);
+            expect(maxConcurrentWrites).toBe(1);
+        });
+
+        it('should serialize concurrent local saves for the local config file', async () => {
+            manager['localConfig'] = { test: 'localValue' };
+            mockFse.writeJSON.mockClear();
+
+            let activeWrites = 0;
+            let maxConcurrentWrites = 0;
+            let releaseWrite: (() => void) | undefined;
+            const writeGate = new Promise<void>((resolve) => {
+                releaseWrite = resolve;
+            });
+
+            mockFse.writeJSON.mockImplementation(async () => {
+                activeWrites++;
+                maxConcurrentWrites = Math.max(maxConcurrentWrites, activeWrites);
+                await writeGate;
+                activeWrites--;
+            });
+
+            const firstSave = manager['save']('local');
+            const secondSave = manager['save']('local');
 
             await new Promise((resolve) => setImmediate(resolve));
 
@@ -462,7 +818,7 @@ describe('ConfigurationManager', () => {
 
         it('should initialize configs from existing projectConfig when registering configuration', async () => {
             // 模拟配置文件存在并包含配置
-            mockFse.pathExists.mockResolvedValue(true);
+            mockExistingPaths(configPath);
             mockFse.readJSON.mockResolvedValue(existingProjectConfig);
             mockFse.ensureDir.mockResolvedValue(undefined);
             mockFse.writeJSON.mockResolvedValue(undefined);
@@ -477,6 +833,7 @@ describe('ConfigurationManager', () => {
             const mockInstance = {
                 moduleName: 'testModule',
                 configs: {}, // 模拟 BaseConfiguration 的 configs 属性
+                localConfigs: {}, // local 作用域桶
                 getAll: jest.fn().mockReturnValue({}), // 初始返回空对象
                 on: jest.fn(),
                 emit: jest.fn(),
@@ -515,9 +872,9 @@ describe('ConfigurationManager', () => {
             await saveHandler(mockInstance);
 
             // 验证修复：Save 时应该保存正确的配置，而不是空对象
-            expect(mockInstance.getAll).toHaveBeenCalled();
+            expect(mockInstance.getAll).toHaveBeenCalledWith('project');
             expect(mockFse.writeJSON).toHaveBeenCalledWith(
-                configPath,
+                `${configPath}.${process.pid}.tmp`,
                 expect.objectContaining({
                     testModule: {
                         existingKey: 'existingValue',
@@ -532,7 +889,7 @@ describe('ConfigurationManager', () => {
 
         it('should throw error when registering non-BaseConfiguration instances', async () => {
             // 模拟配置文件存在并包含配置
-            mockFse.pathExists.mockResolvedValue(true);
+            mockExistingPaths(configPath);
             mockFse.readJSON.mockResolvedValue(existingProjectConfig);
             mockFse.ensureDir.mockResolvedValue(undefined);
             mockFse.writeJSON.mockResolvedValue(undefined);

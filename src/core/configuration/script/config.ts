@@ -49,8 +49,9 @@ export interface IBaseConfiguration extends EventEmitterMethods {
 
     /**
      * 保存配置
+     * @param scope 'project'(默认) 保存项目配置；'local' 保存个人/本机配置
      */
-    save(): Promise<boolean>;
+    save(scope?: ConfigurationScope): Promise<boolean>;
 }
 
 /**
@@ -58,6 +59,7 @@ export interface IBaseConfiguration extends EventEmitterMethods {
  */
 export class BaseConfiguration extends EventEmitter implements IBaseConfiguration {
     protected configs: Record<string, any> = {};
+    protected localConfigs: Record<string, any> = {};
 
     constructor(
         public readonly moduleName: string,
@@ -84,15 +86,35 @@ export class BaseConfiguration extends EventEmitter implements IBaseConfiguratio
         if (scope === 'default') {
             return this.getDefaultConfig();
         }
+        if (scope === 'local') {
+            return this.localConfigs;
+        }
         return this.configs;
     }
 
     public async get<T>(key?: string, scope?: ConfigurationScope): Promise<T> {
         if (key === undefined) {
-            return utils.deepMerge(this.getDefaultConfig(), this.configs);
+            // 不带 key 的合并读：default ← project ← local（后者覆盖前者）
+            if (scope === 'default') {
+                return (this.getDefaultConfig() as T);
+            }
+            if (scope === 'project') {
+                return (this.configs as T);
+            }
+            if (scope === 'local') {
+                return (this.localConfigs as T);
+            }
+            return utils.deepMerge(
+                utils.deepMerge(this.getDefaultConfig(), this.configs),
+                this.localConfigs,
+            );
         }
         const projectConfig = utils.getByDotPath(this.configs, key);
+        const localConfig = utils.getByDotPath(this.localConfigs, key);
+        const defaultConfig = utils.getByDotPath(this.getDefaultConfig(), key);
         const hasProjectValue = projectConfig !== undefined;
+        const hasLocalValue = localConfig !== undefined;
+        const hasDefaultValue = defaultConfig !== undefined;
 
         // 根据作用域决定返回策略
         if (scope === 'project') {
@@ -102,8 +124,10 @@ export class BaseConfiguration extends EventEmitter implements IBaseConfiguratio
             return (projectConfig as T);
         }
 
-        const defaultConfig = utils.getByDotPath(this.getDefaultConfig(), key);
-        const hasDefaultValue = defaultConfig !== undefined;
+        if (scope === 'local') {
+            // 显式 local 读取只返回本地配置，缺失时返回 undefined，避免和 default 值混淆。
+            return (localConfig as T);
+        }
 
         if (scope === 'default') {
             if (!hasDefaultValue) {
@@ -112,17 +136,20 @@ export class BaseConfiguration extends EventEmitter implements IBaseConfiguratio
             return (defaultConfig as T);
         }
 
-        // 如果项目配置和默认配置都不存在，抛出错误
-        if (!hasProjectValue && !hasDefaultValue) {
+        // 合并读：三处都不存在才抛错
+        if (!hasProjectValue && !hasLocalValue && !hasDefaultValue) {
             throw new Error(`[Configuration] 通过 ${this.moduleName}.${key} 获取配置失败`);
         }
 
-        return (utils.deepMerge(defaultConfig, projectConfig) as T);
+        return (utils.deepMerge(utils.deepMerge(defaultConfig, projectConfig), localConfig) as T);
     }
 
     public async set<T>(key: string, value: T, scope: ConfigurationScope = 'project'): Promise<boolean> {
         if (scope === 'default') {
             utils.setByDotPath(this.defaultConfigs, key, value);
+        } else if (scope === 'local') {
+            utils.setByDotPath(this.localConfigs, key, value);
+            await this.save('local');
         } else {
             utils.setByDotPath(this.configs, key, value);
             await this.save();
@@ -138,6 +165,11 @@ export class BaseConfiguration extends EventEmitter implements IBaseConfiguratio
             if (this.defaultConfigs) {
                 removed = utils.removeByDotPath(this.defaultConfigs, key);
             }
+        } else if (scope === 'local') {
+            removed = utils.removeByDotPath(this.localConfigs, key);
+            if (removed) {
+                await this.save('local');
+            }
         } else {
             // 从项目配置中移除
             removed = utils.removeByDotPath(this.configs, key);
@@ -149,8 +181,8 @@ export class BaseConfiguration extends EventEmitter implements IBaseConfiguratio
         return removed;
     }
 
-    public async save() {
-        this.emit(MessageType.Save, this);
+    public async save(scope: ConfigurationScope = 'project') {
+        this.emit(MessageType.Save, this, scope);
         return true;
     }
 }

@@ -5,13 +5,16 @@ const mockCreateAsset = jest.fn();
 const mockCreateAssetByType = jest.fn();
 const mockImportAsset = jest.fn();
 const mockSaveAsset = jest.fn();
+const mockReimportAsset = jest.fn();
 const mockQueryPath = jest.fn();
+const mockQueryUrl = jest.fn();
 const mockQueryLinesInFile = jest.fn();
 const mockEraseLinesInRange = jest.fn();
 const mockReplaceTextInFile = jest.fn();
 const mockNodeQuery = jest.fn();
 const mockNodeDelete = jest.fn();
 const mockComponentQuery = jest.fn();
+const mockComponentSetProperty = jest.fn();
 
 jest.mock('../src/api/decorator/decorator.js', () => ({
     description: () => jest.fn(),
@@ -31,7 +34,9 @@ jest.mock('../src/core/assets', () => ({
         createAssetByType: (...args: unknown[]) => mockCreateAssetByType(...args),
         importAsset: (...args: unknown[]) => mockImportAsset(...args),
         saveAsset: (...args: unknown[]) => mockSaveAsset(...args),
+        reimportAsset: (...args: unknown[]) => mockReimportAsset(...args),
         queryPath: (...args: unknown[]) => mockQueryPath(...args),
+        queryUrl: (...args: unknown[]) => mockQueryUrl(...args),
     },
 }));
 
@@ -53,6 +58,7 @@ jest.mock('../src/core/scene', () => ({
         },
         Component: {
             query: (...args: unknown[]) => mockComponentQuery(...args),
+            setProperty: (...args: unknown[]) => mockComponentSetProperty(...args),
         },
     },
 }));
@@ -82,13 +88,16 @@ describe('Bug #497 common API error status codes', () => {
         mockCreateAssetByType.mockReset();
         mockImportAsset.mockReset();
         mockSaveAsset.mockReset();
+        mockReimportAsset.mockReset();
         mockQueryPath.mockReset();
+        mockQueryUrl.mockReset();
         mockQueryLinesInFile.mockReset();
         mockEraseLinesInRange.mockReset();
         mockReplaceTextInFile.mockReset();
         mockNodeQuery.mockReset();
         mockNodeDelete.mockReset();
         mockComponentQuery.mockReset();
+        mockComponentSetProperty.mockReset();
     });
 
     it('allows client-side business error codes in common results', () => {
@@ -100,7 +109,11 @@ describe('Bug #497 common API error status codes', () => {
         expect(getCommonErrorStatus(new Error('ENOENT: no such file or directory'))).toBe(COMMON_STATUS.NOT_FOUND);
         expect(getCommonErrorStatus(new Error('Asset can not be found: db://assets/missing.scene'))).toBe(COMMON_STATUS.NOT_FOUND);
         expect(getCommonErrorStatus(new Error('can not find asset d:\\cocos\\program\\snake2\\assets\\resources\\Image'))).toBe(COMMON_STATUS.NOT_FOUND);
+        expect(getCommonErrorStatus(new Error('无法找到资源 missing-asset-uuid, 请检查参数是否正确'))).toBe(COMMON_STATUS.NOT_FOUND);
         expect(getCommonErrorStatus(new Error('Invalid scene/prefab asset content: invalid JSON'))).toBe(COMMON_STATUS.BAD_REQUEST);
+        expect(getCommonErrorStatus(Object.assign(new Error('Invalid asset reference for property spriteFrame'), {
+            code: 'INVALID_ASSET_REFERENCE',
+        }))).toBe(COMMON_STATUS.BAD_REQUEST);
         expect(getCommonErrorStatus(new Error('Filename cannot be empty.'))).toBe(COMMON_STATUS.BAD_REQUEST);
         expect(getCommonErrorStatus(new Error('parameter error'))).toBe(COMMON_STATUS.BAD_REQUEST);
         expect(getCommonErrorStatus(new Error('file GameManager.ts already exists, please use overwrite option'))).toBe(COMMON_STATUS.BAD_REQUEST);
@@ -134,6 +147,16 @@ describe('Bug #497 common API error status codes', () => {
         expect(result.code).toBe(HTTP_STATUS.NOT_FOUND);
         expect(result.data).toBeNull();
         expect(result.reason).toContain('Asset not found');
+    });
+
+    it('returns 404 when reimporting a genuinely missing asset', async () => {
+        mockReimportAsset.mockRejectedValue(new Error('无法找到资源 missing-asset-uuid, 请检查参数是否正确'));
+
+        const result = await new AssetsApi().reimportAsset('missing-asset-uuid');
+
+        expect(result.code).toBe(HTTP_STATUS.NOT_FOUND);
+        expect(result.data).toBeNull();
+        expect(result.reason).toContain('无法找到资源 missing-asset-uuid');
     });
 
     it('returns 400 for asset query parameter errors', async () => {
@@ -230,6 +253,28 @@ describe('Bug #497 common API error status codes', () => {
         expect(result.code).toBe(HTTP_STATUS.NOT_FOUND);
         expect(result.data).toBeNull();
         expect(result.reason).toContain('Asset path can not be found');
+    });
+
+    it('returns 400 when querying asset URL with a parameter error', async () => {
+        mockQueryUrl.mockImplementation(() => {
+            throw new Error('parameter error');
+        });
+
+        const result = await new AssetsApi().queryUrl('bad');
+
+        expect(result.code).toBe(HTTP_STATUS.BAD_REQUEST);
+        expect(result.data).toBeNull();
+        expect(result.reason).toBe('parameter error');
+    });
+
+    it('returns 404 when querying asset URL cannot resolve a URL', async () => {
+        mockQueryUrl.mockReturnValue('');
+
+        const result = await new AssetsApi().queryUrl('yj56j');
+
+        expect(result.code).toBe(HTTP_STATUS.NOT_FOUND);
+        expect(result.data).toBeNull();
+        expect(result.reason).toContain('Asset URL can not be found');
     });
 
     it('returns 400 when saving invalid scene or prefab content', async () => {
@@ -346,5 +391,20 @@ describe('Bug #497 common API error status codes', () => {
 
         expect(result.code).toBe(HTTP_STATUS.NOT_FOUND);
         expect(result.reason).toBe('component not found: Canvas/Missing/cc.Label');
+    });
+
+    it('returns 400 when a component Asset reference fails semantic validation', async () => {
+        mockComponentSetProperty.mockRejectedValue(Object.assign(
+            new Error("Invalid asset reference for property 'spriteFrame': expected cc.SpriteFrame"),
+            { code: 'INVALID_ASSET_REFERENCE' },
+        ));
+
+        const result = await new ComponentApi().setProperty({
+            componentPath: 'Canvas/Coin/cc.Sprite',
+            properties: { spriteFrame: { uuid: 'bad-parent-uuid' } },
+        });
+
+        expect(result.code).toBe(HTTP_STATUS.BAD_REQUEST);
+        expect(result.reason).toContain('expected cc.SpriteFrame');
     });
 });

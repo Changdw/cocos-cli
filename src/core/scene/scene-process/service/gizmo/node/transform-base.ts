@@ -3,6 +3,7 @@ import ControllerBase from '../controller/base';
 import { Node, Component, Scene } from 'cc';
 import type { GizmoMouseEvent } from '../utils/defines';
 import { ServiceEvents } from '../../core/global-events';
+import { getEditorNodeByPath } from '../utils/editor-node';
 
 /**
  * 获取 Service（惰性访问，避免循环依赖）
@@ -28,8 +29,7 @@ class TransformBaseGizmo extends GizmoBase<Component> {
         const svc = getService();
         const paths: string[] = svc?.Selection?.query?.() ?? [];
         const nodes = paths.map((path: string) => {
-            const EditorExtends = (cc as any).EditorExtends || (globalThis as any).EditorExtends;
-            return EditorExtends?.Node?.getNodeByPath?.(path) ?? null;
+            return getEditorNodeByPath(path);
         });
         return nodes.filter((node: Node | null) => {
             if (node === null || !node.isValid || this.isNodeLocked(node)) {
@@ -86,6 +86,7 @@ class TransformBaseGizmo extends GizmoBase<Component> {
     onNodeChanged(_event?: any) {
         if (this._controller && this.updateControllerTransform) {
             this.updateControllerTransform();
+            this._controller.adjustControllerSize?.();
         }
     }
 

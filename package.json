@@ -1,6 +1,6 @@
 {
     "name": "cocos-cli",
-    "version": "0.0.1-alpha.31",
+    "version": "0.0.1-alpha.36",
     "displayName": "COCOS CLI",
     "icon": "static/logo/logo.png",
     "description": "COCOS CLI",
@@ -8,7 +8,7 @@
     "engines": {
         "vscode": ">=1.107.1",
         "electron": "39.2.3",
-        "pink": ">=0.0.1.24"
+        "pink": ">=0.0.1.30"
     },
     "bin": {
         "cocos": "./dist/cli.js"
@@ -27,15 +27,16 @@
         "check:e2e-coverage": "tsx e2e/scripts/check-coverage.ts",
         "check:e2e-coverage:report": "tsx e2e/scripts/check-coverage.ts --save",
         "generate:mcp-types": "node --max-old-space-size=4096 node_modules/tsx/dist/cli.mjs e2e/scripts/generate-mcp-types.ts",
-        "generate:dts": "node --max-old-space-size=4096 --stack-size=8192 node_modules/tsx/dist/cli.mjs workflow/generate-dts.ts && npx jest --roots packages/cocos-cli-types --testPathPattern dts-snapshot -u",
-        "generate:dts:ci": "node --max-old-space-size=4096 --stack-size=8192 node_modules/tsx/dist/cli.mjs workflow/generate-dts.ts",
+        "generate:dts": "node --max-old-space-size=8192 node_modules/tsx/dist/cli.mjs workflow/generate-dts.ts && npx jest --roots packages/cocos-cli-types --testPathPattern dts-snapshot -u",
+        "generate:dts:ci": "node --max-old-space-size=8192 node_modules/tsx/dist/cli.mjs workflow/generate-dts.ts",
         "install:engine": "cd ./packages/engine && npm i",
         "compiler": "FORCE_UPDATE=true npm i",
         "compiler:engine": "node --max-old-space-size=8192 workflow/compiler-engine.js --force",
         "build:cc-module": "node workflow/build-cc-module.js",
         "build:static-web": "node workflow/build-scene-bundle.js && node workflow/build-polyfills.js",
-        "build": "npm run build:clear && node workflow/prepare-dts.js && tsc -b && npm run build:static-web && node workflow/generate-schema.js && npm run generate:dts",
-        "compile": "npm run build:clear && node workflow/prepare-dts.js && tsc -b && npm run build:static-web && node workflow/generate-schema.js",
+        "build:platform-views": "node workflow/build-platform-views.js && node workflow/build-platform-assets.js",
+        "build": "npm run build:clear && node workflow/prepare-dts.js && tsc -b && npm run build:static-web && node workflow/generate-schema.js && npm run generate:dts && npm run build:platform-views",
+        "compile": "npm run build:clear && node workflow/prepare-dts.js && tsc -b && npm run build:platform-views && npm run build:static-web && node workflow/generate-schema.js",
         "build:clear": "node workflow/build-clear.js",
         "build:watch": "tsc -b --watch",
         "postinstall": "node workflow/postinstall.js",
@@ -43,7 +44,7 @@
         "pack:script": "node workflow/pack-scripts.js",
         "release": "npx --yes gulp release --gulpfile workflow/release.js",
         "start:mcp-debug": "node ./dist/cli.js start-mcp-server --project=./tests/fixtures/projects/asset-operation",
-        "start:preview": "node ./dist/cli.js preview --project=./tests/fixtures/projects/asset-operation",
+        "start:preview": "node ./dist/cli.js preview --scene-editor",
         "start:mcp-inspector": "npx @modelcontextprotocol/inspector",
         "cli": "node ./dist/cli.js",
         "rebuild": "node workflow/electron-rebuild.js"

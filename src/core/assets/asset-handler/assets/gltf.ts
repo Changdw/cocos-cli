@@ -50,37 +50,43 @@ export const GltfHandler: AssetHandlerBase = {
 
     propertySchemaConfig: {
         dumpMaterials: {
-            title: 'Dump Materials',
+            title: 'i18n:ENGINE.assets.fbx.GlTFUserData.dumpMaterials.name',
+            description: 'i18n:ENGINE.assets.fbx.GlTFUserData.dumpMaterials.title',
             type: 'boolean',
             default: false,
         },
         mountAllAnimationsOnPrefab: {
-            title: 'Mount All Animations On Prefab',
+            title: 'i18n:ENGINE.assets.fbx.GlTFUserData.mountAllAnimationsOnPrefab.name',
             type: 'boolean',
             default: false,
         },
         allowMeshDataAccess: {
-            title: 'Allow Mesh Data Access',
+            title: 'i18n:ENGINE.assets.fbx.allowMeshDataAccess.name',
+            description: 'i18n:ENGINE.assets.fbx.allowMeshDataAccess.title',
             type: 'boolean',
             default: true,
         },
         addVertexColor: {
-            title: 'Add Vertex Color',
+            title: 'i18n:ENGINE.assets.fbx.addVertexColor.name',
+            description: 'i18n:ENGINE.assets.fbx.addVertexColor.title',
             type: 'boolean',
             default: false,
         },
         promoteSingleRootNode: {
-            title: 'Promote Single Root Node',
+            title: 'i18n:ENGINE.assets.fbx.promoteSingleRootNode.name',
+            description: 'i18n:ENGINE.assets.fbx.promoteSingleRootNode.title',
             type: 'boolean',
             default: false,
         },
         generateLightmapUVNode: {
-            title: 'Generate Lightmap UV',
+            title: 'i18n:ENGINE.assets.fbx.generateLightmapUVNode.name',
+            description: 'i18n:ENGINE.assets.fbx.generateLightmapUVNode.title',
             type: 'boolean',
             default: false,
         },
         normals: {
-            title: 'Normals',
+            title: 'i18n:ENGINE.assets.fbx.GlTFUserData.normals.name',
+            description: 'i18n:ENGINE.assets.fbx.GlTFUserData.normals.title',
             type: 'number',
             default: NormalImportSetting.require,
             enum: [
@@ -89,10 +95,16 @@ export const GltfHandler: AssetHandlerBase = {
                 NormalImportSetting.require,
                 NormalImportSetting.recalculate,
             ],
-            enumDescriptions: ['Optional', 'Exclude', 'Require', 'Recalculate'],
+            enumDescriptions: [
+                'i18n:ENGINE.assets.fbx.GlTFUserData.normals.optional.name',
+                'i18n:ENGINE.assets.fbx.GlTFUserData.normals.exclude.name',
+                'i18n:ENGINE.assets.fbx.GlTFUserData.normals.require.name',
+                'i18n:ENGINE.assets.fbx.GlTFUserData.normals.recalculate.name',
+            ],
         },
         tangents: {
-            title: 'Tangents',
+            title: 'i18n:ENGINE.assets.fbx.GlTFUserData.tangents.name',
+            description: 'i18n:ENGINE.assets.fbx.GlTFUserData.tangents.title',
             type: 'number',
             default: TangentImportSetting.require,
             enum: [
@@ -101,20 +113,29 @@ export const GltfHandler: AssetHandlerBase = {
                 TangentImportSetting.require,
                 TangentImportSetting.recalculate,
             ],
-            enumDescriptions: ['Exclude', 'Optional', 'Require', 'Recalculate'],
+            enumDescriptions: [
+                'i18n:ENGINE.assets.fbx.GlTFUserData.tangents.exclude.name',
+                'i18n:ENGINE.assets.fbx.GlTFUserData.tangents.optional.name',
+                'i18n:ENGINE.assets.fbx.GlTFUserData.tangents.require.name',
+                'i18n:ENGINE.assets.fbx.GlTFUserData.tangents.recalculate.name',
+            ],
         },
         morphNormals: {
-            title: 'Morph Normals',
+            title: 'i18n:ENGINE.assets.fbx.GlTFUserData.morphNormals.name',
+            description: 'i18n:ENGINE.assets.fbx.GlTFUserData.morphNormals.title',
             type: 'number',
             default: NormalImportSetting.exclude,
             enum: [
                 NormalImportSetting.exclude,
                 NormalImportSetting.optional,
             ],
-            enumDescriptions: ['Exclude', 'Optional'],
+            enumDescriptions: [
+                'i18n:ENGINE.assets.fbx.GlTFUserData.morphNormals.exclude.name',
+                'i18n:ENGINE.assets.fbx.GlTFUserData.morphNormals.optional.name',
+            ],
         },
         meshOptimizer: {
-            title: 'Mesh Optimizer',
+            title: 'i18n:importer.property_schema.gltf.mesh_optimizer',
             type: 'object',
             default: {
                 enable: false,
@@ -123,24 +144,27 @@ export const GltfHandler: AssetHandlerBase = {
             },
             properties: {
                 enable: {
-                    title: 'Enable',
+                    title: 'i18n:importer.property_schema.gltf.mesh_optimizer_enable',
                     type: 'boolean',
                     default: false,
                 },
                 algorithm: {
-                    title: 'Algorithm',
+                    title: 'i18n:importer.property_schema.gltf.mesh_optimizer_algorithm',
                     type: 'string',
                     default: 'simplify',
                     enum: ['simplify', 'gltfpack'],
-                    enumDescriptions: ['Simplify', 'gltfpack'],
+                    enumDescriptions: [
+                        'i18n:importer.property_schema.gltf.mesh_optimizer_simplify',
+                        'i18n:importer.property_schema.gltf.mesh_optimizer_gltfpack',
+                    ],
                 },
                 simplifyOptions: {
-                    title: 'Simplify Options',
+                    title: 'i18n:importer.property_schema.gltf.simplify_options',
                     type: 'object',
                     default: getDefaultSimplifyOptions(),
                     properties: {
                         targetRatio: {
-                            title: 'Target Ratio',
+                            title: 'i18n:ENGINE.assets.fbx.meshSimplify.targetRatio.name',
                             type: 'number',
                             default: 1,
                             minimum: 0,
@@ -148,19 +172,19 @@ export const GltfHandler: AssetHandlerBase = {
                             step: 0.01,
                         },
                         enableSmartLink: {
-                            title: 'Enable Smart Link',
+                            title: 'i18n:importer.property_schema.gltf.enable_smart_link',
                             type: 'boolean',
                             default: true,
                         },
                         agressiveness: {
-                            title: 'Agressiveness',
+                            title: 'i18n:importer.property_schema.gltf.agressiveness',
                             type: 'number',
                             default: 7,
                             minimum: 0,
                             step: 1,
                         },
                         maxIterationCount: {
-                            title: 'Max Iteration Count',
+                            title: 'i18n:importer.property_schema.gltf.max_iteration_count',
                             type: 'number',
                             default: 100,
                             minimum: 1,

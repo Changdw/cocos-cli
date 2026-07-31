@@ -8,6 +8,7 @@ import { TransformToolData, ISnapConfigData } from './gizmo/transform-tool';
 import GizmoDefines from './gizmo/gizmo-defines';
 import GizmoBase from './gizmo/base/gizmo-base';
 import GizmoOperation from './gizmo/gizmo-operation';
+import { getEditorNodeByPath, getEditorNodeByUuid, getEditorNodePath } from './gizmo/utils/editor-node';
 import { create3DNode } from './gizmo/utils/engine-utils';
 import { rectTransformSnapping } from './gizmo/utils/rect-transform-snapping';
 import WorldAxisController from './gizmo/controller/world-axis';
@@ -38,6 +39,8 @@ import './gizmo/components/mesh-renderer';
 import './gizmo/components/skinned-mesh-renderer';
 import './gizmo/components/video-player';
 import './gizmo/components/web-view';
+import './gizmo/components/light-probe-group';
+import './gizmo/components/reflection-probe';
 
 type TGizmoType = 'icon' | 'persistent' | 'component';
 
@@ -130,18 +133,15 @@ function walkNodeComponent(node: Node, callback: (comp: Component) => void): voi
 }
 
 function getNodeByPath(path: string): Node | null {
-    const EditorExtends = (cc as any).EditorExtends || (globalThis as any).EditorExtends;
-    return EditorExtends?.Node?.getNodeByPath?.(path) ?? null;
+    return getEditorNodeByPath(path);
 }
 
 function getNodeByUuid(uuid: string): Node | null {
-    const EditorExtends = (cc as any).EditorExtends || (globalThis as any).EditorExtends;
-    return EditorExtends?.Node?.getNode?.(uuid) ?? null;
+    return getEditorNodeByUuid(uuid);
 }
 
 function getNodePath(node: Node): string {
-    const EditorExtends = (cc as any).EditorExtends || (globalThis as any).EditorExtends;
-    return EditorExtends?.Node?.getNodePath?.(node) ?? '';
+    return getEditorNodePath(node);
 }
 const SceneGizmoLayer = Layers.Enum.SCENE_GIZMO;
 
@@ -159,6 +159,7 @@ export class GizmoService extends BaseService<IGizmoEvents> implements IGizmoSer
     private _gizmoOperation!: GizmoOperation;
     private _iconVisible = false;
     private _selection: string[] = [];
+    private _hasEditorOpened = false;
 
     // Pool: Map<className, GizmoBase[]> — 与 cocos-editor GizmoPool 一致
     private _componentPool: Map<string, GizmoBase[]> = new Map();
@@ -357,6 +358,10 @@ export class GizmoService extends BaseService<IGizmoEvents> implements IGizmoSer
         // 与 cocos-editor TransformGizmoManager.__listenEvents 一致：snap 配置变更持久化
         this._listenSnapEvents();
 
+        // 与 cocos-editor GizmoManager.init 一致：gizmo 配置只在服务初始化时恢复。
+        // 打开/重载场景时会强制切回 position，避免异步配置读取覆盖场景打开流程。
+        void this.initFromConfig();
+
         // 与 cocos-editor GizmoManager.init 一致：监听相机投影变化
         try {
             (Service as any).Camera?.controller?.on?.('projection-changed', (projection: number) => {
@@ -382,7 +387,7 @@ export class GizmoService extends BaseService<IGizmoEvents> implements IGizmoSer
         try {
             const rpc = Rpc.getInstance();
             const snapData = this.transformToolData.snapConfigs.getPureDataObject();
-            await rpc.request('sceneConfigInstance', 'set', ['gizmo.snapConfigs', snapData]);
+            await rpc.request('sceneConfigInstance', 'set', ['gizmo.snapConfigs', snapData, 'local']);
         } catch {
             // Config persistence not available
         }
@@ -392,13 +397,15 @@ export class GizmoService extends BaseService<IGizmoEvents> implements IGizmoSer
     async initFromConfig(): Promise<void> {
         try {
             const rpc = Rpc.getInstance();
-            const config: any = await rpc.request('sceneConfigInstance', 'get', ['gizmo']);
+            const config: any = await rpc.request('sceneConfigInstance', 'get', ['gizmo', 'local']);
             if (config) {
                 if (config.is2D !== undefined) this.is2D = config.is2D;
                 if (config.is3DIcon !== undefined) this.setIconGizmo3D(config.is3DIcon);
                 if (config.iconSize !== undefined) this.setIconGizmoSize(config.iconSize);
-                if (config.transformToolName !== undefined) this.transformToolName = config.transformToolName;
-                if (config.viewMode !== undefined) this.viewMode = config.viewMode;
+                if (!this._hasEditorOpened) {
+                    if (config.transformToolName !== undefined) this.transformToolName = config.transformToolName;
+                    if (config.viewMode !== undefined) this.viewMode = config.viewMode;
+                }
                 if (config.pivot !== undefined) this.setPivot(config.pivot);
                 if (config.coordinate !== undefined) this.setCoordinate(config.coordinate);
                 if (config.toolsVisibility3d !== undefined) {
@@ -425,7 +432,7 @@ export class GizmoService extends BaseService<IGizmoEvents> implements IGizmoSer
     async saveConfig(): Promise<void> {
         try {
             const rpc = Rpc.getInstance();
-            const current = await rpc.request('sceneConfigInstance', 'get', ['gizmo']) as Record<string, any> ?? {};
+            const current = await rpc.request('sceneConfigInstance', 'get', ['gizmo', 'local']) as Record<string, any> ?? {};
             const gizmoConfig = {
                 ...current,
                 is2D: this.is2D,
@@ -442,7 +449,7 @@ export class GizmoService extends BaseService<IGizmoEvents> implements IGizmoSer
                 originAxis2D: this.queryOriginAxes2D(),
                 originAxis3D: this.queryOriginAxes3D(),
             };
-            await rpc.request('sceneConfigInstance', 'set', ['gizmo', gizmoConfig]);
+            await rpc.request('sceneConfigInstance', 'set', ['gizmo', gizmoConfig, 'local']);
         } catch {
             // Config persistence not available
         }
@@ -875,23 +882,44 @@ export class GizmoService extends BaseService<IGizmoEvents> implements IGizmoSer
         });
     }
 
-    private _rebindSelectedGizmos(): void {
-        const selectedPaths = Service.Selection?.query?.() ?? [];
+    private _reselectCurrentSelection(): void {
+        const selectedPaths = Array.from(new Set(Service.Selection?.query?.() ?? []));
         this._selection.length = 0;
+        Service.Selection?.clear?.();
         for (const path of selectedPaths) {
-            this.onSelectionSelect(path);
+            if (!getNodeByPath(path)) {
+                continue;
+            }
+            Service.Selection?.select?.(path);
         }
     }
 
     // ── 编辑器生命周期（由 BaseService 事件钩子调用）───────────────────────────
 
+    refreshSelectedGizmos(): void {
+        const selectedPaths = Service.Selection?.query?.() ?? [];
+        let refreshed = false;
+        for (const path of selectedPaths) {
+            const node = getNodeByPath(path);
+            if (node) {
+                this.onNodeChanged(node);
+                refreshed = true;
+            }
+        }
+        if (refreshed) {
+            Service.Engine?.repaintInEditMode?.();
+        }
+    }
+
     onEditorOpened(): void {
+        this._hasEditorOpened = true;
         this.clearAllGizmos();
+        // 与 Creator onSceneOpened 一致：场景加载后 active 才可靠，每次打开都回到移动工具。
+        this.transformToolName = 'position';
         this._showIconGizmosForScene();
-        this.initFromConfig();
         // 编辑器打开/重载后节点和组件对象可能已重建，保留选择路径并重新挂到新组件上。
-        this._rebindSelectedGizmos();
-        // Camera.onEditorOpened 有 200ms 延迟的 defaultFocus，需要等它完成后再显示世界坐标轴
+        this._reselectCurrentSelection();
+        // Camera.onEditorOpened 会异步恢复视图；延后一帧再补注册并刷新世界坐标轴。
         setTimeout(() => {
             // init 阶段编辑器相机还不存在，registerCameraMovedEvent 静默失败，此处补注册
             this._worldAxisController?.registerCameraMovedEvent();
@@ -909,6 +937,11 @@ export class GizmoService extends BaseService<IGizmoEvents> implements IGizmoSer
 
     onNodeChanged(node: Node, opts?: IChangeNodeOptions): void {
         if (!node) return;
+        // 光照探针数据变化（如探针组重新生成）时，探针组自身节点会收到该事件，
+        // 但受其影响的 mesh 的四面体高亮挂在别的节点上，需主动通知选中的探针消费者刷新。
+        if (opts?.type === NodeEventType.LIGHT_PROBE_CHANGED || opts?.type === NodeEventType.LIGHT_PROBE_BAKING_CHANGED) {
+            this._scheduleProbeConsumersRefresh();
+        }
         const has = this._selection.includes(node.uuid);
 
         walkNodeComponent(node, (component: Component) => {
@@ -953,13 +986,47 @@ export class GizmoService extends BaseService<IGizmoEvents> implements IGizmoSer
             }
         });
 
-        if (opts?.type !== NodeEventType.CHILD_CHANGED) {
+        if (opts?.type !== NodeEventType.CHILD_CHANGED
+            && opts?.type !== NodeEventType.LIGHT_PROBE_CHANGED
+            && opts?.type !== NodeEventType.LIGHT_PROBE_BAKING_CHANGED) {
             node.children.forEach((child) => {
                 this.onNodeChanged(child, opts);
             });
         }
 
         Service.Engine?.repaintInEditMode?.();
+    }
+
+    /**
+     * 光照探针数据变化时，通知当前选中节点上的组件 gizmo（如 mesh/skinned 的影响四面体）刷新。
+     * tetra helper 内部按签名短路，重复调用是廉价的。
+     */
+    private _notifyLightProbeChanged(): void {
+        for (const uuid of this._selection) {
+            const node = getNodeByUuid(uuid);
+            if (!node) continue;
+            walkNodeComponent(node, (component: Component) => {
+                const gizmo = getGizmoProperty('component', component);
+                if (gizmo && (gizmo as any).onLightProbeChanged && gizmo.checkVisible()) {
+                    (gizmo as any).onLightProbeChanged();
+                }
+            });
+        }
+    }
+
+    private _probeRefreshScheduled = false;
+
+    /**
+     * 去抖：烘焙事件（LIGHT_PROBE_BAKING_CHANGED）会在场景所有节点上同步 emit，
+     * 用微任务把这一波折叠成一次刷新，避免每节点一次导致的重复重建。
+     */
+    private _scheduleProbeConsumersRefresh(): void {
+        if (this._probeRefreshScheduled) return;
+        this._probeRefreshScheduled = true;
+        Promise.resolve().then(() => {
+            this._probeRefreshScheduled = false;
+            this._notifyLightProbeChanged();
+        });
     }
 
     onComponentAdded(comp: Component): void {

@@ -13,14 +13,17 @@ import utils from '../base/utils';
 import { middlewareService } from '../../server/middleware/core';
 import BuildMiddleware from './build.middleware';
 import { BuildGlobalInfo } from './share/global';
-import { fillIncludeModulesFromProjectConfig } from './share/common-options-validator';
+export { clearCache } from './cache';
+export type { BuildCacheScope, ClearCacheResult } from './cache';
 
-export async function init(platform?: string) {
+export async function init(platform?: string[]) {
     await builderConfig.init();
     await pluginManager.init();
     middlewareService.register('Build', BuildMiddleware);
-    if (platform) {
-        await pluginManager.register(platform);
+    if (platform?.length) {
+        for (const platformName of platform) {
+            await pluginManager.register(platformName);
+        }
     } else {
         await pluginManager.registerAllPlatform();
     }
@@ -73,9 +76,7 @@ export async function createBuildTask<P extends Platform>(platform: P, options?:
         realOptions = rightOptions;
     }
 
-    // 从项目配置中补充 includeModules
     realOptions.logDest = options.logDest;
-    await fillIncludeModulesFromProjectConfig(realOptions);
 
     const { BuildTask } = await import('./worker/builder');
     return new BuildTask(options.taskId, realOptions);
@@ -274,12 +275,13 @@ function readBuildTaskOptions(root: string): IBuildTaskOption<any> {
 }
 
 export async function getPreviewSettings<P extends Platform>(options?: IBuildTaskOption<P>): Promise<IPreviewSettingsResult> {
-    const buildOptions = options || (await pluginManager.getOptionsByPlatform('web-desktop'));
+    const temp = options || (await pluginManager.getOptionsByPlatform('web-desktop'));
+    const buildOptions = JSON.parse(JSON.stringify(temp));
     buildOptions.preview = true;
     // TODO 预览 settings 的排队之类的
     const { BuildTask } = await import('./worker/builder/index');
     const buildTask = new BuildTask(buildOptions.taskId || 'v', buildOptions as unknown as IBuildTaskOption<Platform>);
-    console.time('Get settings.js in preview');
+    const previewSettingsStart = Date.now();
 
     // 拿出 settings 信息
     const settings = await buildTask.getPreviewSettings();
@@ -294,7 +296,7 @@ export async function getPreviewSettings<P extends Platform>(options?: IBuildTas
         }
         script2library[removeDbHeader(asset.url).replace(/.ts$/, '.js')] = asset.library + '.js';
     }
-    console.timeEnd('Get settings.js in preview');
+    console.log(`Get settings.js in preview: ${Date.now() - previewSettingsStart}ms`);
     // 返回数据
     return {
         settings,

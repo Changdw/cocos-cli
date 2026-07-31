@@ -4,7 +4,7 @@ import { EventEmitter } from 'events';
 import { SceneProcessEventTag, SceneReadyChannel } from '../common';
 import { Rpc } from './rpc';
 import { getServerUrl } from '../../../server';
-import { listenModuleMessages } from './messages';
+import { disposeModuleMessages, listenModuleMessages } from './messages';
 import { getAvailablePort } from '../../../server/utils';
 
 export interface ISceneWorkerEvents {
@@ -96,13 +96,29 @@ export class SceneWorker {
                 };
 
                 // 监听就绪消息
+                let listenerPromise: Promise<void> | null = null;
+                const failStartup = (error: unknown) => {
+                    console.error('注册场景进程监听器失败:', error);
+                    this._process?.off('message', onReady);
+                    this._process?.off('error', onError);
+                    this._process?.off('exit', onEarlyExit);
+                    if (this._process) {
+                        this._process.kill('SIGTERM');
+                        this._process = null;
+                    }
+                    resolveOnce(false);
+                };
+
                 const onReady = (msg: any) => {
                     if (msg === SceneReadyChannel) {
                         console.log('Scene process start.');
                         this._process?.off('message', onReady);
                         this._process?.off('error', onError);
                         this._process?.off('exit', onEarlyExit);
-                        resolveOnce(true);
+                        void (listenerPromise ?? Promise.resolve()).then(
+                            () => resolveOnce(true),
+                            failStartup,
+                        );
                     }
                 };
 
@@ -126,7 +142,8 @@ export class SceneWorker {
 
                 // 启动RPC和注册监听器
                 Rpc.startup(this._process);
-                this.registerListener();
+                listenerPromise = this.registerListener();
+                listenerPromise.catch(failStartup);
 
             } catch (error) {
                 console.error('创建场景进程失败:', error);
@@ -140,6 +157,7 @@ export class SceneWorker {
         const process = this._process;
         if (!process) return true;
         this.isManualStop = true;
+        disposeModuleMessages();
         return new Promise<boolean>((resolve) => {
             let settled = false;
             const cleanup = () => {
@@ -294,6 +312,7 @@ export class SceneWorker {
         });
 
         this.process.on('exit', (code: number, signal) => {
+            disposeModuleMessages();
             if (code !== 0) {
                 console.error(`场景进程退出异常 code:${code}, signal:${signal}`);
                 
@@ -406,6 +425,7 @@ export class SceneWorker {
         if (event) {
             this.eventEmitter.removeAllListeners(event);
         } else {
+            disposeModuleMessages();
             this.eventEmitter.removeAllListeners();
             // 重置重启相关状态
             this.currentRestartCount = 0;

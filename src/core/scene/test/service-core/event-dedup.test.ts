@@ -738,30 +738,30 @@ describe('场景事件契约测试', () => {
             const source = readSourceFile('editor.ts');
 
             it('open 应 emit editor:open 1 次', () => {
-                const body = extractMethodBody(source, /async open\(params:/);
+                const body = extractMethodBody(source, /private async openUnlocked\(params:/);
                 expect(body.length).toBeGreaterThan(0);
                 expect(countEmitCalls(body, 'editor:open')).toBe(1);
             });
 
             it('open 不应 broadcast editor:open', () => {
-                const body = extractMethodBody(source, /async open\(params:/);
+                const body = extractMethodBody(source, /private async openUnlocked\(params:/);
                 expect(body).not.toMatch(/this\.broadcast\(\s*['"]editor:open['"]/);
             });
 
             it('close 应 emit editor:close 1 次', () => {
-                const body = extractMethodBody(source, /async close\(params:/);
+                const body = extractMethodBody(source, /private async closeUnlocked\(params:/);
                 expect(body.length).toBeGreaterThan(0);
                 expect(countEmitCalls(body, 'editor:close')).toBe(1);
             });
 
             it('save 应 emit editor:save 1 次', () => {
-                const body = extractMethodBody(source, /async save\(params:/);
+                const body = extractMethodBody(source, /private async saveUnlocked\(params:/);
                 expect(body.length).toBeGreaterThan(0);
                 expect(countEmitCalls(body, 'editor:save')).toBe(1);
             });
 
             it('reload 应 broadcast editor:reload 1 次（不额外 emit）', () => {
-                const body = extractMethodBody(source, /async reload\(params:/);
+                const body = extractMethodBody(source, /private async reloadUnlocked\(params:/);
                 expect(body.length).toBeGreaterThan(0);
                 expect(body).toMatch(/this\.broadcast\(\s*['"]editor:reload['"]/);
                 expect(body).not.toMatch(/this\.emit\(\s*['"]editor:reload['"]/);
@@ -853,13 +853,13 @@ describe('场景事件契约测试', () => {
             });
 
             it('undo 应 broadcast undo:changed 1 次', () => {
-                const body = extractMethodBody(source, /async undo\(\)/);
+                const body = extractMethodBody(source, /async undo\(/);
                 expect(body.length).toBeGreaterThan(0);
                 expect(countEmitCalls(body, 'undo:changed')).toBe(1);
             });
 
             it('redo 应 broadcast undo:changed 1 次', () => {
-                const body = extractMethodBody(source, /async redo\(\)/);
+                const body = extractMethodBody(source, /async redo\(/);
                 expect(body.length).toBeGreaterThan(0);
                 expect(countEmitCalls(body, 'undo:changed')).toBe(1);
             });
@@ -877,8 +877,8 @@ describe('场景事件契约测试', () => {
             });
 
             it('undo/redo 不应同时 emit 和 broadcast undo:changed', () => {
-                const undoBody = extractMethodBody(source, /async undo\(\)/);
-                const redoBody = extractMethodBody(source, /async redo\(\)/);
+                const undoBody = extractMethodBody(source, /async undo\(/);
+                const redoBody = extractMethodBody(source, /async redo\(/);
                 expect(undoBody).not.toMatch(/this\.emit\(\s*['"]undo:changed['"]/);
                 expect(redoBody).not.toMatch(/this\.emit\(\s*['"]undo:changed['"]/);
             });
@@ -959,6 +959,7 @@ describe('场景事件契约测试', () => {
 
         describe('GizmoBase (gizmo/base/gizmo-base.ts)', () => {
             const source = readSourceFile('gizmo/base/gizmo-base.ts');
+            const commitEventSource = readSourceFile('animation/property-commit-event.ts');
 
             it('onControlBegin 应 broadcast gizmo:control-begin 1 次', () => {
                 const body = extractMethodBody(source, /onControlBegin\(/);
@@ -974,6 +975,13 @@ describe('场景事件契约测试', () => {
                 expect(count).toBe(1);
             });
 
+            it('onControlEnd 应提交动画属性 committed 事件', () => {
+                const body = extractMethodBody(source, /onControlEnd\(/);
+                expect(body.length).toBeGreaterThan(0);
+                const count = (body.match(/broadcastAnimationPropertyCommitted/g) || []).length;
+                expect(count).toBe(1);
+            });
+
             it('onControlBegin 不应同时 emit gizmo:control-begin', () => {
                 const body = extractMethodBody(source, /onControlBegin\(/);
                 expect(body).not.toMatch(/\.emit\(\s*['"]gizmo:control-begin['"]/);
@@ -982,6 +990,13 @@ describe('场景事件契约测试', () => {
             it('onControlEnd 不应同时 emit gizmo:control-end', () => {
                 const body = extractMethodBody(source, /onControlEnd\(/);
                 expect(body).not.toMatch(/\.emit\(\s*['"]gizmo:control-end['"]/);
+            });
+
+            it('broadcastAnimationPropertyCommitted 应通过共享 helper 提交 animation:property-committed', () => {
+                expect(source).toMatch(/broadcastAnimationPropertyCommitted\(/);
+                expect(source).not.toMatch(/broadcast\?\.\(['"]animation:property-committed['"]/);
+                const count = (commitEventSource.match(/ServiceEvents\.broadcast\(\s*['"]animation:property-committed['"]/g) || []).length;
+                expect(count).toBe(1);
             });
         });
 

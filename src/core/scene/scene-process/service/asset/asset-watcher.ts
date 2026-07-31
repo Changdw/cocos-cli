@@ -7,6 +7,7 @@ import { Rpc } from '../../rpc';
 const ASSET_PROPS = 'A$$ETprops';
 const DELIMETER = CCClass.Attr.DELIMETER;
 const ASSET_PROPS_KEY = ASSET_PROPS + DELIMETER + ASSET_PROPS;
+const ASSET_LOAD_TIMEOUT = 10_000;
 
 declare class WeakRef {
     constructor (obj: any);
@@ -160,6 +161,7 @@ function getUuidsOfPropValue(val: any): any[] {
 
 class AssetWatcher {
     public owner: any = null;
+    private active = false;
     public watchingInfos: { [index: string]: any } = Object.create(null);
 
     constructor(owner: any) {
@@ -167,6 +169,7 @@ class AssetWatcher {
     }
 
     public start() {
+        this.active = true;
         const owner = this.owner;
         const ctor = owner.constructor;
         const assetPropsData = CCClass.Attr.getClassAttrs(ctor)[ASSET_PROPS_KEY];
@@ -183,6 +186,7 @@ class AssetWatcher {
     }
 
     public stop() {
+        this.active = false;
         for (const name in this.watchingInfos) {
             if (!(name in this.watchingInfos)) {
                 continue;
@@ -198,6 +202,10 @@ class AssetWatcher {
     }
 
     public changeWatchAsset(propName: string, newUuids: []) {
+        if (!this.active) {
+            return;
+        }
+
         // unRegister old
         this.unRegisterListener(propName);
 
@@ -407,8 +415,15 @@ class AssetUpdater {
 
     lockNum = 0;
     timer: any = null;
+    private flushPromise: Promise<void> | null = null;
+    private resolveFlush: (() => void) | null = null;
 
     lock() {
+        if (this.lockNum === 0 && !this.flushPromise) {
+            this.flushPromise = new Promise((resolve) => {
+                this.resolveFlush = resolve;
+            });
+        }
         this.lockNum++;
         clearTimeout(this.timer);
     }
@@ -416,9 +431,19 @@ class AssetUpdater {
         this.lockNum--;
         if (this.lockNum === 0) {
             this.timer = setTimeout(() => {
-                this.update();
+                try {
+                    this.update();
+                } finally {
+                    this.resolveFlush?.();
+                    this.resolveFlush = null;
+                    this.flushPromise = null;
+                }
             }, 400);
         }
+    }
+
+    waitForFlush(): Promise<void> {
+        return this.flushPromise ?? Promise.resolve();
     }
 
     private update() {
@@ -444,10 +469,24 @@ class AssetUpdater {
         this.queue.delete(uuid);
     }
 
+    clearQueue() {
+        this.queue.clear();
+    }
+
 }
 
 class AssetWatcherManager {
     updater: AssetUpdater = new AssetUpdater();
+    private generation = 0;
+    private watchers = new Set<AssetWatcher>();
+
+    public invalidate(): void {
+        this.generation++;
+        this.watchers.forEach((watcher) => watcher.stop());
+        this.watchers.clear();
+        assetListener.removeAllListeners();
+        this.updater.clearQueue();
+    }
 
     public initHandle(obj: any) {
         const assetPropsData = getAssetPropsData(obj);
@@ -465,6 +504,7 @@ class AssetWatcherManager {
         }
 
         if (obj._watcherHandle) {
+            this.watchers.add(obj._watcherHandle);
             obj._watcherHandle.start();
         }
 
@@ -491,8 +531,9 @@ class AssetWatcherManager {
             || uuid.endsWith('@40c10');
     }
     public async onAssetChanged(uuid: string) {
+        const generation = this.generation;
         const info = await Rpc.getInstance().request('assetManager', 'queryAssetInfo', [uuid]);
-        if (!info) {
+        if (!info || generation !== this.generation) {
             return;
         }
 
@@ -514,27 +555,61 @@ class AssetWatcherManager {
         removeCaches(uuid);
 
         this.updater.lock();
-        // console.log(`开始加载 ${uuid} ${info?.name}`);
-        assetManager.loadAny(uuid, (err: any, asset: any) => {
-            // console.log(`加载结束 ${uuid} ${info?.name}`);
-            if (err) {
-                this.updater.unlock();
-                console.error(err);
+        try {
+            const asset = await this.loadAsset(uuid);
+            if (generation !== this.generation) {
+                this.discardCachedAsset(uuid, asset);
                 return;
             }
-
             if (oldAsset && asset && oldAsset.constructor.name !== asset.constructor.name) {
                 this.updater.add(uuid, null);
-                // assetListener.emit(uuid, null);
-                // assetListener.off(uuid);
                 // tslint:disable-next-line: max-line-length
                 console.warn('The asset type has been modified, and emptied the original reference in the scene.');
             } else {
                 this.updater.add(uuid, asset);
-                // assetListener.emit(uuid, asset);
             }
+        } catch (error) {
+            console.error(error);
+        } finally {
             this.updater.unlock();
-            // updateAsset(uuid, asset);
+        }
+        await this.updater.waitForFlush();
+    }
+
+    private discardCachedAsset(uuid: string, asset: Asset): void {
+        if (assetManager.assets.get(uuid) === asset) {
+            assetManager.releaseAsset(asset);
+        }
+    }
+
+    private loadAsset(uuid: string): Promise<Asset> {
+        return new Promise((resolve, reject) => {
+            let settled = false;
+            const finish = (callback: () => void) => {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                clearTimeout(timer);
+                callback();
+            };
+            const timer = setTimeout(() => {
+                finish(() => reject(new Error(`Asset load timeout: ${uuid}`)));
+            }, ASSET_LOAD_TIMEOUT);
+
+            assetManager.loadAny(uuid, (err: Error | null, asset: Asset) => {
+                if (settled) {
+                    if (!err && asset) {
+                        this.discardCachedAsset(uuid, asset);
+                    }
+                    return;
+                }
+                if (err) {
+                    finish(() => reject(err));
+                    return;
+                }
+                finish(() => resolve(asset));
+            });
         });
     }
 

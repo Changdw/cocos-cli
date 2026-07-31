@@ -4,11 +4,11 @@ declare const cc: any;
 declare const EditorExtends: any;
 
 import dumpUtil from './utils';
+import { getDumpComponentAccess } from './service-access';
 
 import { DumpDefines } from './dump-defines';
 import { IProperty } from '../../../@types/public';
 import { IComponent, INode, IPrefab, IScene, ITargetOverrideInfo } from '../../../common';
-import compMgr from '../component/index';
 import { prefabUtils } from './../prefab/utils';
 import { Service } from './../core';
 import { MobilityMode, Node, Prefab, Component, js } from 'cc';
@@ -267,7 +267,15 @@ export function encodeScene(scene: any): IScene {
     }
     for (const [key, val] of Object.entries(data._globals)) {
         if (val && typeof val === 'object' && 'type' in val && 'value' in val) {
-            (val as IProperty).path = `_globals.${key}`;
+            const prop = val as IProperty;
+            prop.path = `_globals.${key}`;
+            if (prop.value && typeof prop.value === 'object' && !Array.isArray(prop.value)) {
+                for (const [subKey, subProp] of Object.entries(prop.value as Record<string, unknown>)) {
+                    if (subProp && typeof subProp === 'object' && !Array.isArray(subProp) && 'type' in subProp && 'value' in subProp) {
+                        (subProp as IProperty).path = `_globals.${key}.${subKey}`;
+                    }
+                }
+            }
         }
     }
 
@@ -280,6 +288,7 @@ export function encodeScene(scene: any): IScene {
  */
 export function encodeComponent(component: any): IComponent {
     const ctor = component.constructor;
+    const componentAccess = getDumpComponentAccess();
     // 嵌套预制体中的mountedComponent并不是mounted;需要做区分
     const mountedRootNode = prefabUtils.getMountedRoot(component);
     let mountedRoot: string | undefined = mountedRootNode?.uuid;
@@ -299,7 +308,7 @@ export function encodeComponent(component: any): IComponent {
             name: encodeObject(component.name, { default: null, visible: false }, component),
             enabled: encodeObject(component.enabled, { default: null, visible: false }, component),
         },
-        path: compMgr.getPathFromUuid(component.uuid) ?? 'unknown',
+        path: componentAccess.getPathFromUuid(component.uuid) ?? 'unknown',
         default: undefined,
         type: dumpUtil.getTypeName(ctor),
         readonly: false,
@@ -307,7 +316,7 @@ export function encodeComponent(component: any): IComponent {
         cid: component.__cid__,
 
         mountedRoot: mountedRoot,
-        component_path: compMgr.getPathFromUuid(component.uuid) ?? '',
+        component_path: componentAccess.getPathFromUuid(component.uuid) ?? '',
     };
 
     // 遍历组件内所有属性

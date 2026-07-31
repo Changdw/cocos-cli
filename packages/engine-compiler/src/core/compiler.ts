@@ -85,25 +85,13 @@ export class EngineCompiler {
         // Spine Hack Begin
         // 先移除 spine 所有版本
         allFeatures = allFeatures.filter((f) => !f.startsWith('spine-'));
-        //todo:暂时只打包 spine 3.8，迁移差不多完成后再支持其他版本
+        // dev-cli 预览 / 场景编辑器引擎：同时编入 spine-3.8 与 spine-4.2，配合 cc.config.json 的
+        // moduleOverrides（SPINE_3_8 && SPINE_4_2 → spine-*-dynamic.ts）实现运行时按 cocos.config.json
+        // 选定 spine 版本（改配置 + 硬刷新即生效，无需重编引擎）。两份 spine WASM/asm external 都会被编入。
+        // 注意：这里是 dev-cli 引擎编译器，与项目构建引擎（src/core/builder/.../separate-engine.ts）是
+        // 两条独立管线；项目构建仍按 includeModules 编译期单版本，产物包体不受影响。
         allFeatures.push('spine-3.8');
-        /* if (Editor) {
-            // 编辑器状态下，可以选择切换 spine 版本
-            const engineModule = (await Editor.Profile.getProject('engine', 'modules'));
-            const moduleConfig = engineModule?.configs[engineModule.globalConfigKey];
-
-            const includeModules: string[] | undefined = moduleConfig?.includeModules ?? [];
-            const spineVersion = includeModules?.find((m) => m.startsWith('spine-'));
-            if (spineVersion) {
-                allFeatures.push(spineVersion);
-            } else {
-                // Fallback to spine 3.8
-                allFeatures.push('spine-3.8');
-            }
-        } else {
-            编辑器打包默认只打 spine 3.8 版本
-            allFeatures.push('spine-3.8');
-        } */
+        allFeatures.push('spine-4.2');
         // Spine Hack End
         const env: StatsQuery.ConstantManager.ConstantOptions = {
             platform: 'NODEJS',

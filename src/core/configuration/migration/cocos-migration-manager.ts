@@ -28,6 +28,13 @@ function mergeConfigs(target: any, source: any): any {
     return result;
 }
 
+function resolveTargetScope(target: IMigrationTarget): CocosCLIConfigScope {
+    if (target.targetScope) {
+        return target.targetScope;
+    }
+    return target.sourceScope === 'local' ? 'local' : 'project';
+}
+
 /**
  * CocosCreator 3.x 配置迁移管理器
  */
@@ -70,7 +77,7 @@ export class CocosMigrationManager {
     public static register(migrationTarget: IMigrationTarget | IMigrationTarget[]): void {
         migrationTarget = !Array.isArray(migrationTarget) ? [migrationTarget] : migrationTarget;
         for (const target of migrationTarget) {
-            const scope = target.targetScope || 'project';
+            const scope = resolveTargetScope(target);
             const items = this._targets.get(scope) || [];
             items.push(target);
             this._targets.set(scope, items);
@@ -96,7 +103,7 @@ export class CocosMigrationManager {
         for (const items of this._targets.values()) {
             for (const target of items) {
                 try {
-                    const targetScope = target.targetScope || 'project';
+                    const targetScope = resolveTargetScope(target);
                     const migratedConfig = await CocosMigration.migrate(projectPath, target);
                     result[targetScope] = mergeConfigs(result[targetScope], migratedConfig);
                     newConsole.debug(`[Migration] 迁移完成: ${target.pluginName}`);
@@ -130,6 +137,7 @@ export class CocosMigrationManager {
     private static createConfigList(): Record<CocosCLIConfigScope, Record<string, any>> {
         return {
             project: {},
+            local: {},
         };
     }
 }

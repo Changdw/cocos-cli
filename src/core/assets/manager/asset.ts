@@ -9,6 +9,7 @@ import assetOperation from './operation';
 import assetHandlerManager from './asset-handler';
 import animationGraphVariant from '../animation-graph-variant';
 import * as serializedData from '../serialized-data';
+import * as materialService from '../material-service';
 
 /**
  * 对外暴露一系列的资源查询、操作接口等
@@ -36,6 +37,7 @@ class AssetManager extends EventEmitter {
     queryAssetMtime = assetQuery.queryAssetMtime.bind(assetQuery);
     // ---------- operation ---------
     importAsset = assetOperation.importAsset.bind(assetOperation);
+    copyAsset = assetOperation.copyAsset.bind(assetOperation);
     saveAssetMeta = assetOperation.saveAssetMeta.bind(assetOperation);
     saveAsset = assetOperation.saveAsset.bind(assetOperation);
     createAsset = assetOperation.createAsset.bind(assetOperation);
@@ -48,8 +50,13 @@ class AssetManager extends EventEmitter {
     outputExportData = assetOperation.outputExportData.bind(assetOperation);
     createAssetByType = assetOperation.createAssetByType.bind(assetOperation);
     updateUserData = assetOperation.updateUserData.bind(assetOperation);
+    updateUserDataByPath = assetOperation.updateUserDataByPath.bind(assetOperation);
     querySerializedData = serializedData.querySerializedData;
     saveSerializedData = serializedData.saveSerializedData;
+    queryMaterial = materialService.queryMaterial;
+    queryMaterialEffect = materialService.queryEffect;
+    queryMaterialAllEffects = materialService.queryAllEffects;
+    saveMaterial = materialService.saveMaterial;
 
     // ---------- animation graph variant ---------
     queryAnimationGraphVariant = animationGraphVariant.query.bind(animationGraphVariant);
@@ -350,6 +357,7 @@ export interface TypedAssetManager extends EventEmitter {
     queryAssetMtime: typeof assetQuery.queryAssetMtime;
 
     importAsset: typeof assetOperation.importAsset;
+    copyAsset: typeof assetOperation.copyAsset;
     saveAssetMeta: typeof assetOperation.saveAssetMeta;
     saveAsset: typeof assetOperation.saveAsset;
     createAsset: typeof assetOperation.createAsset;
@@ -362,8 +370,13 @@ export interface TypedAssetManager extends EventEmitter {
     outputExportData: typeof assetOperation.outputExportData;
     createAssetByType: typeof assetOperation.createAssetByType;
     updateUserData: typeof assetOperation.updateUserData;
+    updateUserDataByPath: typeof assetOperation.updateUserDataByPath;
     querySerializedData: typeof serializedData.querySerializedData;
     saveSerializedData: typeof serializedData.saveSerializedData;
+    queryMaterial: typeof materialService.queryMaterial;
+    queryMaterialEffect: typeof materialService.queryEffect;
+    queryMaterialAllEffects: typeof materialService.queryAllEffects;
+    saveMaterial: typeof materialService.saveMaterial;
 
     queryAnimationGraphVariant: typeof animationGraphVariant.query;
     changeAnimationGraphVariant: typeof animationGraphVariant.change;

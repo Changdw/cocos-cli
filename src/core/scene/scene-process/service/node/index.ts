@@ -20,6 +20,7 @@ import { ServiceEvents } from '../core/global-events';
 // const { basename, extname } = require('path');
 // import nodeUtil from '../../../utils/node';
 import dumpUtil from '../dump';
+import { registerDumpNodeAccess } from '../dump/service-access';
 import { Service } from '../core/decorator';
 
 // import getComponentFunctionOfNode from '../component/get-component-function-of-node';
@@ -172,6 +173,7 @@ export class NodeManager {
         [Node.EventType.CHILD_ADDED]: 'onNodeParentChanged',
         [Node.EventType.CHILD_REMOVED]: 'onNodeParentChanged',
         [Node.EventType.LIGHT_PROBE_CHANGED]: 'onLightProbeChanged',
+        [Node.EventType.LIGHT_PROBE_BAKING_CHANGED]: 'onLightProbeBakingChanged',
     } as const;
     private nodeHandlers = new Map<string, Function>();
 
@@ -282,6 +284,11 @@ export class NodeManager {
      */
     onLightProbeChanged(node: Node) {
         const changeOpts: IChangeNodeOptions = { type: NodeEventType.LIGHT_PROBE_CHANGED, source: EventSourceType.ENGINE };
+        this.emit('node:change', node, changeOpts);
+    }
+
+    onLightProbeBakingChanged(node: Node) {
+        const changeOpts: IChangeNodeOptions = { type: NodeEventType.LIGHT_PROBE_BAKING_CHANGED, source: EventSourceType.ENGINE };
         this.emit('node:change', node, changeOpts);
     }
 
@@ -1606,4 +1613,11 @@ export class NodeManager {
     }
 }
 
-export default new NodeManager();
+const nodeManager = new NodeManager();
+
+registerDumpNodeAccess({
+    query: nodeManager.query.bind(nodeManager),
+    addComponentAt: nodeManager.addComponentAt.bind(nodeManager),
+});
+
+export default nodeManager;

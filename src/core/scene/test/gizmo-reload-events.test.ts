@@ -3,9 +3,15 @@ import { EventEmitter } from 'events';
 const mockService = {
     Selection: {
         query: jest.fn(),
+        clear: jest.fn(),
+        select: jest.fn(),
     },
     Engine: {
         repaintInEditMode: jest.fn(),
+    },
+    Editor: {
+        getCurrentEditorType: jest.fn(),
+        getRootNode: jest.fn(),
     },
 };
 const mockGetClassName = jest.fn((obj: any) => obj?.__className ?? obj?.constructor?.name ?? '');
@@ -22,6 +28,7 @@ jest.mock('cc', () => {
     class MockCamera { }
     class MockColor { }
     class MockRect { }
+    class MockScene { }
     class MockVec3 { }
 
     return {
@@ -47,6 +54,7 @@ jest.mock('cc', () => {
         },
         Node: MockNode,
         Rect: MockRect,
+        Scene: MockScene,
         Vec3: MockVec3,
         director: {
             getScene: jest.fn(() => null),
@@ -127,6 +135,8 @@ jest.mock('../scene-process/service/gizmo/components/mesh-renderer', () => ({}))
 jest.mock('../scene-process/service/gizmo/components/skinned-mesh-renderer', () => ({}));
 jest.mock('../scene-process/service/gizmo/components/video-player', () => ({}));
 jest.mock('../scene-process/service/gizmo/components/web-view', () => ({}));
+jest.mock('../scene-process/service/gizmo/components/light-probe-group', () => ({}));
+jest.mock('../scene-process/service/gizmo/components/reflection-probe', () => ({}));
 
 describe('Gizmo editor lifecycle', () => {
     afterEach(() => {
@@ -137,12 +147,17 @@ describe('Gizmo editor lifecycle', () => {
         mockGizmoDefines.iconGizmo.clear();
         mockGizmoDefines.persistentGizmo.clear();
         mockGizmoDefines.methods.clear();
+        mockService.Editor.getCurrentEditorType.mockReturnValue('unknown');
+        mockService.Editor.getRootNode.mockReturnValue(null);
+        delete (globalThis as any).EditorExtends;
+        delete (globalThis as any).cc;
     });
 
-    it('initializes gizmos from editor open lifecycle', () => {
+    it('resets gizmos from editor open lifecycle without reloading config', () => {
         jest.useFakeTimers();
         const { GizmoService } = require('../scene-process/service/gizmo');
         const gizmo = new GizmoService();
+        gizmo.transformToolName = 'rotate';
 
         const clearAllGizmos = jest.spyOn(gizmo, 'clearAllGizmos').mockImplementation(() => {});
         const showIconGizmos = jest.spyOn(gizmo as any, '_showIconGizmosForScene').mockImplementation(() => {});
@@ -152,8 +167,34 @@ describe('Gizmo editor lifecycle', () => {
 
         expect(clearAllGizmos).toHaveBeenCalledTimes(1);
         expect(showIconGizmos).toHaveBeenCalledTimes(1);
-        expect(initFromConfig).toHaveBeenCalledTimes(1);
+        expect(gizmo.transformToolName).toBe('position');
+        expect(initFromConfig).not.toHaveBeenCalled();
         jest.runOnlyPendingTimers();
+    });
+
+    it('does not let late config restore override the editor-open position tool', async () => {
+        let resolveConfig!: (value: unknown) => void;
+        const configPromise = new Promise((resolve) => { resolveConfig = resolve; });
+        const request = jest.fn(() => configPromise);
+        const { Rpc } = require('../scene-process/rpc');
+        Rpc.getInstance.mockReturnValue({ request });
+
+        const { GizmoService } = require('../scene-process/service/gizmo');
+        const gizmo = new GizmoService();
+        gizmo.transformToolName = 'position';
+        gizmo.viewMode = 'select';
+        (gizmo as any)._hasEditorOpened = true;
+
+        const restorePromise = gizmo.initFromConfig();
+        resolveConfig({
+            transformToolName: 'rotate',
+            viewMode: 'view',
+            toolsVisibility3d: true,
+        });
+        await restorePromise;
+
+        expect(gizmo.transformToolName).toBe('position');
+        expect(gizmo.viewMode).toBe('select');
     });
 
     it('rebuilds selected gizmos from editor open lifecycle', () => {
@@ -165,17 +206,100 @@ describe('Gizmo editor lifecycle', () => {
 
         const clearAllGizmos = jest.spyOn(gizmo, 'clearAllGizmos').mockImplementation(() => {});
         const showIconGizmos = jest.spyOn(gizmo as any, '_showIconGizmosForScene').mockImplementation(() => {});
-        jest.spyOn(gizmo, 'initFromConfig').mockImplementation(() => undefined as any);
-        const onSelectionSelect = jest.spyOn(gizmo, 'onSelectionSelect').mockImplementation(() => {});
+        (globalThis as any).EditorExtends = {
+            Node: {
+                getNodeByPath: jest.fn(() => ({ uuid: 'button-uuid' })),
+            },
+        };
 
         gizmo.onEditorOpened();
 
         expect(clearAllGizmos).toHaveBeenCalledTimes(1);
         expect(showIconGizmos).toHaveBeenCalledTimes(1);
         expect((gizmo as any)._selection).toEqual([]);
-        expect(onSelectionSelect).toHaveBeenCalledWith('/Canvas/button');
+        expect(mockService.Selection.clear).toHaveBeenCalledTimes(1);
+        expect(mockService.Selection.select).toHaveBeenCalledWith('/Canvas/button');
         jest.runOnlyPendingTimers();
         expect(mockService.Engine.repaintInEditMode).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips reselecting paths that are not in the opened editor scene', () => {
+        jest.useFakeTimers();
+        (globalThis as any).EditorExtends = {
+            Node: {
+                getNodeByPath: jest.fn(() => null),
+            },
+        };
+        mockService.Selection.query.mockReturnValue(['/Missing']);
+
+        const { GizmoService } = require('../scene-process/service/gizmo');
+        const gizmo = new GizmoService();
+        jest.spyOn(gizmo, 'clearAllGizmos').mockImplementation(() => {});
+        jest.spyOn(gizmo as any, '_showIconGizmosForScene').mockImplementation(() => {});
+
+        gizmo.onEditorOpened();
+
+        expect(mockService.Selection.clear).toHaveBeenCalledTimes(1);
+        expect(mockService.Selection.select).not.toHaveBeenCalled();
+        jest.runOnlyPendingTimers();
+    });
+
+    it('reselects prefab nodes by path relative to the prefab root when hidden Canvas is not in hierarchy', () => {
+        jest.useFakeTimers();
+        const child = { name: 'Child', uuid: 'child-uuid', children: [] };
+        const root = { name: 'Node', uuid: 'root-uuid', children: [child] };
+        (globalThis as any).EditorExtends = {
+            Node: {
+                getNodeByPath: jest.fn(() => null),
+            },
+        };
+        mockService.Editor.getCurrentEditorType.mockReturnValue('prefab');
+        mockService.Editor.getRootNode.mockReturnValue(root);
+        mockService.Selection.query.mockReturnValue(['Node/Child']);
+
+        const { GizmoService } = require('../scene-process/service/gizmo');
+        const gizmo = new GizmoService();
+        jest.spyOn(gizmo, 'clearAllGizmos').mockImplementation(() => {});
+        jest.spyOn(gizmo as any, '_showIconGizmosForScene').mockImplementation(() => {});
+
+        gizmo.onEditorOpened();
+
+        expect(mockService.Selection.select).toHaveBeenCalledWith('Node/Child');
+        jest.runOnlyPendingTimers();
+    });
+
+    it('resolves transform gizmo nodes with the same prefab relative path fallback', () => {
+        const child = { name: 'Child', uuid: 'child-uuid', children: [], isValid: true, parent: null };
+        const root = { name: 'Node', uuid: 'root-uuid', children: [child], isValid: true, parent: null };
+        (globalThis as any).cc = {
+            EditorExtends: {
+                Node: {
+                    getNodeByPath: jest.fn(() => null),
+                },
+            },
+        };
+        mockService.Editor.getCurrentEditorType.mockReturnValue('prefab');
+        mockService.Editor.getRootNode.mockReturnValue(root);
+        mockService.Selection.query.mockReturnValue(['Node/Child']);
+
+        const TransformBaseGizmo = require('../scene-process/service/gizmo/node/transform-base').default;
+        const gizmo = new TransformBaseGizmo(null);
+
+        expect(gizmo.nodes).toEqual([child]);
+    });
+
+    it('refreshes transform controller size when selected gizmos are updated after camera restore', () => {
+        const TransformBaseGizmo = require('../scene-process/service/gizmo/node/transform-base').default;
+        const gizmo = new TransformBaseGizmo(null);
+        const updateControllerTransform = jest.fn();
+        const adjustControllerSize = jest.fn();
+        (gizmo as any).updateControllerTransform = updateControllerTransform;
+        (gizmo as any)._controller = { adjustControllerSize };
+
+        gizmo.onNodeChanged();
+
+        expect(updateControllerTransform).toHaveBeenCalledTimes(1);
+        expect(adjustControllerSize).toHaveBeenCalledTimes(1);
     });
 
     it('does not reuse destroyed gizmos after clearing all gizmos', () => {

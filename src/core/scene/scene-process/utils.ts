@@ -14,3 +14,7 @@ export function parseCommandLineArgs(argv: string[]): Record<string, string | un
         return acc;
     }, {} as Record<string, string | undefined>);
 }
+
+export function resolveSceneAssetBase(serverURL: string | undefined, libraryPath: string): string {
+    return serverURL || libraryPath;
+}

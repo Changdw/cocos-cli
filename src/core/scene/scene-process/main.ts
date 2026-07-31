@@ -1,6 +1,6 @@
 import { SceneReadyChannel } from '../common';
 import { Rpc } from './rpc';
-import { parseCommandLineArgs } from './utils';
+import { parseCommandLineArgs, resolveSceneAssetBase } from './utils';
 import { Engine } from '../../engine';
 import { join } from 'path';
 import { serviceManager } from './service/service-manager';
@@ -33,12 +33,14 @@ async function startup() {
     serviceManager.initialize(serverURL ?? '');
 
     await Engine.init(enginePath);
-    // 这里 importBase 与 nativeBase 用服务器是为了让服务器转换资源真实存放的路径
+    const libraryPath = join(projectPath, 'library');
+    const assetBase = resolveSceneAssetBase(serverURL, libraryPath);
     await Engine.initEngine({
         serverURL: serverURL,
-        importBase: serverURL ?? join(projectPath, 'library'),
-        nativeBase: serverURL ?? join(projectPath, 'library'),
+        importBase: assetBase,
+        nativeBase: assetBase,
         writablePath: join(projectPath, 'temp'),
+        enableCustomPipeline: false,
     }, async () => {
         // 导入 service，处理装饰器，捕获开发的 api
         await import('./service');

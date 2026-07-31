@@ -1,7 +1,7 @@
 import fse from 'fs-extra';
 import { existsSync, readdirSync, statSync } from 'fs';
 import { EngineInfo } from './@types/public';
-import { IEngineConfig, IEngineProjectConfig, IInitEngineInfo } from './@types/config';
+import type { IEngineConfig, IEngineProjectConfig, IInitEngineInfo, IJointTextureLayoutPreviewResult } from './@types/config';
 import { IModuleConfig, ModuleRenderConfig } from './@types/modules';
 import { join } from 'path';
 import { cloneDeep, merge } from 'lodash';
@@ -10,6 +10,21 @@ import { assetManager } from '../assets';
 import { getEngineDynamicConfigContribution, getEngineRenderConfig, getLocalizedEngineRenderConfig } from './dynamic-metadata';
 import { createEngineMetadataNodes } from './metadata';
 import i18n from '../base/i18n';
+import {
+    CUSTOM_PIPELINE_MODULE,
+    CUSTOM_PIPELINE_NAME_KEY,
+    DEFAULT_CUSTOM_PIPELINE_NAME,
+    deriveGraphicsConfigFromCustomPipeline,
+    deriveGraphicsConfigFromModules,
+    ensureCustomPipelineMacroConfig,
+    hasOwnConfigKey,
+    mergeGraphicsConfigWithModules,
+    normalizeIncludeModulesWithGraphics,
+} from './graphics-config';
+import {
+    queryJointTextureLayoutPreview as createJointTextureLayoutPreview,
+    resolveCustomJointTextureLayouts,
+} from './joint-texture-layout';
 
 /**
  * 整合 engine 的一些编译、配置读取等功能
@@ -22,6 +37,7 @@ export interface IEngine {
     initEngine(info: IInitEngineInfo): Promise<this>;
     queryRenderConfig(): ModuleRenderConfig;
     queryLocalizedRenderConfig(): ModuleRenderConfig;
+    queryJointTextureLayoutPreview(): Promise<IJointTextureLayoutPreviewResult>;
     queryLayerBuiltin(): Promise<{ name: string; value: number }[]>;
     querySortingLayerBuiltin(): Promise<ReadonlyArray<{ id: number; name: string; value: number }>>;
 }
@@ -49,6 +65,7 @@ const Backends2D = {
 // 所以界面上的 勾选动作 和 状态判断 都要忽略这个列表的数据，从 3.8.6 开始我将这个 ignoreKeys 改成 ignoreModules 从 视图层移到主进程
 // 直接在数据源上过滤掉，减少 视图层的判断
 const ignoreModules = ['custom-pipeline-post-process'];
+
 class EngineManager implements IEngine {
     private _init: boolean = false;
     private _info: EngineInfo = {
@@ -111,41 +128,43 @@ class EngineManager implements IEngine {
     }
 
     private createFallbackDefaultConfig(): IEngineConfig {
+        const includeModules = [
+            '2d',
+            '3d',
+            'debug-renderer',
+            'affine-transform',
+            'animation',
+            'audio',
+            'base',
+            'custom-pipeline',
+            'dragon-bones',
+            'gfx-webgl',
+            'graphics',
+            'intersection-2d',
+            'light-probe',
+            'marionette',
+            'mask',
+            'particle',
+            'particle-2d',
+            'physics-2d-box2d',
+            'physics-ammo',
+            'primitive',
+            'profiler',
+            'rich-text',
+            'skeletal-animation',
+            'spine-3.8',
+            'terrain',
+            'tiled-map',
+            'tween',
+            'ui',
+            'ui-skew',
+            'video',
+            'websocket',
+            'webview'
+        ];
+
         return {
-            includeModules: [
-                '2d',
-                '3d',
-                'debug-renderer',
-                'affine-transform',
-                'animation',
-                'audio',
-                'base',
-                'custom-pipeline',
-                'dragon-bones',
-                'gfx-webgl',
-                'graphics',
-                'intersection-2d',
-                'light-probe',
-                'marionette',
-                'mask',
-                'particle',
-                'particle-2d',
-                'physics-2d-box2d',
-                'physics-ammo',
-                'primitive',
-                'profiler',
-                'rich-text',
-                'skeletal-animation',
-                'spine-3.8',
-                'terrain',
-                'tiled-map',
-                'tween',
-                'ui',
-                'ui-skew',
-                'video',
-                'websocket',
-                'webview'
-            ],
+            includeModules,
             flags: {
                 LOAD_BULLET_MANUALLY: false,
                 LOAD_SPINE_MANUALLY: false
@@ -183,8 +202,10 @@ class EngineManager implements IEngine {
                 ENABLE_MULTI_TOUCH: true,
                 MAX_LABEL_CANVAS_POOL_SIZE: 20,
                 ENABLE_WEBGL_HIGHP_STRUCT_VALUES: false,
-                BATCHER2D_MEM_INCREMENT: 144
+                BATCHER2D_MEM_INCREMENT: 144,
+                [CUSTOM_PIPELINE_NAME_KEY]: DEFAULT_CUSTOM_PIPELINE_NAME,
             },
+            graphics: deriveGraphicsConfigFromModules(includeModules),
             customJointTextureLayouts: [],
             splashScreen: {
                 displayRatio: 1,
@@ -228,12 +249,14 @@ class EngineManager implements IEngine {
                 macroConfig: fallbackConfig.macroConfig,
             },
         });
+        const includeModules = contribution.defaults.includeModules;
 
         return {
             ...fallbackConfig,
-            includeModules: contribution.defaults.includeModules,
+            includeModules,
             flags: contribution.defaults.flags,
-            macroConfig: contribution.defaults.macroConfig,
+            macroConfig: ensureCustomPipelineMacroConfig(contribution.defaults.macroConfig),
+            graphics: deriveGraphicsConfigFromModules(includeModules),
         };
     }
 
@@ -326,9 +349,21 @@ class EngineManager implements IEngine {
                     mergedConfig.noDeprecatedFeatures = moduleConfig.noDeprecatedFeatures;
                 }
             }
-            if (!Object.prototype.hasOwnProperty.call(projectConfig, 'customPipeline')) {
-                mergedConfig.customPipeline = mergedConfig.includeModules?.includes('custom-pipeline') ?? false;
+            mergedConfig.macroConfig = ensureCustomPipelineMacroConfig(mergedConfig.macroConfig);
+
+            if (hasOwnConfigKey(projectConfig, 'graphics')) {
+                mergedConfig.graphics = mergeGraphicsConfigWithModules(mergedConfig.includeModules, projectConfig.graphics);
+                mergedConfig.includeModules = normalizeIncludeModulesWithGraphics(mergedConfig.includeModules, mergedConfig.graphics);
+            } else if (hasOwnConfigKey(projectConfig, 'customPipeline')) {
+                mergedConfig.graphics = deriveGraphicsConfigFromCustomPipeline(mergedConfig.customPipeline, mergedConfig.includeModules);
+                mergedConfig.includeModules = normalizeIncludeModulesWithGraphics(mergedConfig.includeModules, mergedConfig.graphics);
+            } else {
+                mergedConfig.graphics = deriveGraphicsConfigFromModules(mergedConfig.includeModules);
             }
+
+            const graphics = mergedConfig.graphics ?? deriveGraphicsConfigFromModules(mergedConfig.includeModules);
+            mergedConfig.graphics = graphics;
+            mergedConfig.customPipeline = graphics.pipeline === CUSTOM_PIPELINE_MODULE;
             this._config = mergedConfig;
         };
         syncConfig();
@@ -384,9 +419,11 @@ class EngineManager implements IEngine {
         await this.initEditorExtensions();
 
         const modules = this.getConfig().includeModules || [];
-        const { physicsConfig, macroConfig, customLayers, sortingLayers, highQuality, renderPipeline } = this.getConfig();
+        const { physicsConfig, macroConfig, customLayers, sortingLayers, highQuality, renderPipeline, customPipeline, customJointTextureLayouts } = this.getConfig();
+        const enableCustomPipeline = info.enableCustomPipeline ?? customPipeline;
         const bundles = assetManager.queryAssets({ isBundle: true }).map((item: any) => item.meta?.userData?.bundleName ?? item.name);
         const builtinAssets = info.serverURL && await this.queryInternalAssetList(this.getInfo().typescript.path);
+        const resolvedCustomJointTextureLayouts = await resolveCustomJointTextureLayouts(customJointTextureLayouts);
         const defaultConfig = {
             debugMode: cc.debug.DebugMode.WARN,
             overrideSettings: {
@@ -412,7 +449,12 @@ class EngineManager implements IEngine {
                 rendering: {
                     renderMode: 3,
                     renderPipeline,
+                    customPipeline: enableCustomPipeline,
                     highQualityMode: highQuality,
+                    ...(enableCustomPipeline && info.serverURL ? { effectSettingsPath: `${info.serverURL}/scripting/engine/effect-settings` } : {}),
+                },
+                animation: {
+                    customJointTextureLayouts: resolvedCustomJointTextureLayouts,
                 },
                 physics: {
                     ...physicsConfig,
@@ -460,9 +502,10 @@ class EngineManager implements IEngine {
     }
 
     async getGameConfig(serverURL: string, importBase: string, nativeBase: string, isPreview?: boolean) {
-        const { physicsConfig, macroConfig, customLayers, sortingLayers, highQuality, renderPipeline, customPipeline } = this.getConfig();
+        const { physicsConfig, macroConfig, customLayers, sortingLayers, highQuality, renderPipeline, customPipeline, customJointTextureLayouts } = this.getConfig();
         const bundles = assetManager.queryAssets({ isBundle: true }).map((item: any) => item.meta?.userData?.bundleName ?? item.name);
         const builtinAssets = serverURL && await this.queryInternalAssetList(this.getInfo().typescript.path);
+        const resolvedCustomJointTextureLayouts = await resolveCustomJointTextureLayouts(customJointTextureLayouts);
         return {
             debugMode: cc.debug.DebugMode.WARN,
             overrideSettings: {
@@ -492,6 +535,9 @@ class EngineManager implements IEngine {
                     customPipeline,
                     highQualityMode: highQuality,
                     ...(customPipeline ? { effectSettingsPath: `${serverURL}/scripting/engine/effect-settings` } : {}),
+                },
+                animation: {
+                    customJointTextureLayouts: resolvedCustomJointTextureLayouts,
                 },
                 physics: {
                     ...physicsConfig,
@@ -545,6 +591,11 @@ class EngineManager implements IEngine {
             throw new Error('Engine not init');
         }
         return getLocalizedEngineRenderConfig(this._info.typescript.path);
+    }
+
+    async queryJointTextureLayoutPreview(): Promise<IJointTextureLayoutPreviewResult> {
+        const { customJointTextureLayouts } = this.getConfig();
+        return createJointTextureLayoutPreview(customJointTextureLayouts);
     }
 
     async queryLayerBuiltin() {

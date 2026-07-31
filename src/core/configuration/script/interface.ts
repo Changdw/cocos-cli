@@ -2,7 +2,7 @@
 /**
  * 配置范围
  */
-export type ConfigurationScope = 'default' | 'project';
+export type ConfigurationScope = 'default' | 'project' | 'local';
 
 export const MessageType = {
     Save: 'configuration:save',

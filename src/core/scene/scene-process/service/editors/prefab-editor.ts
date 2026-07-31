@@ -28,14 +28,14 @@ export class PrefabEditor extends BaseEditor {
         // 获取预制体标识符
         const identifier = this.getIdentifier(asset);
         // 加载预制体资源
-        this.virtualScene = await sceneUtils.runScene(new Scene(`virtual-scene-${asset.uuid}`));
+        const virtualScene = new Scene(`virtual-scene-${asset.uuid}`);
         const prefabAsset = await sceneUtils.loadAny<Prefab>(identifier.assetUuid);
 
         // 实例化预制体
         const instance = instantiate(prefabAsset);
         editorPrefabUtils.preparePrefabRootForEditing(instance);
-        this.virtualScene.addChild(instance);
-        await this.ensurePreviewCanvasForUI(instance);
+        await this.mountPrefabInstanceForPreview(virtualScene, instance);
+        this.virtualScene = await sceneUtils.runScene(virtualScene);
 
         // 设置当前打开的预制体
         this.setCurrentOpen({
@@ -62,10 +62,30 @@ export class PrefabEditor extends BaseEditor {
         if (!this.entity) {
             throw new Error('没有打开预制体');
         }
-        // 序列化预制体数据
+        return this.saveToAsset(this.entity.identifier.assetUuid);
+    }
+
+    async saveTo(asset: IAssetInfo): Promise<IAssetInfo> {
+        return this.saveToAsset(asset.uuid);
+    }
+
+    private async saveToAsset(assetUuid: string): Promise<IAssetInfo> {
+        if (!this.entity) {
+            throw new Error('没有打开预制体');
+        }
+        const prefabAsset = await sceneUtils.loadAny<Prefab>(assetUuid);
+        const loadedUuid = (prefabAsset as any)?._uuid ?? (prefabAsset as any)?.uuid;
+        if (!(prefabAsset instanceof Prefab) || loadedUuid !== assetUuid) {
+            throw new Error(`目标资源不是有效的 Prefab: ${assetUuid}`);
+        }
         const serializedData = editorPrefabUtils.serialize(this.entity.instance);
-        // 保存到磁盘
-        return await Rpc.getInstance().request('assetManager', 'saveAsset', [this.entity.identifier.assetUuid, serializedData]);
+        const saved = await Rpc.getInstance().request('assetManager', 'saveAsset', [assetUuid, serializedData]);
+        if (!saved || saved.uuid !== assetUuid) {
+            throw new Error(`保存目标资源标识不一致: 期望 ${assetUuid}，实际 ${saved?.uuid ?? 'undefined'}`);
+        }
+        editorPrefabUtils.rebindPrefabAsset(this.entity.instance, prefabAsset);
+        this.entity.identifier = this.getIdentifier(saved);
+        return saved;
     }
 
     protected async _doReload(): Promise<INode> {
@@ -90,6 +110,16 @@ export class PrefabEditor extends BaseEditor {
         Prefab._utils.applyTargetOverrides(this.entity.instance);
         await this.ensurePreviewCanvasForUI(this.entity.instance);
         return this.encode(undefined, this._lastOpenOptions);
+    }
+
+    private async mountPrefabInstanceForPreview(scene: Scene, instance: Node): Promise<void> {
+        if (!this.shouldUsePreviewCanvas(instance)) {
+            scene.addChild(instance);
+            return;
+        }
+
+        const canvasNode = await createShouldHideInHierarchyCanvasNode(scene);
+        instance.parent = canvasNode;
     }
 
     private async ensurePreviewCanvasForUI(instance: Node): Promise<void> {

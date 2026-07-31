@@ -4,23 +4,16 @@ import { ServiceEvents } from './core/global-events';
 import type { ISelectionService, ISelectionEvents, IChangeNodeOptions } from '../../common';
 import { NodeEventType } from '../../common';
 import type { Node } from 'cc';
-
-function getNodeMgr() {
-    return ((cc as any).EditorExtends || (globalThis as any).EditorExtends)?.Node;
-}
+import { getEditorNodeByUuid, getEditorNodePath, getEditorNodeUuidByPath } from './gizmo/utils/editor-node';
 
 function pathToUuid(path: string): string {
-    const NodeMgr = getNodeMgr();
-    if (!NodeMgr) return '';
-    return NodeMgr.getNodeUuidByPath?.(path) ?? '';
+    return getEditorNodeUuidByPath(path);
 }
 
 function uuidToPath(uuid: string): string {
-    const NodeMgr = getNodeMgr();
-    if (!NodeMgr) return '';
-    const node = NodeMgr.getNode?.(uuid);
+    const node = getEditorNodeByUuid(uuid);
     if (!node) return '';
-    return NodeMgr.getNodePath(node) ?? '';
+    return getEditorNodePath(node);
 }
 
 interface SelectionEntry {
@@ -116,9 +109,7 @@ export class SelectionService extends BaseService<ISelectionEvents> implements I
 
     private _callFocusInEditor(uuid: string): void {
         try {
-            const NodeMgr = getNodeMgr();
-            if (!NodeMgr) return;
-            const node = NodeMgr.getNode(uuid);
+            const node = getEditorNodeByUuid(uuid) as any;
             if (!node?._components) return;
             for (const comp of node.components) {
                 if (comp?.onFocusInEditor) {
@@ -132,9 +123,7 @@ export class SelectionService extends BaseService<ISelectionEvents> implements I
 
     private _callLostFocusInEditor(uuid: string): void {
         try {
-            const NodeMgr = getNodeMgr();
-            if (!NodeMgr) return;
-            const node = NodeMgr.getNode(uuid);
+            const node = getEditorNodeByUuid(uuid) as any;
             if (!node?._components) return;
             for (const comp of node.components) {
                 if (comp?.onLostFocusInEditor) {

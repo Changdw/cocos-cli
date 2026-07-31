@@ -33,6 +33,7 @@ static/web/editor-extends.bundle.js
 
 # 构建文件
 /dist
+src/core/builder/platforms/*/dist
 
 # jest
 coverage
@@ -45,3 +46,7 @@ e2e/reports/
 # auto generated files
 src/i18n/types/generated.d.ts
 CLAUDE.md
+config.local.json
+
+# 个人/本机配置（local 作用域），不进版本库
+profiles/cocos.config.json

@@ -16,7 +16,7 @@ export class ConfigurationApi {
 
     @tool('configuration-remigrate')
     @title('Re-migrate configuration') // 重新迁移配置
-    @description('Re-migrate and generate cocos.config.json from the settings directory of the current project') // 从当前项目的 settings 目录重新迁移生成 cocos.config.json
+    @description('Re-migrate and generate settings/profiles cocos.config.json files from the current project') // 从当前项目重新迁移生成 settings/profiles 下的 cocos.config.json
     @result(SchemaMigrateResult)
     async migrateFromProject(): Promise<CommonResultType<TMigrateResult>> {
         const code: HttpStatusCode = COMMON_STATUS.SUCCESS;

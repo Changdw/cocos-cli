@@ -4,6 +4,7 @@ import { join } from 'path';
 import { IDisplayOptions } from '../../@types';
 import { IBuildStageItem, IInternalBuildPluginConfig, IPlatformBuildPluginConfig } from '../../@types/protected';
 import Utils from '../../../base/utils';
+import { GlobalPaths } from '../../../../global';
 
 const customBuildStages: IBuildStageItem[] = [{
     name: 'make',
@@ -21,11 +22,13 @@ export const baseNativeCommonOptions: IDisplayOptions = {
         type: 'boolean',
         default: false,
         experiment: true,
+        hidden: true,
     },
     serverMode: {
         label: 'Server Mode',
         type: 'boolean',
         default: false,
+        hidden: true,
     },
     netMode: {
         label: 'NetMode',
@@ -36,21 +39,25 @@ export const baseNativeCommonOptions: IDisplayOptions = {
             { label: 'Host Server', value: 1 },
             { label: 'Listen Server', value: 2 },
         ],
+        hidden: true,
     },
     encrypted: {
         label: 'i18n:builder.platforms.native.options.encrypted',
         type: 'boolean',
         default: false,
+        hidden: true,
     },
     xxteaKey: {
         label: 'i18n:builder.platforms.native.options.xxtea_key',
         type: 'string',
         default: Utils.UUID.generate().substr(0, 16),
+        hidden: true,
     },
     compressZip: {
         label: 'i18n:builder.platforms.native.options.compress_zip',
         type: 'boolean',
         default: false,
+        hidden: true,
     },
     JobSystem: {
         label: 'Job System',
@@ -62,6 +69,7 @@ export const baseNativeCommonOptions: IDisplayOptions = {
             { label: 'TBB', value: 'tbb' },
         ],
         verifyRules: [],
+        hidden: true,
     },
 };
 
@@ -75,7 +83,7 @@ export const commonOptions: IInternalBuildPluginConfig & Pick<IPlatformBuildPlug
     },
     buildTemplateConfig: {
         templates: [{
-            path: join(__dirname, '../../../../../resources/3d/engine/templates/native/index.ejs'),
+            path: join(GlobalPaths.enginePath, 'templates/native/index.ejs'),
             destUrl: 'index.ejs',
         }],
         version: '1.0.0',

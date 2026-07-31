@@ -188,8 +188,25 @@ class SceneUtil {
      */
     async loadAny<TAsset extends cc.Asset>(uuid: string): Promise<TAsset> {
         return new Promise<TAsset>((resolve, reject) => {
+            let settled = false;
+            const timer = setTimeout(() => {
+                settled = true;
+                reject(new Error(`加载资源超时: ${uuid}`));
+            }, SceneUtil.Timeout);
+
             cc.assetManager.assets.remove(uuid);
             cc.assetManager.loadAny<TAsset>(uuid, (error: Error | null, asset: TAsset) => {
+                if (settled) {
+                    // loadAny cannot be cancelled. If a timed-out request completes later,
+                    // remove only its own asset so a newer session is left untouched.
+                    if (!error && cc.assetManager.assets.get(uuid) === asset) {
+                        cc.assetManager.releaseAsset(asset);
+                    }
+                    return;
+                }
+
+                settled = true;
+                clearTimeout(timer);
                 if (error) {
                     reject(error);
                 } else {

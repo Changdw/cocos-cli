@@ -1,11 +1,13 @@
 import type { BuildStageProgressCallback, IBuildCommandOption, IBuildResultData, IBuildStageOptions, IBuildTaskOption, IBundleBuildOptions, IPackOptions, IPreviewSettingsResult, Platform, PreviewPackResult } from '../../core/builder/@types/private';
 import type { BuildConfiguration } from '../../core/builder/@types/config-export';
 import type { BuildCheckResult, PlatformBuildSchema, PlatformConfigItem } from '../../core/builder/@types/protected';
+import type { BuildCacheScope, ClearCacheResult } from '../../core/builder/cache';
 
 export type * from '../../core/builder/@types/private';
 export type * from '../../core/builder/@types/config-export';
+export type { BuildCacheScope, ClearCacheResult };
 
-export async function init(platform?: string): Promise<void> {
+export async function init(platform?: string[]): Promise<void> {
     const builder = await import('../../core/builder');
     return builder.init(platform);
 }
@@ -48,6 +50,11 @@ export async function make(platform: Platform, dest: string) {
 export async function run(platform: Platform, dest: string) {
     const { default: Launcher } = await import('../../core/launcher');
     return Launcher.run(platform, dest);
+}
+
+export async function getPreviewUrl(dest: string, platform?: string): Promise<string> {
+    const commonUtils = await import('../../core/builder/platforms/web-common/utils');
+    return commonUtils.getPreviewUrl(dest, platform);
 }
 
 export async function upload(platform: Platform, dest: string, accessToken?: string) {
@@ -95,6 +102,11 @@ export async function refreshDisplayI18nFields(): Promise<void> {
 export async function createBuildTemplate(nameOrPlatform: string): Promise<void> {
     const builder = await import('../../core/builder');
     return builder.createBuildTemplate(nameOrPlatform);
+}
+
+export async function clearCache(scope: BuildCacheScope): Promise<ClearCacheResult> {
+    const builder = await import('../../core/builder');
+    return builder.clearCache(scope);
 }
 
 export async function checkBuildOption(platform: string, key: string, value: unknown, options: IBuildTaskOption): Promise<BuildCheckResult> {

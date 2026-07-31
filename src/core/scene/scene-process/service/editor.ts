@@ -17,13 +17,14 @@ import { PrefabEditor, SceneEditor } from './editors';
 import { IAssetInfo } from '../../../assets/@types/public';
 import { Rpc } from '../rpc';
 import { enrichMissingDependencyError } from './error-utils';
+import type { IEditorSessionService, IEditorSessionSnapshot } from './core/editor-session';
 
 /**
  * EditorAsset - 统一的编辑器管理入口
  * 作为调度器，根据资源类型动态创建和管理编辑器实例
  */
 @register('Editor')
-export class EditorService extends BaseService<IEditorEvents> implements IEditorService {
+export class EditorService extends BaseService<IEditorEvents> implements IEditorService, IEditorSessionService {
     private needReloadAgain: IReloadOptions | null = null;
     private lastSceneOrNode: TEditorEntity | undefined;
     private reloadPromise: Promise<TEditorEntity> | null = null;
@@ -34,6 +35,8 @@ export class EditorService extends BaseService<IEditorEvents> implements IEditor
     private lockPromise: Promise<void> | null = null;
     private lockResolve: (() => void) | null = null;
     private _isReloading = false;
+    private lifecyclePromise: Promise<void> = Promise.resolve();
+    private editorSessionGeneration = 0;
 
     public async lock() {
         if (this.reloadPromise) {
@@ -79,6 +82,23 @@ export class EditorService extends BaseService<IEditorEvents> implements IEditor
         return this.currentEditorUuid;
     }
 
+    public getEditorSession(): IEditorSessionSnapshot {
+        return {
+            uuid: this.currentEditorUuid,
+            generation: this.editorSessionGeneration,
+        };
+    }
+
+    public isCurrentEditorSession(session: IEditorSessionSnapshot): boolean {
+        return session.generation === this.editorSessionGeneration
+            && session.uuid === this.currentEditorUuid
+            && this.isOpen;
+    }
+
+    private invalidateEditorSession(): void {
+        this.editorSessionGeneration++;
+    }
+
     /**
      * 是否打开场景
      */
@@ -114,6 +134,10 @@ export class EditorService extends BaseService<IEditorEvents> implements IEditor
     }
 
     async open(params: IOpenOptions): Promise<TEditorEntity> {
+        return this.runLifecycle(() => this.openUnlocked(params));
+    }
+
+    private async openUnlocked(params: IOpenOptions): Promise<TEditorEntity> {
         const { urlOrUUID } = params;
 
         const assetInfo = await Rpc.getInstance().request('assetManager', 'queryAssetInfo', [urlOrUUID]);
@@ -121,20 +145,28 @@ export class EditorService extends BaseService<IEditorEvents> implements IEditor
             throw new Error(`通过 ${urlOrUUID} 无法打开，查询不到该资源信息`);
         }
 
-        if (this.currentEditorUuid) {
-            const currentEditor = this.editorMap.get(this.currentEditorUuid);
+        const currentEditorUuid = this.currentEditorUuid;
+        if (currentEditorUuid) {
+            const currentEditor = this.editorMap.get(currentEditorUuid);
             if (currentEditor) {
+                this.invalidateEditorSession();
                 try {
-                    // 关闭当前场景
-                    const assetInfo = await Rpc.getInstance().request('assetManager', 'queryAssetInfo', [this.currentEditorUuid]);
-                    if (assetInfo) {
-                        await currentEditor.close();
-                    }
+                    const currentAssetInfo = await Rpc.getInstance().request('assetManager', 'queryAssetInfo', [currentEditorUuid]);
+                    await currentEditor.close({ save: Boolean(currentAssetInfo) });
                 } catch (error) {
                     console.error(error);
-                } finally {
-                    this.editorMap.delete(this.currentEditorUuid);
+                    throw error;
                 }
+                this.editorMap.delete(currentEditorUuid);
+                if (this.currentEditorUuid === currentEditorUuid) {
+                    this.currentEditorUuid = null;
+                    this.isOpen = false;
+                }
+                this.emitInternal(InternalServiceEvents.EditorDisposed);
+            } else {
+                this.invalidateEditorSession();
+                this.currentEditorUuid = null;
+                this.isOpen = false;
             }
         }
 
@@ -164,48 +196,64 @@ export class EditorService extends BaseService<IEditorEvents> implements IEditor
 
             // 设置当前打开的编辑器
             this.currentEditorUuid = assetInfo.uuid;
-            this.emit('editor:open');
+            this.invalidateEditorSession();
+            this.emit('editor:open', cc.director.getScene());
             this.isOpen = true;
             console.log(`打开 ${assetInfo.url}`);
             return encode;
         } catch (err) {
             await outputDependentInfo(err);
             this.editorMap.delete(uuid);
+            if (this.currentEditorUuid === uuid) {
+                this.currentEditorUuid = null;
+                this.isOpen = false;
+            }
             console.error(err);
             throw err;
         }
     }
 
     async close(params: ICloseOptions): Promise<boolean> {
+        return this.runLifecycle(() => this.closeUnlocked(params));
+    }
+
+    private async closeUnlocked(params: ICloseOptions): Promise<boolean> {
         const urlOrUUID = params.urlOrUUID ?? this.currentEditorUuid;
         try {
-            if (!urlOrUUID) return true;
+            const currentEditorUuid = this.currentEditorUuid;
+            if (!urlOrUUID || !currentEditorUuid) return true;
 
             const assetInfo = await Rpc.getInstance().request('assetManager', 'queryAssetInfo', [urlOrUUID]);
-            if (!assetInfo) {
-                throw new Error(`通过 ${urlOrUUID} 请求资源失败`);
+            const editor = assetInfo
+                ? this.editorMap.get(assetInfo.uuid)
+                : params.allowDeletedSourceFallback && params.expectedCurrentUuid === currentEditorUuid
+                    ? this.editorMap.get(currentEditorUuid)
+                    : undefined;
+            if (!editor) {
+                if (!assetInfo) {
+                    throw new Error(`通过 ${urlOrUUID} 请求资源失败`);
+                }
+                return true;
             }
 
-            const uuid = assetInfo.uuid;
-            const editor = this.editorMap.get(uuid);
-            if (!editor) return true;
-
+            this.invalidateEditorSession();
             const result = await editor.close({ save: params.save ?? true });
 
-            // 如果关闭的是当前打开的编辑器，清除当前状态
-            if (uuid === this.currentEditorUuid) {
+            if (editor === this.editorMap.get(currentEditorUuid)) {
                 this._clearUndoHistory();
                 this.currentEditorUuid = null;
             }
-
-            // 移除编辑器实例以释放内存
-            this.editorMap.delete(uuid);
+            for (const [uuid, candidate] of this.editorMap) {
+                if (candidate === editor) {
+                    this.editorMap.delete(uuid);
+                }
+            }
 
             this.emit('editor:close');
             // 真正关闭编辑器时的会话清理边界；重载只复用内容卸载/挂载边界。
             this.emitInternal(InternalServiceEvents.EditorDisposed);
             this.isOpen = false;
-            console.log(`关闭 ${assetInfo.url}`);
+            console.log(`关闭 ${assetInfo?.url ?? urlOrUUID}`);
             return result;
         } catch (error) {
             console.error(`关闭失败: [${urlOrUUID}]`, error);
@@ -214,9 +262,14 @@ export class EditorService extends BaseService<IEditorEvents> implements IEditor
     }
 
     async save(params: ISaveOptions): Promise<IAssetInfo> {
+        return this.runLifecycle(() => this.saveUnlocked(params));
+    }
+
+    private async saveUnlocked(params: ISaveOptions): Promise<IAssetInfo> {
         const urlOrUUID = params.urlOrUUID ?? this.currentEditorUuid;
         try {
-            if (!urlOrUUID) {
+            const currentEditorUuid = this.currentEditorUuid;
+            if (!urlOrUUID || !currentEditorUuid) {
                 throw new Error('当前没有打开任何编辑器');
             }
 
@@ -225,13 +278,26 @@ export class EditorService extends BaseService<IEditorEvents> implements IEditor
                 throw new Error(`通过 ${urlOrUUID} 请求资源失败`);
             }
 
-            const uuid = assetInfo.uuid;
-            const editor = this.editorMap.get(uuid);
+            const editor = this.editorMap.get(currentEditorUuid);
             if (!editor) {
-                throw new Error(`当前没有打开任何编辑器`);
+                throw new Error('当前没有打开任何编辑器');
+            }
+            if (!this.isSaveTargetCompatible(editor, assetInfo.type)) {
+                throw new Error(`不能将 ${editor instanceof SceneEditor ? 'scene' : 'prefab'} 保存到 ${assetInfo.type} 资源`);
             }
 
-            const result = await editor.save();
+            const result = assetInfo.uuid === currentEditorUuid
+                ? await editor.save()
+                : await editor.saveTo(assetInfo);
+            if (result.uuid !== assetInfo.uuid) {
+                throw new Error(`保存目标资源标识不一致: 期望 ${assetInfo.uuid}，实际 ${result.uuid}`);
+            }
+            if (assetInfo.uuid !== currentEditorUuid) {
+                this.editorMap.delete(currentEditorUuid);
+                this.editorMap.set(result.uuid, editor);
+                this.currentEditorUuid = result.uuid;
+                this.invalidateEditorSession();
+            }
 
             this._markUndoSaved();
 
@@ -244,7 +310,27 @@ export class EditorService extends BaseService<IEditorEvents> implements IEditor
         }
     }
 
+    private isSaveTargetCompatible(editor: SceneEditor | PrefabEditor, targetType: string): boolean {
+        if (editor instanceof SceneEditor) {
+            return targetType === 'scene' || targetType === 'cc.SceneAsset';
+        }
+        return targetType === 'prefab' || targetType === 'cc.Prefab';
+    }
+
     async reload(params: IReloadOptions): Promise<ReloadResult> {
+        return this.runLifecycle(() => this.reloadUnlocked(params));
+    }
+
+    public async reloadForSession(params: IReloadOptions, session: IEditorSessionSnapshot): Promise<ReloadResult> {
+        return this.runLifecycle(async () => {
+            if (!this.isCurrentEditorSession(session)) {
+                return ReloadResult.EDITOR_NOT_FOUND;
+            }
+            return this.reloadUnlocked(params);
+        });
+    }
+
+    private async reloadUnlocked(params: IReloadOptions): Promise<ReloadResult> {
         if (this._isReloading) {
             this.needReloadAgain = params;
             return ReloadResult.QUEUED;
@@ -267,8 +353,8 @@ export class EditorService extends BaseService<IEditorEvents> implements IEditor
             }
 
             const editor = this.editorMap.get(assetInfo.uuid);
-            if (!editor) {
-                console.warn(`当前没有打开任何编辑器`);
+            if (!editor || assetInfo.uuid !== this.currentEditorUuid) {
+                console.warn('当前没有打开任何编辑器');
                 this._isReloading = false;
                 return ReloadResult.EDITOR_NOT_FOUND;
             }
@@ -315,6 +401,20 @@ export class EditorService extends BaseService<IEditorEvents> implements IEditor
             console.error(error);
             this._isReloading = false;
             return ReloadResult.FAILED;
+        }
+    }
+
+    private async runLifecycle<T>(operation: () => Promise<T>): Promise<T> {
+        const previous = this.lifecyclePromise;
+        let release!: () => void;
+        this.lifecyclePromise = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        await previous;
+        try {
+            return await operation();
+        } finally {
+            release();
         }
     }
 

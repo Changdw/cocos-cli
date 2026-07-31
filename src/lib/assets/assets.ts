@@ -1,4 +1,4 @@
-import type { AnimationMaskChange, AnimationMaskDump, AssetOperationOption, AssetPropertySchemaMap, CreateAssetByTypeOptions, DeleteAssetOptions, IAssetFileSystemProvider, IAssetInfo, IAssetMeta, ISupportCreateType, QueryAssetsOption, SerializedAssetPatch, SerializedAssetQueryResult } from '../../core/assets/@types/public';
+import type { AnimationMaskChange, AnimationMaskDump, AssetOperationOption, AssetPropertySchemaMap, CreateAssetByTypeOptions, DeleteAssetOptions, IAssetFileSystemProvider, IAssetInfo, IAssetMeta, ISupportCreateType, MaterialDump, MaterialEffectInfo, MaterialTechniqueDump, QueryAssetsOption, SerializedAssetPatch, SerializedAssetQueryResult } from '../../core/assets/@types/public';
 import type { CreateAssetOptions, IAssetConfig, IAssetDBInfo, ICreateMenuInfo, IUerDataConfigItem, QueryAssetType, ThumbnailInfo, ThumbnailSize } from '../../core/assets/@types/protected';
 import type { FilterPluginOptions, IPluginScriptInfo } from '../../core/scripting/interface';
 import { assetDBManager, assetManager } from '../../core/assets';
@@ -164,6 +164,17 @@ export async function importAsset(
 }
 
 /**
+ * Copy Asset // 复制资源及其完整元数据
+ */
+export async function copyAsset(
+    source: string,
+    target: string,
+    options?: AssetOperationOption
+): Promise<IAssetInfo> {
+    return await assetManager.copyAsset(source, target, options);
+}
+
+/**
  * Reimport Asset // 重新导入资源
  */
 export async function reimportAsset(pathOrUrlOrUUID: string): Promise<IAssetInfo> {
@@ -241,6 +252,41 @@ export async function saveSerializedData(
 export const serializedData = {
     query: querySerializedData,
     save: saveSerializedData,
+};
+
+/**
+ * Query all available material effects.
+ */
+export async function queryMaterialAllEffects(): Promise<Record<string, MaterialEffectInfo>> {
+    return await assetManager.queryMaterialAllEffects();
+}
+
+/**
+ * Query one material effect dump by UUID or effect name.
+ */
+export async function queryMaterialEffect(effectNameOrUuid: string): Promise<MaterialTechniqueDump[]> {
+    return await assetManager.queryMaterialEffect(effectNameOrUuid);
+}
+
+/**
+ * Query material dump data.
+ */
+export async function queryMaterial(uuidOrUrlOrPath: string): Promise<MaterialDump> {
+    return await assetManager.queryMaterial(uuidOrUrlOrPath);
+}
+
+/**
+ * Save material dump data.
+ */
+export async function saveMaterial(uuidOrUrlOrPath: string, dump: MaterialDump): Promise<void> {
+    return await assetManager.saveMaterial(uuidOrUrlOrPath, dump);
+}
+
+export const material = {
+    query: queryMaterial,
+    queryEffect: queryMaterialEffect,
+    queryAllEffects: queryMaterialAllEffects,
+    save: saveMaterial,
 };
 
 /**
@@ -345,10 +391,20 @@ export async function queryAssetUserDataConfig(
  */
 export async function updateAssetUserData(
     urlOrUuidOrPath: string,
+    userData: Record<string, any>
+): Promise<any> {
+    return await assetManager.updateUserData(urlOrUuidOrPath, userData);
+}
+
+/**
+ * Update Asset User Data By Path // 按路径更新资源用户数据
+ */
+export async function updateAssetUserDataByPath(
+    urlOrUuidOrPath: string,
     path: string,
     value: any
 ): Promise<any> {
-    return await assetManager.updateUserData(urlOrUuidOrPath, path, value);
+    return await assetManager.updateUserDataByPath(urlOrUuidOrPath, path, value);
 }
 
 /**
