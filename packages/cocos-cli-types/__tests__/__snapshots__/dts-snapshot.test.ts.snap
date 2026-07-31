@@ -202,6 +202,7 @@ export declare interface BitmapFontAssetUserData {
     fontSize: number;
     textureUuid: string;
 }
+export declare function copyAsset(source: string, target: string, options?: AssetOperationOption): Promise<IAssetInfo>;
 export declare function createAsset(options: CreateAssetOptions): Promise<IAssetInfo>;
 export declare function createAssetByType(ccType: ISupportCreateType, dirOrUrl: string, baseName: string, options?: CreateAssetByTypeOptions): Promise<IAssetInfo>;
 export declare interface CreateAssetByTypeOptions extends AssetOperationOption {
@@ -7629,6 +7630,7 @@ export declare namespace Assets {
         createAssetByType,
         createAsset,
         importAsset,
+        copyAsset,
         reimportAsset,
         saveAsset,
         querySerializedData,
@@ -7827,6 +7829,7 @@ export declare namespace Configuration {
     }
 }
 export declare type ConfigurationScope = 'default' | 'project' | 'local';
+export declare function copyAsset(source: string, target: string, options?: AssetOperationOption): Promise<IAssetInfo>;
 export declare function createAsset(options: CreateAssetOptions): Promise<IAssetInfo>;
 export declare function createAssetByType(ccType: ISupportCreateType, dirOrUrl: string, baseName: string, options?: CreateAssetByTypeOptions): Promise<IAssetInfo>;
 export declare interface CreateAssetByTypeOptions extends AssetOperationOption {

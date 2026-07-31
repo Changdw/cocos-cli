@@ -12,6 +12,7 @@ import assetConfig from '../asset-config';
 import { url2path, ensureOutputData, url2uuid, pathToDbUrlIfAssetDBPath, dirnameForDbUrlOrPath } from '../utils';
 import assetDBManager from './asset-db';
 import assetHandlerManager from './asset-handler';
+import { copyAssetSource } from './asset-copy';
 import { copyPath, moveAssetSource, removeAssetSource, renamePath } from './filesystem';
 import i18n from '../../base/i18n';
 import assetQuery from './query';
@@ -494,6 +495,63 @@ class AssetOperation extends EventEmitter {
         return assetQuery.queryAssetInfos({
             pattern: `${assetInfo.url}/**/*`
         });
+    }
+
+    /**
+     * Copy an existing main asset together with its complete meta information.
+     */
+    async copyAsset(source: string, target: string, options?: AssetOperationOption): Promise<IAssetInfo> {
+        return await assetDBManager.addTask(this._copyAsset.bind(this), [source, target, options]);
+    }
+
+    private async _copyAsset(source: string, target: string, options?: AssetOperationOption): Promise<IAssetInfo> {
+        const asset = assetQuery.queryAsset(source);
+        if (!asset) {
+            throw new Error(`asset in source file ${source} not exists`);
+        }
+        if (asset._parent) {
+            throw new Error('Sub-assets cannot be copied independently; copy their main asset instead.');
+        }
+
+        this.checkValidUrl(target);
+        source = asset.source;
+        this._checkExists(source);
+        if (target.startsWith('db://')) {
+            target = url2path(target);
+        }
+        target = this._checkOverwrite(target, options);
+
+        const targetIsAssetDBRoot = Object.values(assetDBManager.assetDBInfo).some((info) => (
+            utils.Path.contains(info.target, target) && utils.Path.contains(target, info.target)
+        ));
+        if (targetIsAssetDBRoot) {
+            throw new Error(`Cannot copy an asset over an AssetDB root.\ntarget: ${target}`);
+        }
+        if (utils.Path.contains(source, target) || utils.Path.contains(target, source)) {
+            throw new Error(`Cannot copy an asset into or over itself.\nsource: ${source}\ntarget: ${target}`);
+        }
+
+        const transaction = await copyAssetSource(source, target, options);
+        let copiedAsset: IAsset | null = null;
+        try {
+            await this._refreshAsset(target);
+            copiedAsset = assetQuery.queryAsset(target);
+            if (!copiedAsset || !copiedAsset.imported || copiedAsset.invalid) {
+                throw copiedAsset?.importError || new Error(`Copy asset from ${source} to ${target} failed`);
+            }
+        } catch (error) {
+            try {
+                await transaction.rollback();
+                await this._refreshAsset(dirname(target), false);
+            } catch (rollbackError) {
+                const rollbackMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
+                throw new Error(`Copy asset from ${source} to ${target} failed and rollback also failed: ${rollbackMessage}`, { cause: error });
+            }
+            throw error;
+        }
+
+        await transaction.finalize();
+        return assetQuery.encodeAsset(copiedAsset);
     }
 
     /**

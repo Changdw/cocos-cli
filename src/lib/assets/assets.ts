@@ -164,6 +164,17 @@ export async function importAsset(
 }
 
 /**
+ * Copy Asset // 复制资源及其完整元数据
+ */
+export async function copyAsset(
+    source: string,
+    target: string,
+    options?: AssetOperationOption
+): Promise<IAssetInfo> {
+    return await assetManager.copyAsset(source, target, options);
+}
+
+/**
  * Reimport Asset // 重新导入资源
  */
 export async function reimportAsset(pathOrUrlOrUUID: string): Promise<IAssetInfo> {
