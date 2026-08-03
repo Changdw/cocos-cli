@@ -100,9 +100,9 @@ export class CameraService extends BaseService<ICameraEvents> implements ICamera
                     // view may not be ready
                 }
 
-                this.initFromConfig();
             }
 
+            const initConfigTask = this.initFromConfig();
             this.refresh();
 
             const uuid = this._getCurrentViewUuid();
@@ -112,16 +112,16 @@ export class CameraService extends BaseService<ICameraEvents> implements ICamera
             }
 
             this._detachSceneCameras();
-            void this._restoreCameraView();
-
+            void this._restoreCameraView(initConfigTask);
         } catch (e) {
             console.warn('[Camera] onEditorOpened failed:', e);
         }
     }
 
-    private async _restoreCameraView(): Promise<void> {
+    private async _restoreCameraView(initConfigTask?: Promise<void>): Promise<void> {
         const uuid = this._currentUuid;
         try {
+            await initConfigTask;
             await this.loadCameraInfos();
             if (uuid !== this._currentUuid) {
                 return;
@@ -167,6 +167,7 @@ export class CameraService extends BaseService<ICameraEvents> implements ICamera
             }
             const gizmoConfig = await rpc.request('sceneConfigInstance', 'get', ['gizmo', 'local']) as Partial<IGizmoConfig> | undefined;
             if (gizmoConfig) {
+                this._applyGizmoViewMode(gizmoConfig);
                 this._applyGizmoDisplay(gizmoConfig);
             }
         } catch {
@@ -196,6 +197,12 @@ export class CameraService extends BaseService<ICameraEvents> implements ICamera
         if (config.originAxis2D !== undefined) this.setOriginAxes2D(config.originAxis2D);
         if (config.originAxis3D !== undefined) this.setOriginAxes3D(config.originAxis3D);
         Service.Engine.repaintInEditMode();
+    }
+
+    private _applyGizmoViewMode(config: Partial<IGizmoConfig>): void {
+        if (config.is2D !== undefined && this.is2D !== config.is2D) {
+            this.is2D = config.is2D;
+        }
     }
 
     setGridColor(color: number[]): void {
