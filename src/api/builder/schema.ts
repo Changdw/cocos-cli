@@ -1,13 +1,18 @@
 import { z } from 'zod';
+import { SchemaAssetDbUrl, SchemaAssetDbUrlOrUUID } from '../base/schema-asset-db-url';
 
 // ==================== Basic Type Definitions ==================== // 基础类型定义
 
 // Scene Reference // 场景引用
 export const SchemaSceneRef = z.object({
-    url: z.string().describe('Scene URL'), // 场景 URL
-    uuid: z.string().describe('Scene UUID') // 场景 UUID
-}).describe('Scene Reference'); // 场景引用
+    url: SchemaAssetDbUrl.describe('Scene URL. Required.'),
+    uuid: z.string().min(1).describe('Scene UUID. Required.'),
+}).describe('Scene Reference. Each scene item must include both url and uuid.');
 
+export const SchemaStartScene = z.union([
+    SchemaAssetDbUrlOrUUID,
+    z.literal(''),
+]).describe('First scene to enter after opening the game. Use a db url or uuid; an empty string means unset and the builder will use the default scene.');
 // Polyfills Configuration // Polyfills 配置
 export const SchemaPolyfills = z.object({
     asyncFunctions: z.boolean().optional().describe('Whether async function polyfill is needed'), // 是否需要 async 函数 polyfill
@@ -118,7 +123,7 @@ const BuildConfigCoreFields = z.object({
 
     // Scene Configuration // 场景配置
     scenes: z.array(SchemaSceneRef).describe('List of scenes to build, defaults to all scenes'), // 构建场景列表，默认为全部场景
-    startScene: z.string().describe('First scene to enter after opening the game, supports db url and uuid formats'), // 打开游戏后进入的第一个场景，支持 db url 和 uuid 格式
+    startScene: SchemaStartScene.describe('First scene to enter after opening the game. Use a db url or uuid; an empty string means unset and the builder will use the default scene.'), // 打开游戏后进入的第一个场景，支持 db url 和 uuid 格式
 
     // Build Mode // 构建模式
     debug: z.boolean().describe('Whether it is debug mode'), // 是否是调试模式
