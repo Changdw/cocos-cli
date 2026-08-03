@@ -47,20 +47,20 @@ describe('scene-clone-node API', () => {
         });
         expect(SchemaNodeCloneResult.parse({
             nodeId: 'node-uuid',
-            path: 'Canvas/Panel-001',
-            name: 'Panel-001',
+            path: 'Canvas/Panel_001',
+            name: 'Panel_001',
         })).toEqual({
             nodeId: 'node-uuid',
-            path: 'Canvas/Panel-001',
-            name: 'Panel-001',
+            path: 'Canvas/Panel_001',
+            name: 'Panel_001',
         });
     });
 
     it('returns the cloned node identifier', async () => {
         mockCloneNode.mockResolvedValue({
             nodeId: 'clone-uuid',
-            path: 'Canvas/Panel-001',
-            name: 'Panel-001',
+            path: 'Canvas/Panel_001',
+            name: 'Panel_001',
             properties: {},
             prefab: null,
         });
@@ -72,10 +72,15 @@ describe('scene-clone-node API', () => {
             code: COMMON_STATUS.SUCCESS,
             data: {
                 nodeId: 'clone-uuid',
-                path: 'Canvas/Panel-001',
-                name: 'Panel-001',
+                path: 'Canvas/Panel_001',
+                name: 'Panel_001',
             },
         });
+    });
+
+    it('rejects empty source and target paths', () => {
+        expect(SchemaNodeClone.safeParse({ sourcePath: '' }).success).toBe(false);
+        expect(SchemaNodeClone.safeParse({ sourcePath: 'Canvas/Panel', targetParentPath: '' }).success).toBe(false);
     });
 
     it.each([

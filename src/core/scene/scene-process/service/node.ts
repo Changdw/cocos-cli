@@ -783,6 +783,7 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
     }
 
     async clone(params: ICloneNodeParams): Promise<INode | null> {
+        let clonedNode: Node | null = null;
         try {
             await Service.Editor.lock();
             const root = Service.Editor.getRootNode();
@@ -801,7 +802,7 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
                 throw new Error('Cannot clone the scene root node.');
             }
 
-            const targetParent = params.targetParentPath
+            const targetParent = params.targetParentPath !== undefined
                 ? NodeMgr.getNodeByPath(params.targetParentPath)
                 : sourceNode.parent;
             if (!targetParent) {
@@ -814,14 +815,25 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
                 throw new Error(`Failed to clone node at path: ${params.sourcePath}`);
             }
 
-            const newNode = NodeMgr.getNode(newUuid) as Node | null;
-            if (!newNode?.isValid) {
+            clonedNode = NodeMgr.getNode(newUuid) as Node | null;
+            if (!clonedNode?.isValid) {
                 throw new Error(`Failed to resolve cloned node: ${newUuid}`);
             }
             const newPath = this._getNodePathByUuid(newUuid);
-            this._undo.recordCreateNodeCommand(beforeNodeUuids, newPath ? [newPath] : []);
-            return sceneUtils.generateNodeDump(newNode) as INode;
+            if (!newPath) {
+                throw new Error(`Failed to resolve cloned node path: ${newUuid}`);
+            }
+            const result = sceneUtils.generateNodeDump(clonedNode) as INode;
+            this._undo.recordCreateNodeCommand(beforeNodeUuids, [newPath]);
+            return result;
         } catch (error) {
+            if (clonedNode?.isValid) {
+                try {
+                    nodeMgr.baseRemoveNode(clonedNode, false);
+                } catch (rollbackError) {
+                    console.error('Failed to roll back cloned node:', rollbackError);
+                }
+            }
             console.error(error);
             throw error;
         } finally {

@@ -484,10 +484,10 @@ describe('Node 层级操作测试', () => {
             const result = await clone({ sourcePath: source!.path });
 
             expect(result).not.toBeNull();
-            expect(result!.path).toBe(`${parent!.path}/CloneSource-001`);
-            expect(result!.name).toBe('CloneSource-001');
+            expect(result!.path).toBe(`${parent!.path}/CloneSource_001`);
+            expect(result!.name).toBe('CloneSource_001');
             expect(result!.nodeId).not.toBe(source!.nodeId);
-            expect(await getChildNames(parent!.path)).toEqual([...childrenBefore, 'CloneSource-001']);
+            expect(await getChildNames(parent!.path)).toEqual([...childrenBefore, 'CloneSource_001']);
 
             const clonedRoot = await NodeProxy.query({ path: result!.path });
             expect(clonedRoot?.properties.position).toEqual({ x: 12, y: 34, z: 5 });

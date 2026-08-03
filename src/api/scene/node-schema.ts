@@ -78,8 +78,8 @@ export const SchemaNodeDelete = z.object({
 }).describe('To configure options for node deletion, the Scene must be open first.'); // 删除节点的选项参数，需先打开场景
 
 export const SchemaNodeClone = z.object({
-    sourcePath: z.string().describe('Path of the source node subtree in the currently opened scene'),
-    targetParentPath: z.string().optional().describe('Path of the target parent node; defaults to the source node parent'),
+    sourcePath: z.string().min(1).describe('Path of the source node subtree in the currently opened scene'),
+    targetParentPath: z.string().min(1).optional().describe('Path of the target parent node; defaults to the source node parent'),
 }).describe('Clone one node subtree in the currently opened scene. Prefab editing and cross-scene cloning are not supported.');
 
 export const SchemaNodeCloneResult = SchemaNodeIdentifier;
