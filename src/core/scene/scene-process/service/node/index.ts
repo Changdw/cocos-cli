@@ -928,6 +928,19 @@ export class NodeManager {
         return newUuids.filter(Boolean);
     }
 
+    clone(sourceUuid: string, targetParentUuid: string): string | undefined {
+        const oldStashInstants = stashInstants;
+        try {
+            const [copiedUuid] = this.copy(sourceUuid);
+            if (!copiedUuid) {
+                return;
+            }
+            return this.createNodeFromStash(targetParentUuid, null, copiedUuid, false, true);
+        } finally {
+            stashInstants = oldStashInstants;
+        }
+    }
+
     paste(target: string | null | undefined, uuids: string | string[], keepWorldTransform = false) {
         if (!Array.isArray(uuids)) {
             uuids = [uuids];

@@ -15,6 +15,7 @@ import {
     type ICopyParams,
     type IPasteParams,
     type IDuplicateParams,
+    type ICloneNodeParams,
     type ICutParams,
     type IClipboardState,
     type IMoveArrayElementParams,
@@ -773,6 +774,53 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
             const newPaths = newUuids.map(uuid => this._getNodePathByUuid(uuid)).filter(Boolean);
             this._undo.recordCreateNodeCommand(beforeNodeUuids, newPaths);
             return newPaths;
+        } catch (error) {
+            console.error(error);
+            throw error;
+        } finally {
+            Service.Editor.unlock();
+        }
+    }
+
+    async clone(params: ICloneNodeParams): Promise<INode | null> {
+        try {
+            await Service.Editor.lock();
+            const root = Service.Editor.getRootNode();
+            if (!root) {
+                throw new Error('Failed to clone node: the scene is not opened.');
+            }
+            if (Service.Editor.getCurrentEditorType() !== 'scene') {
+                throw new Error('Failed to clone node: cloning is only supported in the scene editor.');
+            }
+
+            const sourceNode = NodeMgr.getNodeByPath(params.sourcePath);
+            if (!sourceNode) {
+                throw new Error(`Source node not found at path: ${params.sourcePath}`);
+            }
+            if (sourceNode === root || !sourceNode.parent) {
+                throw new Error('Cannot clone the scene root node.');
+            }
+
+            const targetParent = params.targetParentPath
+                ? NodeMgr.getNodeByPath(params.targetParentPath)
+                : sourceNode.parent;
+            if (!targetParent) {
+                throw new Error(`Target parent node not found at path: ${params.targetParentPath}`);
+            }
+
+            const beforeNodeUuids = this._collectSceneNodeUuidsForUndo();
+            const newUuid = nodeMgr.clone(sourceNode.uuid, targetParent.uuid);
+            if (!newUuid) {
+                throw new Error(`Failed to clone node at path: ${params.sourcePath}`);
+            }
+
+            const newNode = NodeMgr.getNode(newUuid) as Node | null;
+            if (!newNode?.isValid) {
+                throw new Error(`Failed to resolve cloned node: ${newUuid}`);
+            }
+            const newPath = this._getNodePathByUuid(newUuid);
+            this._undo.recordCreateNodeCommand(beforeNodeUuids, newPath ? [newPath] : []);
+            return sceneUtils.generateNodeDump(newNode) as INode;
         } catch (error) {
             console.error(error);
             throw error;
