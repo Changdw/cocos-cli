@@ -888,7 +888,7 @@ describe('ServiceEvents 事件发射集成测试', () => {
 
             prefabService.filterChildOfAssetOfPrefabInstance(['child-uuid-1'], 'test operation');
 
-            expect(listener).toHaveBeenCalledWith('/Node-child-uuid-1');
+            expect(listener).toHaveBeenCalledWith(expect.objectContaining({ uuid: 'child-uuid-1' }));
         });
 
         it('filterChildOfAssetOfPrefabInstance 中非 prefab 子节点不应 emit node:change', () => {
@@ -913,7 +913,7 @@ describe('ServiceEvents 事件发射集成测试', () => {
 
             prefabService.filterPartOfPrefabAsset(['part-uuid'], 'test operation');
 
-            expect(listener).toHaveBeenCalledWith('/Node-part-uuid');
+            expect(listener).toHaveBeenCalledWith(expect.objectContaining({ uuid: 'part-uuid' }));
         });
 
         it('filterPartOfPrefabAsset 中非 prefab 部件不应 emit node:change', () => {
@@ -953,7 +953,7 @@ describe('ServiceEvents 事件发射集成测试', () => {
 
             prefabService.canModifySibling('parent', 0, 1);
 
-            expect(listener).toHaveBeenCalledWith('/PrefabChild');
+            expect(listener).toHaveBeenCalledWith(expect.objectContaining({ uuid: 'prefab-child' }));
         });
     });
 });

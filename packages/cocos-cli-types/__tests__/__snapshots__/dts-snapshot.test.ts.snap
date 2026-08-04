@@ -6406,6 +6406,7 @@ export declare interface IPrefabService extends IServiceEvents {
     getPrefabInfo(params: IGetPrefabInfoParams): Promise<IPrefab | null>;
     unlinkPrefab(params: IUnlinkPrefabParams): Promise<boolean>;
     removePrefabInfoFromNode(node: Node_2, removeNested?: boolean): void;
+    filterChildOfPrefabAssetWhenRemoveNode(uuids: string | string[]): string[];
 }
 export declare interface IPrefabStateInfo {
     state: PrefabState;
