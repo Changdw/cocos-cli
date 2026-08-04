@@ -1,7 +1,8 @@
 import { InteractivePreview, getBoundaryOfMeshNodes } from './interactive-preview';
-import { DirectionalLight, Scene, Node, Prefab, assetManager, instantiate } from 'cc';
+import { DirectionalLight, Scene, Node, Prefab, instantiate } from 'cc';
 import { Service } from '../core/decorator';
 import { Rpc } from '../../rpc';
+import { loadPreviewAsset, removePreviewAssetCache } from './asset-reload';
 
 export class ModelPreview extends InteractivePreview {
     private lightComp: DirectionalLight | any;
@@ -39,13 +40,8 @@ export class ModelPreview extends InteractivePreview {
 
         const prefabUuid = await this.resolvePrefabUuid(uuid);
 
-        assetManager.assets.remove(prefabUuid);
-        const prefabAsset = await new Promise<Prefab>((resolve, reject) => {
-            assetManager.loadAny(prefabUuid, { reloadAsset: true }, (err: any, result: any) => {
-                if (err) reject(err);
-                else resolve(result);
-            });
-        });
+        removePreviewAssetCache(uuid);
+        const prefabAsset = await loadPreviewAsset<Prefab>(prefabUuid, 'model');
 
         this.cameraComp.enabled = true;
 

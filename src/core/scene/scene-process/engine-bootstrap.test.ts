@@ -138,4 +138,42 @@ describe('scene-process engine bootstrap', () => {
             }),
         }));
     });
+
+    it('reloads project assets without using the browser cache', async () => {
+        const oldAsset = { _uuid: 'asset-uuid', old: true };
+        const newAsset = { _uuid: '', old: false };
+        const cache = new Map<string, any>([['asset-uuid', oldAsset]]);
+        const assets = {
+            get: jest.fn((uuid: string) => cache.get(uuid)),
+            add: jest.fn((uuid: string, asset: any) => cache.set(uuid, asset)),
+            remove: jest.fn((uuid: string) => cache.delete(uuid)),
+        };
+        (globalThis as any).cc.assetManager.assets = assets;
+        (globalThis as any).cc.deserialize = jest.fn(() => newAsset);
+        (global.fetch as jest.Mock)
+            .mockResolvedValueOnce({
+                text: async () => '.json',
+            })
+            .mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({}),
+            });
+
+        await startup({ serverURL: 'http://localhost:7456' });
+
+        const loaded = await new Promise<any>((resolve, reject) => {
+            (globalThis as any).cc.assetManager.loadAny(
+                'asset-uuid',
+                { reloadAsset: true },
+                (err: Error | null, asset: any) => err ? reject(err) : resolve(asset),
+            );
+        });
+
+        expect(loaded).toBe(newAsset);
+        expect(assets.remove).toHaveBeenCalledWith('asset-uuid');
+        expect(global.fetch).toHaveBeenCalledWith(
+            expect.stringMatching(/^http:\/\/localhost:7456\/import\/asset-uuid\.json\?isBrowser=true&_t=/),
+            { cache: 'no-store' },
+        );
+    });
 });

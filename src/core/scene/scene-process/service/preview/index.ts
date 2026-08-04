@@ -24,6 +24,8 @@ export class PreviewService extends BaseService<IPreviewEvents> implements IPrev
     private _typeMap: Map<string, PreviewTypeEntry> = new Map();
     private _initialized = false;
     private _activePreview: IPreviewInstance | null = null;
+    private _activeUuid: string | null = null;
+    private _reloadTimer: ReturnType<typeof setTimeout> | null = null;
 
     scenePreview = scenePreview;
     materialPreview = new MaterialPreview();
@@ -134,12 +136,27 @@ export class PreviewService extends BaseService<IPreviewEvents> implements IPrev
         // 设置资源
         await (entry.instance as any)[entry.setup](uuid);
         this._activePreview = entry.instance as unknown as IPreviewInstance;
+        this._activeUuid = uuid;
 
         // 将相机挂到 mainWindow 上屏渲染
         this.attachToMainWindow(entry.instance as InteractivePreview);
         Service.Engine.repaintInEditMode();
 
         return this._activePreview;
+    }
+
+    onAssetChanged(uuid: string) {
+        if (!this._activeUuid || this._activeUuid !== uuid) return;
+        if (this._reloadTimer) {
+            clearTimeout(this._reloadTimer);
+        }
+        this._reloadTimer = setTimeout(() => {
+            this._reloadTimer = null;
+            if (this._activeUuid !== uuid) return;
+            void this.open(uuid).catch((err) => {
+                console.warn(`[Preview] Failed to reload changed asset ${uuid}:`, err);
+            });
+        }, 50);
     }
 
     private attachToMainWindow(previewInstance: InteractivePreview) {

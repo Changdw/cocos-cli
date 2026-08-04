@@ -81,6 +81,7 @@ const tempVec3A = new Vec3();
 const tempVec3B = new Vec3();
 
 import type { IMaterialPreviewInstance } from '../../../common/preview';
+import { loadPreviewAsset } from './asset-reload';
 
 export class MaterialPreview extends InteractivePreview implements IMaterialPreviewInstance {
     private lightComp!: DirectionalLight;
@@ -208,14 +209,7 @@ export class MaterialPreview extends InteractivePreview implements IMaterialPrev
             return;
         }
         try {
-            const material = await new Promise<Material>((resolve, reject) => {
-                const timeout = setTimeout(() => reject(new Error(`Load material timeout: ${uuid}`)), 10000);
-                cc.assetManager.loadAny(uuid, (err: any, asset: any) => {
-                    clearTimeout(timeout);
-                    if (err) reject(err);
-                    else resolve(asset);
-                });
-            });
+            const material = await loadPreviewAsset<Material>(uuid, 'material');
             this.setMaterial(material);
             this.resetCameraView();
         } catch (e) {
