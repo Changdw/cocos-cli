@@ -184,7 +184,7 @@ describe('Bug #497 common API error status codes', () => {
         mockCreateAsset.mockRejectedValue(new Error('Invalid URL: input URL must be a string and start with db:// \n  url:'));
 
         const result = await new AssetsApi().createAsset({
-            target: 'd:\\cocos\\program\\snake2\\assets\\resources',
+            target: 'd:\\outside\\resources',
         });
 
         expect(result.code).toBe(HTTP_STATUS.BAD_REQUEST);
