@@ -790,6 +790,14 @@ class AssetQueryManager {
             throw new Error('parameter error');
         }
 
+        const normalizedUrl = pathToDbUrlIfAssetDBPath(uuidOrPath, assetDBManager.assetDBInfo);
+        if (!uuidOrPath.startsWith('db://') && normalizedUrl.startsWith('db://')) {
+            const dbName = normalizedUrl.slice('db://'.length).split('/', 1)[0];
+            if (assetDBManager.assetDBMap[dbName]) {
+                return normalizedUrl;
+            }
+        }
+
         // 根路径 /assets, /internal 对应的 url 模拟数据
         const name = uuidOrPath.substr(assetConfig.data.root.length + 1);
         if (assetDBManager.assetDBMap[name]) {

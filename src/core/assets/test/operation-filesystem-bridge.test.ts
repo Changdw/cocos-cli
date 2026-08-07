@@ -156,6 +156,12 @@ describe('asset operation filesystem bridge', () => {
             state: 'none',
             preImportExtList: [],
         };
+        assetDBManager.assetDBMap.assets = {
+            options: {
+                name: 'assets',
+                target,
+            },
+        } as any;
     }
 
     beforeEach(() => {
@@ -165,15 +171,14 @@ describe('asset operation filesystem bridge', () => {
         mockRollbackCopy.mockResolvedValue(undefined);
         const assetDBManager = require('../manager/asset-db').default as typeof import('../manager/asset-db').default;
         Object.keys(assetDBManager.assetDBInfo).forEach((key) => delete assetDBManager.assetDBInfo[key]);
+        Object.keys(assetDBManager.assetDBMap).forEach((key) => delete assetDBManager.assetDBMap[key]);
+        const { pathToDbUrlIfAssetDBPath } = jest.requireActual('../asset-db-url') as typeof import('../asset-db-url');
         mockAssetQueryUrl.mockImplementation((value: string) => {
-            const normalized = value.replace(/\\/g, '/');
-            if (normalized.startsWith('D:/project/assets/')) {
-                return `db://assets/${normalized.slice('D:/project/assets/'.length)}`;
-            }
-            if (normalized === 'D:/project/assets') {
-                return 'db://assets';
-            }
-            return '';
+            const normalizedUrl = pathToDbUrlIfAssetDBPath(value, assetDBManager.assetDBInfo);
+            const dbName = normalizedUrl.startsWith('db://')
+                ? normalizedUrl.slice('db://'.length).split('/', 1)[0]
+                : '';
+            return dbName && assetDBManager.assetDBMap[dbName] ? normalizedUrl : '';
         });
     });
 
@@ -573,6 +578,31 @@ describe('asset operation filesystem bridge', () => {
         expect(mockRefresh).toHaveBeenCalledWith('db://assets/resources/Image/snake_head.png');
         expect(mockQueryAssetInfo).toHaveBeenCalledWith('db://assets/resources/Image/snake_head.png');
         expect(result).toEqual([assetInfo]);
+    });
+
+    it('createAsset should accept a Windows asset path after queryUrl normalizes its drive-letter case', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const target = 'g:\\test\\PinK-Animation-Editor-QA\\assets\\extended\\clip-settings\\baseline.scene';
+        const template = 'db://assets/extended/clip-settings/source.scene';
+        const createdAsset = {
+            source: target,
+            imported: true,
+            invalid: false,
+        };
+
+        setAssetDBInfo('G:\\test\\PinK-Animation-Editor-QA\\assets');
+        mockCreateAssetByHandler.mockResolvedValue(target);
+        mockQueryAsset.mockReturnValue(createdAsset);
+        jest.spyOn(assetOperation, 'refreshAsset').mockResolvedValue(0);
+
+        const result = await assetOperation.createAsset({ target, template });
+
+        expect(mockAssetQueryUrl).toHaveBeenCalledWith(target);
+        expect(mockCreateAssetByHandler).toHaveBeenCalledWith(expect.objectContaining({
+            target,
+            template,
+        }));
+        expect(result).toEqual({ source: target });
     });
 
     it('createAssetByType should resolve a database-name relative directory before creating', async () => {
