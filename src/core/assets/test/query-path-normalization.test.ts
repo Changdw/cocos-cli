@@ -15,18 +15,9 @@ jest.mock('@cocos/asset-db', () => ({
     forEach: jest.fn(),
     queryPath: (...args: any[]) => mockQueryPath(...args),
     queryUrl: (...args: any[]) => mockQueryUrl(...args),
-}));
-
-jest.mock('@cocos/asset-db/index', () => ({
-    queryUUID: (...args: any[]) => mockQueryUUID(...args),
-    queryAsset: (...args: any[]) => mockQueryAsset(...args),
     Utils: {
         nameToId: (value: string) => value,
     },
-    queryPath: (...args: any[]) => mockQueryPath(...args),
-    queryUrl: (...args: any[]) => mockQueryUrl(...args),
-    Asset: class {},
-    VirtualAsset: class {},
 }));
 
 jest.mock('../manager/asset-db', () => ({

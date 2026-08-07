@@ -963,7 +963,7 @@ export { }
 exports[`DTS API compatibility builder.d.ts should match snapshot 1`] = `
 "import EventEmitter from 'events';
 import { EventEmitter as EventEmitter_2 } from 'stream';
-import { IAssetDeleteOptions, IAssetWriteFileOptions } from '@cocos/asset-db/libs/filesystem';
+import { IAssetDeleteOptions, IAssetWriteFileOptions } from '@cocos/asset-db';
 import type { PluginItem } from '@babel/core';
 import { SpriteFrame } from 'cc';
 export declare interface AcornNode {
@@ -2010,6 +2010,10 @@ export declare interface GlTFUserData {
 }
 export declare type HasModuleSideEffects = (id: string, external: boolean) => boolean;
 export declare type IAsset = VirtualAsset | Asset;
+export declare interface IAssetDeleteOptions extends IAssetOperationOptionsBase {
+    recursive?: boolean;
+    useTrash?: boolean;
+}
 export declare interface IAssetGroupItem {
     baseUrls: string[];
     scriptDest: string;
@@ -2075,6 +2079,19 @@ export declare interface IAssetMeta<T extends ISupportCreateType | 'unknown' = '
     id?: string;
     name?: string;
 }
+export declare interface IAssetOperationContext {
+    opId: string;
+    kind: IAssetOperationKind;
+    origin: IAssetOperationOrigin;
+    source: string;
+    paths: string[];
+    timestamp: number;
+}
+export declare type IAssetOperationKind = 'write' | 'rename' | 'move' | 'copy' | 'delete';
+export declare interface IAssetOperationOptionsBase {
+    context?: IAssetOperationContext;
+}
+export declare type IAssetOperationOrigin = 'direct-op' | 'watcher';
 export declare interface IAssetPathBase {
     bundleName?: string;
     redirect?: string;
@@ -2111,6 +2128,10 @@ export declare type IAssetType =
 | 'dragonBones.DragonBonesAtlasAsset'
 | 'RenderStage'
 | 'RenderFlow';
+export declare interface IAssetWriteFileOptions extends IAssetOperationOptionsBase {
+    create?: boolean;
+    overwrite?: boolean;
+}
 export declare type IASTCQuality = 'veryfast' | 'fast' | 'medium' | 'thorough' | 'exhaustive';
 export declare interface IAtlasInfo {
     spriteFrameInfos: ISpriteFrameInfo[];

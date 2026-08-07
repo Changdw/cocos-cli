@@ -7,7 +7,7 @@ const mockReimportAsset = jest.fn();
 const mockResolveToRaw = jest.fn();
 const mockContains = jest.fn();
 
-jest.mock('@cocos/asset-db/libs/manager', () => ({
+jest.mock('@cocos/asset-db', () => ({
     queryPath: (...args: unknown[]) => mockQueryPath(...args),
 }));
 

@@ -1,6 +1,6 @@
 'use strict';
 
-import { Asset, VirtualAsset, queryUUID, Utils as dbUtils, queryAsset as dbQueryAsset, queryPath } from '@cocos/asset-db/index';
+import { Asset, VirtualAsset, queryUUID, Utils as dbUtils, queryAsset as dbQueryAsset, queryPath } from '@cocos/asset-db';
 import { extname, isAbsolute, join, resolve } from 'path';
 import { readFile, readJSON } from 'fs-extra';
 import type { Asset as CCAsset, Details } from 'cc';
