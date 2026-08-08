@@ -321,7 +321,7 @@ if (isMainThread) {
     const runWorkerOnce = (): Promise<number> => new Promise((resolve, reject) => {
         const worker = new Worker(workerPath, {
             resourceLimits: {
-                stackSizeMb: 16,
+                stackSizeMb: 64,
                 maxOldGenerationSizeMb: 4096,
             },
         });
