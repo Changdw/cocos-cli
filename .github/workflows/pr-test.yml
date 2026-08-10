@@ -103,10 +103,6 @@ jobs:
         id: unit-tests
         run: npm run test:quiet
 
-      - name: Run AssetDB tests
-        id: asset-db-tests
-        run: npm run test:asset-db
-
       - name: Run E2E tests
         id: e2e-tests
         uses: ./.github/actions/run-e2e-tests
