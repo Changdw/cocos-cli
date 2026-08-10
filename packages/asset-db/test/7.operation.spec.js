@@ -145,19 +145,18 @@ describe('文件操作', () => {
         it('更改文件 meta 内的 uuid', async () => {
             const assetFile = path.join(PATH.TARGET, '2.test');
             const metaFile = path.join(PATH.TARGET, '2.test.meta');
+            const previousMtimeMs = fse.statSync(metaFile).mtimeMs;
             const metaJSON = fse.readJSONSync(metaFile);
             metaJSON.uuid = v4();
             fse.outputJSONSync(metaFile, metaJSON, { spaces: 2 });
+            // Windows CI may preserve the same mtime for two rapid writes.
+            fse.utimesSync(metaFile, new Date(), new Date(previousMtimeMs + 5000));
 
             // 导入资源
             await DB.refresh(path.join(PATH.TARGET, '2.test'));
 
             expect(DB.path2asset.size).to.equal(1);
             expect(DB.uuid2asset.size).to.equal(1);
-
-            await new Promise((resolve) => {
-                setTimeout(resolve, 1000);
-            });
 
             expect(DB.path2asset.get(assetFile).uuid).to.equal(metaJSON.uuid);
             expect(!!DB.uuid2asset.get(metaJSON.uuid)).to.equal(true);

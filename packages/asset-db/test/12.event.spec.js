@@ -156,7 +156,10 @@ describe('AssetDB 事件系统', () => {
                 });
             });
 
+            const previousMtimeMs = fse.statSync(PATH.FILE1).mtimeMs;
             fse.outputJSONSync(PATH.FILE1, { a: 2, }, { spaces: 2, });
+            // Windows CI may preserve the same mtime for two rapid writes.
+            fse.utimesSync(PATH.FILE1, new Date(), new Date(previousMtimeMs + 5000));
             await DB.refresh(PATH.TARGET);
         });
 
