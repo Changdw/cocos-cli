@@ -1,6 +1,6 @@
 'use strict';
 
-import type { IAssetFileSystemProvider, IAssetRenameOptions, IAssetWriteFileOptions } from '@cocos/asset-db/libs/filesystem';
+import type { IAssetFileSystemProvider, IAssetRenameOptions, IAssetWriteFileOptions } from '@cocos/asset-db';
 import { copy as fsCopy, ensureDir, existsSync, move, outputFile, readFile as fsReadFile, remove } from 'fs-extra';
 import { dirname, join, relative } from 'path';
 import type { IMoveOptions } from '../@types/private';

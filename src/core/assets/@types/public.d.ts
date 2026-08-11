@@ -10,7 +10,7 @@ export type {
     IAssetOperationOrigin,
     IAssetRenameOptions,
     IAssetWriteFileOptions,
-} from '@cocos/asset-db/libs/filesystem';
+} from '@cocos/asset-db';
 
 export interface IAssetMeta<T extends ISupportCreateType | 'unknown' = 'unknown'> {
     ver: string;

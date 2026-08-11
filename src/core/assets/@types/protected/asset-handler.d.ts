@@ -1,6 +1,6 @@
 import { type } from 'os';
 import { IAsset, IAssetInfo, VirtualAsset, Asset, IExportData, IAssetType } from './asset';
-import { Migrate } from '@cocos/asset-db/libs/importer';
+import { Migrate } from '@cocos/asset-db';
 import type { AssetPropertySchemaMap } from '../public';
 
 export interface CustomOperator {

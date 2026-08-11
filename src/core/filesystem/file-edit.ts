@@ -6,7 +6,7 @@ import { replaceInFile } from 'replace-in-file';
 import path from 'path';
 import { resolveToRaw, contains } from '../base/utils/path';
 import { assetManager } from '../../core/assets';
-import { queryPath } from '@cocos/asset-db/libs/manager';
+import { queryPath } from '@cocos/asset-db';
 
 const LF = '\n';
 const fileEditQueues = new Map<string, Promise<void>>();
