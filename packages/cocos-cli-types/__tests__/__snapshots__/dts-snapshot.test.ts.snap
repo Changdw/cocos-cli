@@ -1106,6 +1106,7 @@ export declare class AssetDB extends EventEmitter {
     reimport(fileOrUUID: string): Promise<VirtualAsset | null>;
     refresh(path: string, options?: AssetDBRefreshOptions): Promise<number>;
     private _replaceUUID;
+    private _updateAssetPathCase;
     private _checkAssetsStatSync;
     private _checkAssetStat;
 }
@@ -1733,6 +1734,7 @@ export declare class DependencyManager {
     dependMap: DependMap;
     _saveTimer: any;
     private console;
+    cacheConflict: PathCaseConflictError | null;
     constructor(customConsole: CustomConsole, pathRoot: string);
     setRecordJSON(path: string): Promise<void>;
     private _restoreCache;
@@ -1741,6 +1743,7 @@ export declare class DependencyManager {
     saveImmediate(): void;
     add(type: string, key: string, depends: string | string[]): void;
     remove(type: string, key: string): void;
+    updatePathCase(previousPath: string, nextPath: string): void;
     destroy(): void;
 }
 export declare interface DependMap {
@@ -1749,6 +1752,9 @@ export declare interface DependMap {
     };
     uuid: {
         [uuid: string]: string[];
+    };
+    [type: string]: {
+        [path: string]: string[];
     };
 }
 export declare interface DirectoryAssetUserData {
@@ -3148,6 +3154,7 @@ export declare class InfoManager {
     pathRoot: string;
     private recordInfo;
     private console;
+    cacheConflict: PathCaseConflictError | null;
     constructor(customConsole: CustomConsole, pathRoot: string);
     _saveTimer: null | NodeJS.Timeout;
     setRecordJSON(path: string): Promise<void>;
@@ -3161,6 +3168,7 @@ export declare class InfoManager {
     get(path: string): SimpleInfo;
     private addMissing;
     getMissingInfo(uuid: string): MissingAssetInfo;
+    updatePathCase(previousPath: string, nextPath: string): void;
     compare(path: string, mtimeMs: number): boolean;
     forEach(handler: Function): Promise<void>;
 }
@@ -3828,6 +3836,7 @@ export declare class MetaManager {
     remove(path: string, options?: IAssetDeleteOptions): Promise<void>;
     get(path: string): Promise<MetaInfo>;
     move(pathA: string, pathB: string): void;
+    updatePathCase(previousPath: string, nextPath: string): void;
 }
 export declare enum MinigamePlatform {
     WECHAT = 0,
@@ -4211,6 +4220,11 @@ export declare interface ParticleAssetUserData {
     rotatePerS: number;
     rotatePerSVar: number;
     spriteFrameUuid: string;
+}
+export declare class PathCaseConflictError extends Error {
+    readonly code = "ASSET_DB_PATH_CASE_CONFLICT";
+    readonly paths: readonly [string, string];
+    constructor(existingPath: string, incomingPath: string);
 }
 export declare type Physics = 'cannon' | 'ammo' | 'builtin';
 export declare type Platform = InternalPlatform | string;

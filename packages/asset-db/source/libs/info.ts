@@ -4,6 +4,13 @@ import { existsSync, readJSONSync, outputJSONSync, remove, removeSync } from 'fs
 import { CustomConsole } from './console';
 import { join, relative } from 'path';
 import { Migrate, Migrator } from './migrator';
+import {
+    assertNoPathIdentityConflicts,
+    createPathRecord,
+    isSamePath,
+    PathCaseConflictError,
+    replacePathRecordKey,
+} from './path-identity';
 
 export interface SimpleInfo {
     time: number;
@@ -73,7 +80,7 @@ const migrations: Migrate<any>[] = [{
 function getDefaultRecordInfo(): RecordInfoMap {
     return {
         version: InfoManager.version,
-        map: {},
+        map: createPathRecord<SimpleInfo>(),
         missing: {},
     };
 }
@@ -90,6 +97,7 @@ export class InfoManager {
     pathRoot: string;
     private recordInfo: RecordInfoMap;
     private console: CustomConsole;
+    cacheConflict: PathCaseConflictError | null = null;
     constructor(customConsole: CustomConsole, pathRoot: string) {
         this.console = customConsole || console;
         this.pathRoot = pathRoot;
@@ -105,9 +113,14 @@ export class InfoManager {
      */
     async setRecordJSON(path: string) {
         this.file = path;
+        this.cacheConflict = null;
         try {
             await this._restoreCache(path);
         } catch (error) {
+            if (error instanceof PathCaseConflictError) {
+                this.recordInfo = getDefaultRecordInfo();
+                this.cacheConflict = error;
+            }
             this.console.warn(error);
         }
     }
@@ -118,8 +131,10 @@ export class InfoManager {
         if (!storeRecordInfo) {
             return;
         }
-        Object.keys(storeRecordInfo.map).forEach((path) => {
-            recordInfo.map[join(this.pathRoot, path)] = storeRecordInfo.map[path];
+        const restoredPaths = Object.keys(storeRecordInfo.map).map((path) => join(this.pathRoot, path));
+        assertNoPathIdentityConflicts(restoredPaths);
+        Object.keys(storeRecordInfo.map).forEach((path, index) => {
+            recordInfo.map[restoredPaths[index]] = storeRecordInfo.map[path];
         })
         // missing 数据只记录绝对路径
         recordInfo.missing = storeRecordInfo.missing;
@@ -260,6 +275,20 @@ export class InfoManager {
      */
     getMissingInfo(uuid: string) {
         return this.recordInfo.missing[uuid] || null;
+    }
+
+    updatePathCase(previousPath: string, nextPath: string) {
+        let changed = replacePathRecordKey(this.recordInfo.map, previousPath, nextPath);
+        Object.keys(this.recordInfo.missing).forEach((uuid) => {
+            const info = this.recordInfo.missing[uuid];
+            if (isSamePath(info.path, previousPath) && info.path !== nextPath) {
+                info.path = nextPath;
+                changed = true;
+            }
+        });
+        if (changed) {
+            this.save();
+        }
     }
 
     /**

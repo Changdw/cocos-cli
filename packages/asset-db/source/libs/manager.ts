@@ -3,7 +3,7 @@
 import type { AssetDB } from './asset-db';
 import type { Asset, VirtualAsset } from './asset';
 
-import { isSubPath } from './utils';
+import { isSamePath, isSubPath } from './utils';
 import { getAssociatedFiles } from './dependency';
 import { isAbsolute, relative, join } from 'path';
 import { parse } from 'url';
@@ -107,6 +107,20 @@ export function queryUrl(uuid_path: string): string {
         for (let name in map) {
             const db = map[name];
             if (isSubPath(uuid_path, db.options.target)) {
+                const searcher = uuid_path.split('@');
+                let asset: Asset | VirtualAsset | undefined = db.path2asset.get(searcher[0]);
+                while (!asset && searcher.length > 1) {
+                    searcher[0] += '@' + searcher[1];
+                    searcher.splice(1, 1);
+                    asset = db.path2asset.get(searcher[0]);
+                }
+                if (asset) {
+                    let url = asset.url;
+                    for (let index = 1; index < searcher.length; index++) {
+                        url += `@${searcher[index]}`;
+                    }
+                    return url;
+                }
                 let pathname = relative(db.options.target, uuid_path);
                 pathname = pathname.replace(/\\/g, '/');
                 return `db://${name}/${pathname}`;
@@ -284,7 +298,7 @@ export async function refresh(uuid_url_path: string) {
     if (isAbsolute(uuid_url_path)) {
         for (let name in map) {
             const db = map[name];
-            if (db.options.target === uuid_url_path || isSubPath(uuid_url_path, db.options.target)) {
+            if (isSamePath(db.options.target, uuid_url_path) || isSubPath(uuid_url_path, db.options.target)) {
                 return await db.refresh(uuid_url_path);
             }
         }

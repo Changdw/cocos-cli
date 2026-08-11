@@ -1,8 +1,11 @@
 'use strict';
 
 import { readdir, stat, existsSync, Stats, statSync, readdirSync } from 'fs-extra';
-import { isAbsolute, resolve, normalize, join, relative, sep } from 'path';
+import { isAbsolute, resolve, normalize, join, relative } from 'path';
 import { createHash } from 'crypto';
+import { isSubPath } from './path-identity';
+
+export { isSamePath, isSubPath, toPathKey } from './path-identity';
 
 /**
  * 将一个 path 转成绝对地址
@@ -78,17 +81,3 @@ export function nameToId(name: string, extend?: number) {
  * @param path
  * @param root
  */
-export function isSubPath(path: string, root: string) {
-    // path = normalize(path);
-    // root = normalize(root);
-
-    if (path === root) {
-        return false;
-    }
-
-    if (path.startsWith(root + sep)) {
-        return true;
-    }
-
-    return false;
-}

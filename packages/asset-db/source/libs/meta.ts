@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'fs-extra';
 import { v1, v4 } from 'node-uuid';
 import { CustomConsole } from './console';
 import { fsDelete, fsExists, fsWriteFile, IAssetDeleteOptions, IAssetWriteFileOptions } from './filesystem';
+import { createPathRecord, isSamePath, replacePathRecordKey } from './path-identity';
 
 // Meta json 文件的格式
 export interface Meta {
@@ -142,7 +143,7 @@ export function completionMeta(meta: any): Meta {
 export class MetaManager {
 
     // 资源与 meta 的映射列表
-    path2meta: { [index: string]: MetaInfo } = {};
+    path2meta: { [index: string]: MetaInfo } = createPathRecord<MetaInfo>();
     private console: CustomConsole;
     constructor(customConsole: CustomConsole) {
         this.console = customConsole || console;
@@ -153,7 +154,7 @@ export class MetaManager {
      * @param manager
      */
     destroy() {
-        this.path2meta = {};
+        this.path2meta = createPathRecord<MetaInfo>();
     }
 
     /**
@@ -292,6 +293,10 @@ export class MetaManager {
     }
 
     move(pathA: string, pathB: string) {
+        if (isSamePath(pathA, pathB)) {
+            replacePathRecordKey(this.path2meta, pathA, pathB);
+            return;
+        }
         if (this.path2meta[pathB]) {
             const json = this.path2meta[pathB].json;
             this.path2meta[pathB].json = this.path2meta[pathA].json;
@@ -300,5 +305,9 @@ export class MetaManager {
             this.path2meta[pathB] = this.path2meta[pathA];
         }
         delete this.path2meta[pathA];
+    }
+
+    updatePathCase(previousPath: string, nextPath: string) {
+        replacePathRecordKey(this.path2meta, previousPath, nextPath);
     }
 }
