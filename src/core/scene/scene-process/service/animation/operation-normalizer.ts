@@ -45,8 +45,8 @@ async function normalizePropertyKeyOperation(
     const keyData = operation.keyData ?? operation.curveData;
     if (operation.value !== undefined) {
         const value = await normalizeProvidedAnimationPropertyOperationValue(context.rootNode, context.rootPath, operation, {
-            queryNodeByUuid: (uuid) => getNodeByUuid(uuid),
-            queryNodePath: (node) => getNodePath(node),
+            queryNodeByUuid: getNodeByUuid,
+            queryNodePath: getNodePath,
         });
         return { ...operation, keyData, value };
     }

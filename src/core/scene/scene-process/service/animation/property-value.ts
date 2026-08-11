@@ -91,11 +91,14 @@ function resolveOperationRelativeNodePath(
     operation: { nodeUuid?: string; nodePath?: string },
     options: { queryNodeByUuid: (uuid: string) => Node | null; queryNodePath: (node: Node) => string },
 ): string | null {
+    if (operation.nodePath) {
+        return toRelativeNodePath(rootNode, rootPath, operation.nodePath);
+    }
     const node = options.queryNodeByUuid(operation.nodeUuid || '');
     if (node) {
         return toRelativeNodePath(rootNode, rootPath, options.queryNodePath(node));
     }
-    return toRelativeNodePath(rootNode, rootPath, operation.nodePath || '');
+    return toRelativeNodePath(rootNode, rootPath, '');
 }
 
 function toRelativeNodePath(rootNode: Node, rootPath: string, nodePath: string): string | null {

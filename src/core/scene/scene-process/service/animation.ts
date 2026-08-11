@@ -209,6 +209,7 @@ export class AnimationService extends BaseService<Record<string, any>> implement
                 time: 0,
                 playState: 'stop',
                 dirty: false,
+                sceneDirty: Service.Undo.isDirty(),
                 selection,
                 restoreSelectionOnExit: true,
             };
@@ -224,6 +225,7 @@ export class AnimationService extends BaseService<Record<string, any>> implement
             time: this._curEditTime,
             playState: this._playState,
             dirty: this._isAnimationSessionDirty(this._session),
+            sceneDirty: this._isSceneSessionDirty(this._session),
             selection,
             restoreSelectionOnExit: this._session.restoreSelectionOnExit,
         };
@@ -535,7 +537,8 @@ export class AnimationService extends BaseService<Record<string, any>> implement
         this._animationStates.create(session.clipUuid, clip);
         await this.setTime({ time: this._curEditTime });
         const after = shouldRecordUndo ? captureAnimationClipSnapshot(clip, propertyMetadataContext) : null;
-        if (before && after && !animationClipSnapshotsEqual(before, after)) {
+        const undoRecorded = Boolean(before && after && !animationClipSnapshotsEqual(before, after));
+        if (undoRecorded && before && after) {
             const undoCommand = new AnimationClipSnapshotCommand({
                 clipUuid: session.clipUuid,
                 before,
@@ -565,6 +568,7 @@ export class AnimationService extends BaseService<Record<string, any>> implement
         return {
             state: 'success',
             result: true,
+            undoRecorded,
         };
     }
 
@@ -572,10 +576,19 @@ export class AnimationService extends BaseService<Record<string, any>> implement
         const session = requireAnimationSession(this._session);
         const state = await this._getAnimationState(session.clipUuid);
         const rootNode = this._getSessionRootNode();
+        ensureClipEvents(state.clip);
+        if (options.target) {
+            return await saveAnimationServiceClip({
+                session,
+                rootNode,
+                clip: state.clip,
+                target: options.target,
+            });
+        }
+
         const propertyMetadataContext = createAnimationPropertyCurveMetadataContext(rootNode);
         const savedSnapshot = captureAnimationClipSnapshot(state.clip, propertyMetadataContext);
         const animationDirtyAtSave = this._isAnimationSessionDirty(session);
-        ensureClipEvents(state.clip);
         this._markSelfSavedClipRefresh(session.clipUuid);
         let saved = false;
         try {
@@ -882,6 +895,16 @@ export class AnimationService extends BaseService<Record<string, any>> implement
             return Service.Undo.hasScopedDifference(session.undoBaseline, scope);
         }
         return Service.Undo.hasScopedDifferenceAfterCheckpoint(session.undoBaseline, scope);
+    }
+
+    private _isSceneSessionDirty(session: IAnimationSession): boolean {
+        if (session.globalDirtyAtEnter) {
+            return true;
+        }
+        return Service.Undo.hasDifferenceOutsideScope(
+            session.undoBaseline,
+            this._createAnimationUndoScope(session.clipUuid),
+        );
     }
 
     private _createAnimationUndoScope(clipUuid: string): Partial<IUndoScope> {

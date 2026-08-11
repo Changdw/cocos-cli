@@ -109,6 +109,23 @@ jest.mock('cc', () => {
             return this;
         }
 
+        trace(target: any) {
+            let result = target;
+            for (const path of this._paths) {
+                if (path instanceof HierarchyPath) {
+                    result = result?.getChildByPath(path.path) || null;
+                } else if (path instanceof ComponentPath) {
+                    result = result?.getComponent(path.component) || null;
+                } else {
+                    result = result?.[path] ?? null;
+                }
+                if (result === null) {
+                    return null;
+                }
+            }
+            return result;
+        }
+
         isHierarchyAt(index: number) {
             return this._paths[index] instanceof HierarchyPath;
         }
@@ -573,6 +590,66 @@ describe('AnimationService animatable property metadata', () => {
         expect(track.path.parsePropertyAt(1)).toBe('materials');
         expect(track.path.parseElementAt(2)).toBe(0);
         expect(parsePropertyTrack(track)?.descriptor.propKey).toBe(key);
+    });
+
+    it('过期 nodeUuid 不能覆盖 nodePath 的属性轨道绑定', () => {
+        const { AnimationClip, Node } = require('cc');
+        const { addPropertyCurve, createPropertyKey, dumpPropertyCurves } = require('../scene-process/service/animation/property-curve');
+        const { parsePropertyTrack } = require('../scene-process/service/animation/property-curve-track');
+        const root = new Node('Root');
+        const original = Object.assign(new Node('Body'), { uuid: 'original-body-uuid', active: false });
+        root.children = [original];
+        const clip = new AnimationClip();
+        const context = {
+            rootNode: root,
+            rootPath: '',
+            queryPropertyMetadata: () => ({ type: { value: 'cc.Boolean' } }),
+        };
+
+        expect(addPropertyCurve(clip, context, {
+            type: 'addPropertyCurve',
+            clipUuid: 'clip',
+            nodePath: 'Body',
+            propKey: 'active',
+            value: false,
+        })).toBe(true);
+        expect(clip._tracks).toHaveLength(1);
+        expect(parsePropertyTrack(clip._tracks[0])).toMatchObject({
+            nodePath: 'Body',
+            descriptor: { propKey: 'active' },
+        });
+        expect(parsePropertyTrack(clip._tracks[0])).not.toHaveProperty('nodeUuid');
+
+        const replacement = Object.assign(new Node('Body'), { uuid: 'replacement-body-uuid', active: true });
+        root.children = [replacement];
+        expect(clip._tracks[0].path.trace(root)).toBe(true);
+        expect(createPropertyKey(clip, context, {
+            type: 'createPropertyKey',
+            clipUuid: 'clip',
+            nodePath: 'Body',
+            nodeUuid: original.uuid,
+            propKey: 'active',
+            frame: 0,
+            value: true,
+        })).toBe(true);
+
+        expect(clip._tracks).toHaveLength(1);
+        expect(dumpPropertyCurves(clip)).toEqual(expect.arrayContaining([
+            expect.objectContaining({ nodePath: 'Body', key: 'active' }),
+        ]));
+
+        const legacyClip = new AnimationClip();
+        expect(addPropertyCurve(legacyClip, context, {
+            type: 'addPropertyCurve',
+            clipUuid: 'clip',
+            nodeUuid: replacement.uuid,
+            propKey: 'active',
+            value: true,
+        })).toBe(true);
+        expect(parsePropertyTrack(legacyClip._tracks[0])).toMatchObject({
+            nodePath: 'Body',
+            descriptor: { propKey: 'active' },
+        });
     });
 
     it('parsePropertyTrack 忽略没有 path 的引擎轨道', () => {

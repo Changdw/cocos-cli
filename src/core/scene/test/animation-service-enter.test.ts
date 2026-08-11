@@ -96,16 +96,80 @@ jest.mock('../scene-process/service/animation/service-save', () => ({
 };
 
 const { AnimationService } = require('../scene-process/service/animation');
-const { isCurrentAnimationSessionClipQuery } = require('../scene-process/service/animation/service-target');
+const { isCurrentAnimationSessionClipQuery, resolveAnimationFrameQueryNode } = require('../scene-process/service/animation/service-target');
+const { normalizeAnimationOperation } = require('../scene-process/service/animation/operation-normalizer');
 const { saveAnimationServiceClip: saveAnimationServiceClipMock } = require('../scene-process/service/animation/service-save');
 
 describe('AnimationService enter', () => {
+    it('queryState exposes sceneDirty independently from animation dirty', async () => {
+        const service = new AnimationService() as any;
+        service._session = {
+            rootUuid: 'root-uuid',
+            rootPath: 'Root',
+            clipUuid: 'clip-uuid',
+            undoBaseline: { commandId: null, generation: 0 },
+            globalDirtyAtEnter: false,
+        };
+        mockService.Undo.hasScopedDifference.mockReturnValue(true);
+        mockService.Undo.hasScopedDifferenceAfterCheckpoint.mockReturnValue(true);
+        mockService.Undo.hasDifferenceOutsideScope.mockReturnValue(false);
+
+        let state = await service.queryState();
+        expect(state.dirty).toBe(true);
+        expect(state.sceneDirty).toBe(false);
+
+        mockService.Undo.hasScopedDifference.mockReturnValue(false);
+        mockService.Undo.hasScopedDifferenceAfterCheckpoint.mockReturnValue(false);
+        mockService.Undo.hasDifferenceOutsideScope.mockReturnValue(true);
+
+        state = await service.queryState();
+        expect(state.dirty).toBe(false);
+        expect(state.sceneDirty).toBe(true);
+        expect(mockService.Undo.hasDifferenceOutsideScope).toHaveBeenCalledWith(
+            service._session.undoBaseline,
+            { assetUuid: 'clip-uuid', editorType: 'animation', mode: 'animation' },
+        );
+    });
+
     beforeEach(() => {
         jest.clearAllMocks();
         const { assetManager } = require('cc');
         assetManager.assets.get.mockReset();
         assetManager.loadAny.mockReset();
         saveAnimationServiceClipMock.mockResolvedValue(true);
+    });
+
+    it('saving a clip copy preserves the source session dirty state', async () => {
+        const { AnimationClip } = require('cc');
+        const service = new AnimationService() as any;
+        const clip = new AnimationClip();
+        clip.events = [];
+        const undoBaseline = { commandId: 'source-change', generation: 7 };
+        const session = {
+            clipUuid: 'clip-uuid',
+            rootUuid: 'root-uuid',
+            rootPath: 'Canvas/AnimatedRoot',
+            undoBaseline,
+            globalDirtyAtEnter: false,
+        };
+        service._session = session;
+        service._getSessionRootNode = jest.fn(() => ({ getComponent: jest.fn(() => null) }));
+        service._getAnimationState = jest.fn(async () => ({ clip }));
+        service._restoreCurrentClipAfterSelfSave = jest.fn();
+        service._markSelfSavedClipRefresh = jest.fn();
+
+        await expect(service.save({ target: '/project/assets/anims/RunCopy.anim' })).resolves.toBe(true);
+
+        expect(saveAnimationServiceClipMock).toHaveBeenCalledWith(expect.objectContaining({
+            session,
+            clip,
+            target: '/project/assets/anims/RunCopy.anim',
+        }));
+        expect(service._restoreCurrentClipAfterSelfSave).not.toHaveBeenCalled();
+        expect(service._markSelfSavedClipRefresh).not.toHaveBeenCalled();
+        expect(mockService.Undo.markSaved).not.toHaveBeenCalled();
+        expect(mockService.Undo.createCheckpoint).not.toHaveBeenCalled();
+        expect(session.undoBaseline).toBe(undoBaseline);
     });
 
     it('treats undoing a saved checkpoint command as animation dirty without changing discard scope detection', () => {
@@ -140,6 +204,51 @@ describe('AnimationService enter', () => {
             rootPath: '/Canvas/AnimatedRoot/',
             clipUuid: 'clip-uuid',
         }, 'clip-uuid', true)).toBe(true);
+    });
+
+    it('prefers nodePath over a stale nodeUuid and supports nodeUuid-only frame queries', () => {
+        const nodeByPath = { uuid: 'path-node' };
+        const nodeByUuid = { uuid: 'uuid-node' };
+        const nodeManager = (globalThis as any).EditorExtends.Node;
+        nodeManager.getNode.mockImplementation((uuid: string) => uuid === 'legacy-node' ? nodeByUuid : null);
+        nodeManager.getNodeByPath.mockImplementation((path: string) => path === 'Canvas/AnimatedRoot/Body' ? nodeByPath : null);
+        const session = { rootPath: 'Canvas/AnimatedRoot' };
+
+        expect(resolveAnimationFrameQueryNode({
+            nodePath: 'Canvas/AnimatedRoot/Body',
+            nodeUuid: 'legacy-node',
+            propKey: 'position',
+            frame: 0,
+        }, session)).toBe(nodeByPath);
+        expect(resolveAnimationFrameQueryNode({
+            nodeUuid: 'legacy-node',
+            propKey: 'position',
+            frame: 0,
+        }, session)).toBe(nodeByUuid);
+    });
+
+    it('forwards nodeUuid-only property keys to frame sampling', async () => {
+        const queryPropertyValueAtFrame = jest.fn(async () => true);
+
+        await expect(normalizeAnimationOperation({
+            type: 'createPropertyKey',
+            clipUuid: 'clip-uuid',
+            nodeUuid: 'legacy-node',
+            propKey: 'active',
+            frame: 0,
+        }, {
+            currentClipUuid: 'current-clip',
+            rootNode: {},
+            rootPath: 'Canvas/AnimatedRoot',
+            queryPropertyValueAtFrame,
+        })).resolves.toMatchObject({ value: true });
+        expect(queryPropertyValueAtFrame).toHaveBeenCalledWith({
+            clipUuid: 'clip-uuid',
+            nodePath: undefined,
+            nodeUuid: 'legacy-node',
+            propKey: 'active',
+            frame: 0,
+        });
     });
 
     it('waits for animation state initialization before sampling time zero', async () => {

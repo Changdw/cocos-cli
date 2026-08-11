@@ -76,11 +76,6 @@ export function resolveAnimationTargetNode(
 }
 
 export function resolveAnimationFrameQueryNode(options: IAnimationQueryPropertyValueAtFrameOptions, session: IAnimationSession): Node {
-    const nodeByUuid = getNodeByUuid(options.nodeUuid || '');
-    if (nodeByUuid) {
-        return nodeByUuid;
-    }
-
     if (options.nodePath) {
         const path = options.nodePath;
         if (path === session.rootPath || path.startsWith(`${session.rootPath}/`)) {
@@ -99,7 +94,13 @@ export function resolveAnimationFrameQueryNode(options: IAnimationQueryPropertyV
         if (nodeByPath) {
             return nodeByPath;
         }
-    } else {
+    }
+
+    const nodeByUuid = getNodeByUuid(options.nodeUuid || '');
+    if (nodeByUuid) {
+        return nodeByUuid;
+    }
+    if (!options.nodePath) {
         const rootNode = getNodeByPath(session.rootPath);
         if (rootNode) {
             return rootNode;

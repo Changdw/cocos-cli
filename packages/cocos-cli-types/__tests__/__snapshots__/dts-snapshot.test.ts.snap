@@ -5881,6 +5881,7 @@ export declare interface IAnimationOperationOptions {
 export declare interface IAnimationOperationResult {
     state: 'success' | 'failure';
     result: boolean;
+    undoRecorded?: boolean;
     reason?: string;
 }
 export declare interface IAnimationPlayStateOptions {
@@ -5932,6 +5933,7 @@ export declare interface IAnimationRootResult {
 }
 export declare interface IAnimationSaveOptions {
     saveScene?: boolean;
+    target?: string;
 }
 export declare interface IAnimationService extends IServiceEvents {
     enter(options: IAnimationEnterOptions): Promise<IAnimationStateInfo>;
@@ -5964,6 +5966,7 @@ export declare interface IAnimationStateInfo {
     time: number;
     playState: AnimationPlayState_2;
     dirty: boolean;
+    sceneDirty: boolean;
     selection: string[];
     restoreSelectionOnExit: boolean;
 }
