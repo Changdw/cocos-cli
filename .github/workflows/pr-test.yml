@@ -15,22 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
-      asset_db_changed: ${{ steps.filter.outputs.asset_db_changed }}
     steps:
-      # issue_comment 事件没有 base_ref，统一从 PR 信息中获取准确的基准提交。
-      - name: Get PR base commit
-        id: pr
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const pullNumber = context.payload.pull_request?.number ?? context.issue.number;
-            const { data: pull } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: pullNumber,
-            });
-            core.setOutput('base_sha', pull.base.sha);
-
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -41,31 +26,14 @@ jobs:
         id: filter
         shell: bash
         run: |
-          BASE_SHA="${{ steps.pr.outputs.base_sha }}"
-          git fetch --no-tags origin "$BASE_SHA"
-          CHANGED_FILES=$(git diff --name-only "$BASE_SHA"...HEAD)
-
-          # 仅 AssetDB 源码、测试及构建配置变更时运行独立测试，README 等文档变更不触发。
-          ASSET_DB_CHANGED=false
-          while IFS= read -r file; do
-            case "$file" in
-              packages/asset-db/source/*|\
-              packages/asset-db/test/*|\
-              packages/asset-db/scripts/*|\
-              packages/asset-db/package.json|\
-              packages/asset-db/tsconfig.json)
-                ASSET_DB_CHANGED=true
-                break
-                ;;
-            esac
-          done <<< "$CHANGED_FILES"
-          echo "asset_db_changed=$ASSET_DB_CHANGED" >> "$GITHUB_OUTPUT"
-
           # 评论触发时始终运行
           if [ "${{ github.event_name }}" = "issue_comment" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          BASE_REF="origin/${{ github.base_ref }}"
+          CHANGED_FILES=$(git diff --name-only "$BASE_REF"...HEAD)
 
           # 仅 dts/snapshot 相关文件变更时跳过 pr-test
           DTS_ONLY=true
@@ -135,9 +103,9 @@ jobs:
         id: unit-tests
         run: npm run test:quiet
 
-      # Windows 上覆盖大小写不敏感路径行为；无关改动由 check-changes 跳过。
+      # pull_request 与 issue_comment 的 PR 标题字段不同，取当前事件中存在的标题进行检测。
       - name: Run AssetDB package tests
-        if: runner.os == 'Windows' && needs.check-changes.outputs.asset_db_changed == 'true'
+        if: runner.os == 'Windows' && contains(github.event.pull_request.title || github.event.issue.title, 'asset-db')
         run: npm run test:asset-db
 
       - name: Run E2E tests
