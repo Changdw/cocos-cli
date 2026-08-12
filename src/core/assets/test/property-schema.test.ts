@@ -1,6 +1,42 @@
+jest.mock('../asset-handler/assets/gltf/material', () => ({
+    dumpMaterial: jest.fn(),
+}));
+jest.mock('../asset-handler/assets/gltf/reader-manager', () => ({
+    glTfReaderManager: {
+        delete: jest.fn(),
+        getOrCreate: jest.fn(),
+    },
+}));
+jest.mock('../asset-handler/assets/gltf/meshSimplify', () => ({
+    getDefaultSimplifyOptions: () => ({
+        targetRatio: 1,
+        enableSmartLink: true,
+        agressiveness: 7,
+        maxIterationCount: 100,
+    }),
+}));
+jest.mock('../asset-handler/assets/utils/gltf-converter', () => ({
+    GltfConverter: jest.fn(),
+    GltfSubAsset: jest.fn(),
+}));
+jest.mock('../manager/query', () => ({
+    __esModule: true,
+    default: {},
+}));
+jest.mock('../asset-config', () => ({
+    __esModule: true,
+    default: {},
+}));
+
 import { createAssetPropertySchemaMap } from '../property-schema';
+import AutoAtlasHandler from '../asset-handler/assets/auto-atlas';
+import { FbxHandler } from '../asset-handler/assets/fbx';
+import { GltfHandler } from '../asset-handler/assets/gltf';
 import { ImageHandler } from '../asset-handler/assets/image';
 import { SpriteFrameHandler } from '../asset-handler/assets/sprite-frame';
+import { TextureHandler } from '../asset-handler/assets/texture';
+import type { AssetPropertySchemaMap } from '../@types/public';
+import type { ICocosConfigurationPropertySchema } from '../../configuration/script/metadata';
 import i18n from '../../base/i18n';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -123,6 +159,36 @@ describe('asset property schema map', () => {
         expect(spriteFrameSchema.trimType).not.toHaveProperty('raw');
     });
 
+    it('keeps every built-in asset property schema description non-empty', async () => {
+        const handlerSchemas: Array<[string, AssetPropertySchemaMap | undefined]> = [
+            ['auto-atlas', AutoAtlasHandler.propertySchemaConfig],
+            ['image', ImageHandler.propertySchemaConfig],
+            ['gltf', GltfHandler.propertySchemaConfig],
+            ['fbx', FbxHandler.propertySchemaConfig],
+            ['sprite-frame', SpriteFrameHandler.propertySchemaConfig],
+            ['texture', TextureHandler.propertySchemaConfig],
+        ];
+        const missingDescriptions: string[] = [];
+
+        for (const [handlerName, schema] of handlerSchemas) {
+            missingDescriptions.push(
+                ...findMissingDescriptions(schema).map((path) => `raw:${handlerName}.${path}`),
+            );
+        }
+
+        for (const language of ['en', 'zh']) {
+            await i18n.setLanguage(language);
+            for (const [handlerName, schema] of handlerSchemas) {
+                const localizedSchema = createAssetPropertySchemaMap(schema);
+                missingDescriptions.push(
+                    ...findMissingDescriptions(localizedSchema).map((path) => `${language}:${handlerName}.${path}`),
+                );
+            }
+        }
+
+        expect(missingDescriptions).toEqual([]);
+    });
+
     it('keeps built-in property schema i18n keys resolvable', () => {
         const engineAssetsI18n = require('../../../../packages/engine/editor/i18n/en/assets.js');
         const importerI18n = {
@@ -177,4 +243,31 @@ function extractPropertySchemaSource(source: string): string {
         source.indexOf('createTextureBasePropertySchema'),
     ].filter((index) => index >= 0).sort((a, b) => a - b)[0];
     return start === undefined ? source : source.slice(start);
+}
+
+function findMissingDescriptions(schemaMap: AssetPropertySchemaMap | undefined): string[] {
+    const missingDescriptions: string[] = [];
+
+    function visit(schema: ICocosConfigurationPropertySchema, path: string) {
+        if (typeof schema.description !== 'string' || !schema.description.trim()) {
+            missingDescriptions.push(path);
+        }
+
+        for (const [key, property] of Object.entries(schema.properties ?? {})) {
+            visit(property, `${path}.${key}`);
+        }
+
+        const items = Array.isArray(schema.items) ? schema.items : schema.items ? [schema.items] : [];
+        items.forEach((item, index) => visit(item, `${path}.items[${index}]`));
+
+        if (schema.additionalProperties && typeof schema.additionalProperties !== 'boolean') {
+            visit(schema.additionalProperties, `${path}.additionalProperties`);
+        }
+    }
+
+    for (const [key, schema] of Object.entries(schemaMap ?? {})) {
+        visit(schema, key);
+    }
+
+    return missingDescriptions;
 }

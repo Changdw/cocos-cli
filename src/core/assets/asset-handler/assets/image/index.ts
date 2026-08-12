@@ -28,6 +28,7 @@ export const ImageHandler: AssetHandler = {
     propertySchemaConfig: {
         type: {
             title: 'i18n:ENGINE.assets.image.type',
+            description: 'i18n:ENGINE.assets.image.typeTip',
             type: 'string',
             default: 'sprite-frame',
             enum: ['raw', 'texture', 'normal map', 'sprite-frame', 'texture cube'],
@@ -35,6 +36,7 @@ export const ImageHandler: AssetHandler = {
         },
         flipVertical: {
             title: 'i18n:ENGINE.assets.image.flipVertical',
+            description: 'i18n:ENGINE.assets.image.flipVerticalTip',
             type: 'boolean',
         },
     },

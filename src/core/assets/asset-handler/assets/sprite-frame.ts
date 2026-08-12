@@ -57,6 +57,7 @@ export const SpriteFrameHandler: AssetHandler = {
     propertySchemaConfig: {
         trimType: {
             title: 'i18n:ENGINE.assets.spriteFrame.trimType',
+            description: 'i18n:ENGINE.assets.spriteFrame.trimTypeTip',
             type: 'string',
             default: 'auto',
             enum: ['auto', 'custom', 'none'],
