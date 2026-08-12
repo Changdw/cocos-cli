@@ -37,6 +37,7 @@ const AutoAtlasHandler: AssetHandler = {
     propertySchemaConfig: {
             maxWidth: {
                 title: 'i18n:importer.property_schema.auto_atlas.max_width',
+                description: 'i18n:importer.property_schema.auto_atlas.max_width_description',
                 type: 'number',
                 default: defaultAutoAtlasUserData.maxWidth,
                 minimum: 1,
@@ -44,6 +45,7 @@ const AutoAtlasHandler: AssetHandler = {
             },
             maxHeight: {
                 title: 'i18n:importer.property_schema.auto_atlas.max_height',
+                description: 'i18n:importer.property_schema.auto_atlas.max_height_description',
                 type: 'number',
                 default: defaultAutoAtlasUserData.maxHeight,
                 minimum: 1,
@@ -51,6 +53,7 @@ const AutoAtlasHandler: AssetHandler = {
             },
             padding: {
                 title: 'i18n:importer.property_schema.auto_atlas.padding',
+                description: 'i18n:importer.property_schema.auto_atlas.padding_description',
                 type: 'number',
                 default: defaultAutoAtlasUserData.padding,
                 minimum: 0,
@@ -58,21 +61,25 @@ const AutoAtlasHandler: AssetHandler = {
             },
             allowRotation: {
                 title: 'i18n:importer.property_schema.auto_atlas.allow_rotation',
+                description: 'i18n:importer.property_schema.auto_atlas.allow_rotation_description',
                 type: 'boolean',
                 default: defaultAutoAtlasUserData.allowRotation,
             },
             forceSquared: {
                 title: 'i18n:importer.property_schema.auto_atlas.force_squared',
+                description: 'i18n:importer.property_schema.auto_atlas.force_squared_description',
                 type: 'boolean',
                 default: defaultAutoAtlasUserData.forceSquared,
             },
             powerOfTwo: {
                 title: 'i18n:importer.property_schema.auto_atlas.power_of_two',
+                description: 'i18n:importer.property_schema.auto_atlas.power_of_two_description',
                 type: 'boolean',
                 default: defaultAutoAtlasUserData.powerOfTwo,
             },
             algorithm: {
                 title: 'i18n:importer.property_schema.auto_atlas.algorithm',
+                description: 'i18n:importer.property_schema.auto_atlas.algorithm_description',
                 type: 'string',
                 default: defaultAutoAtlasUserData.algorithm,
                 enum: ['MaxRects'],
@@ -80,6 +87,7 @@ const AutoAtlasHandler: AssetHandler = {
             },
             format: {
                 title: 'i18n:importer.property_schema.auto_atlas.format',
+                description: 'i18n:importer.property_schema.auto_atlas.format_description',
                 type: 'string',
                 default: defaultAutoAtlasUserData.format,
                 enum: ['png', 'jpg'],
@@ -90,6 +98,7 @@ const AutoAtlasHandler: AssetHandler = {
             },
             quality: {
                 title: 'i18n:importer.property_schema.auto_atlas.quality',
+                description: 'i18n:importer.property_schema.auto_atlas.quality_description',
                 type: 'number',
                 default: defaultAutoAtlasUserData.quality,
                 minimum: 0,
@@ -98,36 +107,43 @@ const AutoAtlasHandler: AssetHandler = {
             },
             contourBleed: {
                 title: 'i18n:importer.property_schema.auto_atlas.contour_bleed',
+                description: 'i18n:importer.property_schema.auto_atlas.contour_bleed_description',
                 type: 'boolean',
                 default: defaultAutoAtlasUserData.contourBleed,
             },
             paddingBleed: {
                 title: 'i18n:importer.property_schema.auto_atlas.padding_bleed',
+                description: 'i18n:importer.property_schema.auto_atlas.padding_bleed_description',
                 type: 'boolean',
                 default: defaultAutoAtlasUserData.paddingBleed,
             },
             filterUnused: {
                 title: 'i18n:importer.property_schema.auto_atlas.filter_unused',
+                description: 'i18n:importer.property_schema.auto_atlas.filter_unused_description',
                 type: 'boolean',
                 default: defaultAutoAtlasUserData.filterUnused,
             },
             removeTextureInBundle: {
                 title: 'i18n:importer.property_schema.auto_atlas.remove_texture_in_bundle',
+                description: 'i18n:importer.property_schema.auto_atlas.remove_texture_in_bundle_description',
                 type: 'boolean',
                 default: defaultAutoAtlasUserData.removeTextureInBundle,
             },
             removeImageInBundle: {
                 title: 'i18n:importer.property_schema.auto_atlas.remove_image_in_bundle',
+                description: 'i18n:importer.property_schema.auto_atlas.remove_image_in_bundle_description',
                 type: 'boolean',
                 default: defaultAutoAtlasUserData.removeImageInBundle,
             },
             removeSpriteAtlasInBundle: {
                 title: 'i18n:importer.property_schema.auto_atlas.remove_sprite_atlas_in_bundle',
+                description: 'i18n:importer.property_schema.auto_atlas.remove_sprite_atlas_in_bundle_description',
                 type: 'boolean',
                 default: defaultAutoAtlasUserData.removeSpriteAtlasInBundle,
             },
             textureSetting: {
                 title: 'i18n:importer.property_schema.auto_atlas.texture_setting',
+                description: 'i18n:importer.property_schema.auto_atlas.texture_setting_description',
                 type: 'object',
                 default: defaultAutoAtlasUserData.textureSetting,
                 properties: createTextureBasePropertySchema(),

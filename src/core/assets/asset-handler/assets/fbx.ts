@@ -17,6 +17,7 @@ export const FbxHandler: AssetHandlerBase = {
         },
         fbx: {
             title: 'i18n:ENGINE.assets.fbx.fbx',
+            description: 'i18n:importer.property_schema.fbx.fbx_description',
             type: 'object',
             default: {
                 unitConversion: 'geometry-level',
@@ -28,6 +29,7 @@ export const FbxHandler: AssetHandlerBase = {
             properties: {
                 unitConversion: {
                     title: 'i18n:importer.property_schema.fbx.unit_conversion',
+                    description: 'i18n:importer.property_schema.fbx.unit_conversion_description',
                     type: 'string',
                     default: 'geometry-level',
                     enum: ['geometry-level', 'hierarchy-level', 'disabled'],
@@ -59,6 +61,7 @@ export const FbxHandler: AssetHandlerBase = {
                 },
                 matchMeshNames: {
                     title: 'i18n:importer.property_schema.fbx.match_mesh_names',
+                    description: 'i18n:importer.property_schema.fbx.match_mesh_names_description',
                     type: 'boolean',
                     default: false,
                 },

@@ -57,6 +57,7 @@ export const GltfHandler: AssetHandlerBase = {
         },
         mountAllAnimationsOnPrefab: {
             title: 'i18n:ENGINE.assets.fbx.GlTFUserData.mountAllAnimationsOnPrefab.name',
+            description: 'i18n:importer.property_schema.gltf.mount_all_animations_on_prefab_description',
             type: 'boolean',
             default: false,
         },
@@ -136,6 +137,7 @@ export const GltfHandler: AssetHandlerBase = {
         },
         meshOptimizer: {
             title: 'i18n:importer.property_schema.gltf.mesh_optimizer',
+            description: 'i18n:importer.property_schema.gltf.mesh_optimizer_description',
             type: 'object',
             default: {
                 enable: false,
@@ -145,11 +147,13 @@ export const GltfHandler: AssetHandlerBase = {
             properties: {
                 enable: {
                     title: 'i18n:importer.property_schema.gltf.mesh_optimizer_enable',
+                    description: 'i18n:importer.property_schema.gltf.mesh_optimizer_enable_description',
                     type: 'boolean',
                     default: false,
                 },
                 algorithm: {
                     title: 'i18n:importer.property_schema.gltf.mesh_optimizer_algorithm',
+                    description: 'i18n:importer.property_schema.gltf.mesh_optimizer_algorithm_description',
                     type: 'string',
                     default: 'simplify',
                     enum: ['simplify', 'gltfpack'],
@@ -160,11 +164,13 @@ export const GltfHandler: AssetHandlerBase = {
                 },
                 simplifyOptions: {
                     title: 'i18n:importer.property_schema.gltf.simplify_options',
+                    description: 'i18n:importer.property_schema.gltf.simplify_options_description',
                     type: 'object',
                     default: getDefaultSimplifyOptions(),
                     properties: {
                         targetRatio: {
                             title: 'i18n:ENGINE.assets.fbx.meshSimplify.targetRatio.name',
+                            description: 'i18n:importer.property_schema.gltf.target_ratio_description',
                             type: 'number',
                             default: 1,
                             minimum: 0,
@@ -173,11 +179,13 @@ export const GltfHandler: AssetHandlerBase = {
                         },
                         enableSmartLink: {
                             title: 'i18n:importer.property_schema.gltf.enable_smart_link',
+                            description: 'i18n:importer.property_schema.gltf.enable_smart_link_description',
                             type: 'boolean',
                             default: true,
                         },
                         agressiveness: {
                             title: 'i18n:importer.property_schema.gltf.agressiveness',
+                            description: 'i18n:importer.property_schema.gltf.agressiveness_description',
                             type: 'number',
                             default: 7,
                             minimum: 0,
@@ -185,6 +193,7 @@ export const GltfHandler: AssetHandlerBase = {
                         },
                         maxIterationCount: {
                             title: 'i18n:importer.property_schema.gltf.max_iteration_count',
+                            description: 'i18n:importer.property_schema.gltf.max_iteration_count_description',
                             type: 'number',
                             default: 100,
                             minimum: 1,

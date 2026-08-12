@@ -20,11 +20,13 @@ export const TextureHandler: AssetHandler = {
         ...createTextureBasePropertySchema(),
         imageUuidOrDatabaseUri: {
             title: 'i18n:ENGINE.assets.image.label',
+            description: 'i18n:importer.property_schema.texture.image_uuid_or_database_uri_description',
             type: 'string',
             default: '',
         },
         isUuid: {
             title: 'i18n:importer.property_schema.texture.use_uuid',
+            description: 'i18n:importer.property_schema.texture.use_uuid_description',
             type: 'boolean',
             default: true,
         },
