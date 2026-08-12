@@ -75,9 +75,3 @@ export function nameToId(name: string, extend?: number) {
     }
     return id;
 }
-
-/**
- * 判断 path 是否是 root 内的文件夹
- * @param path
- * @param root
- */
