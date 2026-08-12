@@ -17,6 +17,7 @@ jobs:
       should_run: ${{ steps.filter.outputs.should_run }}
       asset_db_changed: ${{ steps.filter.outputs.asset_db_changed }}
     steps:
+      # issue_comment 事件没有 base_ref，统一从 PR 信息中获取准确的基准提交。
       - name: Get PR base commit
         id: pr
         uses: actions/github-script@v7
@@ -44,6 +45,7 @@ jobs:
           git fetch --no-tags origin "$BASE_SHA"
           CHANGED_FILES=$(git diff --name-only "$BASE_SHA"...HEAD)
 
+          # 仅 AssetDB 源码、测试及构建配置变更时运行独立测试，README 等文档变更不触发。
           ASSET_DB_CHANGED=false
           while IFS= read -r file; do
             case "$file" in
@@ -133,6 +135,7 @@ jobs:
         id: unit-tests
         run: npm run test:quiet
 
+      # Windows 上覆盖大小写不敏感路径行为；无关改动由 check-changes 跳过。
       - name: Run AssetDB package tests
         if: runner.os == 'Windows' && needs.check-changes.outputs.asset_db_changed == 'true'
         run: npm run test:asset-db
