@@ -159,6 +159,62 @@ describe('asset property schema map', () => {
         expect(spriteFrameSchema.trimType).not.toHaveProperty('raw');
     });
 
+    it('keeps the Chinese AutoAtlas schema wording aligned with Creator', async () => {
+        await i18n.setLanguage('zh');
+        const autoAtlasSchema = createAssetPropertySchemaMap(AutoAtlasHandler.propertySchemaConfig);
+
+        expect(autoAtlasSchema).toMatchObject({
+            maxWidth: {
+                title: '最大宽度',
+                description: '单张图集最大宽度，超出将自动合成多张图像或无法合图',
+            },
+            maxHeight: {
+                title: '最大高度',
+                description: '单张图集最大高度，超出将自动合成多张图像或无法合图',
+            },
+            padding: {
+                title: '间距',
+                description: '图集中碎图之间的间距',
+            },
+            allowRotation: {
+                title: '允许旋转',
+                description: '是否允许旋转碎图',
+            },
+            forceSquared: {
+                title: '输出大小为正方形',
+                description: '是否强制将图集长宽大小设置成正方形',
+            },
+            powerOfTwo: {
+                title: '二次幂',
+                description: '是否将图集长宽大小设置为二次方倍数',
+            },
+            algorithm: {
+                title: '算法',
+                description: '合图策略，目前暂时只有一个选项',
+            },
+            paddingBleed: {
+                title: '扩边',
+                description: '在碎图的边框外扩展出一像素外框，并复制相邻碎图像素到外框中。该功能也称作 Extrude',
+            },
+            filterUnused: {
+                title: '剔除未使用的图片',
+                description: '仅被使用的图片会被合并进图集（仅构建阶段生效）',
+            },
+            removeTextureInBundle: {
+                title: '剔除在 Bundle 内未被使用的 Texture2D',
+                description: '剔除在 Bundle 内未被使用的 Texture2D',
+            },
+            removeImageInBundle: {
+                title: '剔除在 Bundle 内未被使用的 ImageAsset',
+                description: '剔除在 Bundle 内未被使用的 ImageAsset',
+            },
+            removeSpriteAtlasInBundle: {
+                title: '剔除在 Bundle 内未被使用的 Sprite Atlas',
+                description: '剔除在 Bundle 内未被使用的 Sprite Atlas',
+            },
+        });
+    });
+
     it('keeps every built-in asset property schema description non-empty', async () => {
         const handlerSchemas: Array<[string, AssetPropertySchemaMap | undefined]> = [
             ['auto-atlas', AutoAtlasHandler.propertySchemaConfig],
