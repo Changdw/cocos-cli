@@ -80,6 +80,34 @@ describe('Dependency 管理器', () => {
         expect(getAssociatedFiles('e2')).to.deep.equal(['e']);
     });
 
+    it('Windows 缓存中的大小写重复路径依赖会安全去重', async () => {
+        if (process.platform !== 'win32') {
+            return;
+        }
+
+        const cacheRoot = path.join(PATH.ROOT, 'case-cache');
+        const cacheFile = path.join(cacheRoot, 'dependency.json');
+        const source = path.join(cacheRoot, 'Source.test');
+        const dependency = path.join(cacheRoot, 'Dependency.test');
+        fse.outputJSONSync(cacheFile, {
+            version: DependencyManager.version,
+            data: {
+                path: {
+                    'Source.test': ['Dependency.test', 'dEPENDENCY.TEST'],
+                },
+                uuid: {},
+            },
+        }, { spaces: 2 });
+
+        const manager = new DependencyManager(console, cacheRoot);
+        await manager.setRecordJSON(cacheFile);
+
+        expect(getAssociatedFiles(dependency.toLowerCase())).to.deep.equal([source]);
+        expect(() => manager.remove('path', source.toLowerCase())).to.not.throw();
+        expect(getAssociatedFiles(dependency)).to.deep.equal([]);
+        manager.destroy();
+    });
+
     it('销毁管理器', async () => {
         DEPEND1.destroy();
         expect(getAssociatedFiles('d1')).to.deep.equal([]);

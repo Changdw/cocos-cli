@@ -192,7 +192,9 @@ describe('资源导入以及刷新等', () => {
 
     it('UUID 冲突的情况下，分配新的 id', async () => {
         record.length = 0;
-        const file = path.join(__dirname, './operation/target', '2.test');
+        // 2.TEST already exists above and is the same Windows filesystem path as 2.test.
+        const file = path.join(__dirname, './operation/target', '4.test');
+        fse.copyFileSync(PATH.FILE, file);
         fse.copyFileSync(PATH.FILE + '.meta', file + '.meta');
         await DB.refresh(file);
         expect(record.length).to.deep.equals(1);

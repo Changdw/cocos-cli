@@ -20,6 +20,15 @@ import { ParallelQueue } from 'workflow-extra';
 import fg from 'fast-glob';
 import { CustomConsole, LogLevel } from './console';
 import { Migrate, Migrator } from './migrator';
+import {
+    assertNoPathIdentityConflicts,
+    getMapStoredPathKey,
+    isSamePath,
+    PathCaseConflictError,
+    PathMap,
+    PathSet,
+    resolveRealPathCase,
+} from './path-identity';
 
 export { map } from './manager';
 
@@ -153,7 +162,7 @@ export class AssetDB extends EventEmitter {
     };
 
     // path 对应 asset 的 map
-    path2asset: Map<string, Asset> = new Map;
+    path2asset: Map<string, Asset> = new PathMap;
 
     // uuid 对应 asset 的 map
     uuid2asset: Map<string, Asset> = new Map;
@@ -401,7 +410,28 @@ export class AssetDB extends EventEmitter {
      */
     async startWithCache() {
         await this.prepareStart();
-        await this.restoreFromCache();
+        try {
+            const managerCacheConflict = this.infoManager.cacheConflict || this.dependencyManager.cacheConflict;
+            if (managerCacheConflict) {
+                throw managerCacheConflict;
+            }
+            await this.restoreFromCache();
+        } catch (error) {
+            if (!(error instanceof PathCaseConflictError)) {
+                throw error;
+            }
+            this.console.warn(error.message);
+            this.console.warn(`Discard invalid cache for asset-db(${this.options.name}) and rebuild it from disk.`);
+            this.uuid2asset.clear();
+            this.path2asset.clear();
+            // Dependency records can only be reconstructed by running importers.
+            // Invalidating mtime information prevents the normal startup fast path
+            // from treating every asset as unchanged.
+            if (this.dependencyManager.cacheConflict) {
+                this.infoManager.destroy();
+            }
+            await this.refresh(this.options.target, { ignoreSelf: true });
+        }
     }
 
     async updateInfoManager() {
@@ -466,8 +496,10 @@ export class AssetDB extends EventEmitter {
         });
         const recordInfo = await migrator.run(cacheJSON, version, [this]);
 
-        await Promise.all(recordInfo.data.paths.map(async (relativePath) => {
-            const path = join(this.options.target, relativePath);
+        const cachedPaths = recordInfo.data.paths.map((relativePath) => join(this.options.target, relativePath));
+        assertNoPathIdentityConflicts(cachedPaths);
+
+        await Promise.all(cachedPaths.map(async (path) => {
             try {
                 const metaFile = join(path + '.meta');
                 const metaInfo = await this.metaManager.get(metaFile);
@@ -618,9 +650,12 @@ export class AssetDB extends EventEmitter {
         path = normalize(path);
 
         // 如果是数据库文件夹，默认就忽略自己
-        if (path === this.options.target) {
+        if (isSamePath(path, this.options.target)) {
             options.ignoreSelf = true;
+            path = this.options.target;
         }
+
+        path = resolveRealPathCase(path, this.options.target);
 
         // 向上递归查询，查询自己的父级文件夹是否存在
         // 如果父文件夹不在 db 里，则自动加入
@@ -631,7 +666,7 @@ export class AssetDB extends EventEmitter {
         }
 
         // 检查是不是配置的 root 路径的子目录，如果不是子路径，则返回刷新 0 个资源
-        if (!isSubPath(path, this.options.target) && path !== this.options.target) {
+        if (!isSubPath(path, this.options.target) && !isSamePath(path, this.options.target)) {
             throw new Error(`asset(${path}) is not in asset-db(${this.options.name})`);
         }
         let files: string[] = [];
@@ -643,6 +678,7 @@ export class AssetDB extends EventEmitter {
                     files = [path];
                 } else {
                     const globPath = process.platform === 'win32' ? path.replace(/\\/g, '/') : path;
+                    const scanBasePath = path;
                     // ! 要写绝对路径，否则可能在某些 win 机器上无法忽略文件
                     const search = options.globList || [
                         `**/*`,
@@ -659,12 +695,12 @@ export class AssetDB extends EventEmitter {
                     });
 
                     files.forEach((file, index) => {
-                        files[index] = join(globPath, file);
+                        files[index] = join(scanBasePath, file);
                     });
 
                     // 当扫描的路径不是根目录的时候，把被扫描的路径也检查一次
-                    if (path !== this.options.target) {
-                        files.splice(0, 0, path);
+                    if (!isSamePath(path, this.options.target)) {
+                        files.splice(0, 0, scanBasePath);
                     }
                 }
             } catch (error) {
@@ -672,6 +708,7 @@ export class AssetDB extends EventEmitter {
                 files = [];
             }
         }
+        assertNoPathIdentityConflicts(files);
         // 文件分组，如果有多个组，会在上一个组导入完成后，才开始下一个组的导入流程
         if (options.hooks && options.hooks.afterScan) {
             try {
@@ -682,9 +719,11 @@ export class AssetDB extends EventEmitter {
         }
 
         // 扫描文件到的文件记录
-        const fileSet: Set<string> = new Set();
-        const deleteSet: Set<string> = new Set();
-        const addSet: Set<string> = new Set();
+        const fileSet: Set<string> = new PathSet();
+        const deleteSet: Set<string> = new PathSet();
+        const addSet: Set<string> = new PathSet();
+        const caseChangedSet: Set<string> = new PathSet();
+        const caseChangedAssets: Asset[] = [];
         const afterError = (error: unknown) => {
             this.taskManager.clear();
             this.unlock();
@@ -696,6 +735,15 @@ export class AssetDB extends EventEmitter {
             const deleteFiles: string[] = [];
             if (this.preImporterHandler) {
                 for (let file of files) {
+                    const storedPath = getMapStoredPathKey(this.path2asset, file);
+                    if (storedPath !== undefined && storedPath !== file && normalize(storedPath) !== normalize(file)) {
+                        const asset = this.path2asset.get(storedPath);
+                        if (asset) {
+                            this._updateAssetPathCase(asset, file);
+                            caseChangedAssets.push(asset);
+                            caseChangedSet.add(file);
+                        }
+                    }
                     if (!this.path2asset.has(file)) {
                         if (this.preImporterHandler(file)) {
                             preAddFiles.push(file);
@@ -708,6 +756,15 @@ export class AssetDB extends EventEmitter {
                 }
             } else {
                 for (let file of files) {
+                    const storedPath = getMapStoredPathKey(this.path2asset, file);
+                    if (storedPath !== undefined && storedPath !== file && normalize(storedPath) !== normalize(file)) {
+                        const asset = this.path2asset.get(storedPath);
+                        if (asset) {
+                            this._updateAssetPathCase(asset, file);
+                            caseChangedAssets.push(asset);
+                            caseChangedSet.add(file);
+                        }
+                    }
                     if (!this.path2asset.has(file)) {
                         addFiles.push(file);
                         addSet.add(file);
@@ -718,7 +775,7 @@ export class AssetDB extends EventEmitter {
 
             this.path2asset.forEach((asset, file) => {
                 if (files.length === 0 || !fileSet.has(file)) {
-                    if (file === path || isSubPath(file, path)) {
+                    if (isSamePath(file, path) || isSubPath(file, path)) {
                         deleteFiles.push(file);
                         deleteSet.add(file);
                     }
@@ -726,6 +783,11 @@ export class AssetDB extends EventEmitter {
             });
 
             this.taskManager.stop();
+
+            for (const asset of caseChangedAssets) {
+                asset.action = AssetActionEnum.change;
+                asset.task = this.taskManager.addTask(asset);
+            }
 
             // 判断添加的资源和移动、删除的资源
             await this._checkAssetsStatSync(preAddFiles, deleteFiles, deleteSet);
@@ -746,7 +808,7 @@ export class AssetDB extends EventEmitter {
             // 没有改动的数据
             const tasks: Promise<any>[] = [];
             for (let file of files) {
-                if (!addSet.has(file) && !deleteSet.has(file)) {
+                if (!addSet.has(file) && !deleteSet.has(file) && !caseChangedSet.has(file)) {
                     const asset = this.path2asset.get(file);
                     if (asset) {
                         tasks.push(this._checkAssetStat(asset));
@@ -802,7 +864,7 @@ export class AssetDB extends EventEmitter {
 
     private _replaceUUID(asset: Asset, oAsset: Asset) {
         if (oAsset !== asset) {
-            if (asset.source === oAsset.source) {
+            if (isSamePath(asset.source, oAsset.source)) {
                 console.trace(`_replaceUUID invalid in asset ${asset.source}`);
                 return;
             }
@@ -817,6 +879,27 @@ export class AssetDB extends EventEmitter {
             }
             asset.meta.uuid = newUUID;
         }
+    }
+
+    private _updateAssetPathCase(asset: Asset, source: string) {
+        const previousSource = asset.source;
+        const previousUrl = asset.url;
+        if (previousSource === source) {
+            return;
+        }
+
+        this.path2asset.set(source, asset);
+        asset._source = source;
+        const sourceExtname = extname(source);
+        asset.extname = sourceExtname.toLowerCase();
+        asset.basename = basename(source, sourceExtname);
+        asset.updateUrl();
+
+        this.infoManager.updatePathCase(previousSource, source);
+        this.infoManager.updatePathCase(previousSource + '.meta', source + '.meta');
+        this.metaManager.updatePathCase(previousSource + '.meta', source + '.meta');
+        this.dependencyManager.updatePathCase(previousSource, source);
+        this.dependencyManager.updatePathCase(previousUrl, asset.url);
     }
 
     /**
@@ -851,7 +934,7 @@ export class AssetDB extends EventEmitter {
                 if (
                     deleteSet.has(uuidCacheAsset.source) ||
                     (
-                        uuidCacheAsset.source !== file &&
+                        !isSamePath(uuidCacheAsset.source, file) &&
                         !existsSync(uuidCacheAsset.source)
                     )
                 ) {

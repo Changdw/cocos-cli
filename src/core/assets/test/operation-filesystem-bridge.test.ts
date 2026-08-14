@@ -243,6 +243,25 @@ describe('asset operation filesystem bridge', () => {
         expect(result).toEqual({ source: asset.source });
     });
 
+    it('reimportAsset accepts a Windows absolute path with different casing without retrying', async () => {
+        const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
+        const requestPath = 'g:\\Project\\Assets\\Game.ts';
+        const asset = {
+            init: true,
+            imported: true,
+            invalid: false,
+            source: 'G:\\Project\\Assets\\Game.ts',
+        };
+        mockReimport.mockResolvedValue(asset);
+
+        const result = await assetOperation.reimportAsset(requestPath);
+
+        expect(mockReimport).toHaveBeenCalledTimes(1);
+        expect(mockReimport).toHaveBeenCalledWith(requestPath);
+        expect(mockQueryAsset).not.toHaveBeenCalled();
+        expect(result).toEqual({ source: asset.source });
+    });
+
     it('reimportAsset still reports a genuinely missing asset', async () => {
         const { assetOperation } = require('../manager/operation') as typeof import('../manager/operation');
         mockReimport.mockResolvedValue(null);

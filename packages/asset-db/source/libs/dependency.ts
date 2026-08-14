@@ -4,10 +4,19 @@ import { existsSync, readJSONSync, outputJSONSync } from 'fs-extra';
 import { join, relative } from 'path';
 import { CustomConsole } from './console';
 import { Migrate, Migrator } from './migrator';
+import {
+    assertNoPathIdentityConflicts,
+    createPathRecord,
+    findPathAwareIndex,
+    isSamePath,
+    PathCaseConflictError,
+    replacePathRecordKey,
+} from './path-identity';
 
 interface DependMap {
     path: { [path: string]: string[] };
     uuid: { [uuid: string]: string[] };
+    [type: string]: { [path: string]: string[] };
 }
 interface RecordInfoMap {
     data: DependMap
@@ -36,8 +45,8 @@ const migrations: Migrate<any>[] = [{
 function getDefaultRecordInfo(): RecordInfoMap {
     return {
         data: {
-            path: {},
-            uuid: {},
+            path: createPathRecord<string[]>(),
+            uuid: createPathRecord<string[]>(),
         },
         version: DependencyManager.version,
     };
@@ -45,7 +54,7 @@ function getDefaultRecordInfo(): RecordInfoMap {
 
 // 关联性 map，一个资源更改后需要通知依赖这个资源的其他资源
 // 这里记录的就是依赖某个资源的其他资源列表
-const associatedMap: { [index: string]: string[] } = {};
+const associatedMap: { [index: string]: string[] } = createPathRecord<string[]>();
 
 /**
  * 资源关联以及依赖关系列表，主要影响导入队列以及是否需要重新导入
@@ -66,6 +75,7 @@ export class DependencyManager {
     // 保存使用的 timer
     _saveTimer: any = null;
     private console: CustomConsole;
+    cacheConflict: PathCaseConflictError | null = null;
     constructor(customConsole: CustomConsole, pathRoot: string) {
         this.console = customConsole || console;
         this.pathRoot = pathRoot;
@@ -76,9 +86,15 @@ export class DependencyManager {
      */
     async setRecordJSON(path: string) {
         this.file = path;
+        this.cacheConflict = null;
         try {
             await this._restoreCache(path);
         } catch (error) {
+            if (error instanceof PathCaseConflictError) {
+                this.destroy();
+                this.dependMap = getDefaultRecordInfo().data;
+                this.cacheConflict = error;
+            }
             this.console.warn(error);
         }
     }
@@ -89,13 +105,27 @@ export class DependencyManager {
             return;
         }
         // 处理缓存数据
-        const { path: pathRecord, uuid: uuidRecord } = this.dependMap;
+        const restoredSourcePaths = [
+            ...Object.keys(cacheInfo.data.path),
+            ...Object.keys(cacheInfo.data.uuid),
+        ].map((relativePath) => join(this.pathRoot, relativePath));
+        assertNoPathIdentityConflicts(restoredSourcePaths);
+        const restoredDependMap = getDefaultRecordInfo().data;
+        const { path: pathRecord, uuid: uuidRecord } = restoredDependMap;
         Object.keys(cacheInfo.data.path).forEach((relativePath) => {
-            pathRecord[join(this.pathRoot, relativePath)] = cacheInfo.data.path[relativePath].map((subPath => join(this.pathRoot, subPath)));
+            const restoredDependencies: string[] = [];
+            cacheInfo.data.path[relativePath].forEach((subPath) => {
+                const dependencyPath = join(this.pathRoot, subPath);
+                if (findPathAwareIndex(restoredDependencies, dependencyPath) === -1) {
+                    restoredDependencies.push(dependencyPath);
+                }
+            });
+            pathRecord[join(this.pathRoot, relativePath)] = restoredDependencies;
         })
         Object.keys(cacheInfo.data.uuid).forEach((relativePath) => {
             uuidRecord[join(this.pathRoot, relativePath)] = cacheInfo.data.uuid[relativePath];
         })
+        this.dependMap = restoredDependMap;
         // 补全关联列表
         for (let type in this.dependMap) {
             const typeMap = this.dependMap[type];
@@ -103,7 +133,7 @@ export class DependencyManager {
                 const array = typeMap[path];
                 array.forEach((urlOrPathOrUUID) => {
                     associatedMap[urlOrPathOrUUID] = associatedMap[urlOrPathOrUUID] || [];
-                    if (associatedMap[urlOrPathOrUUID].indexOf(path) !== -1) {
+                    if (findPathAwareIndex(associatedMap[urlOrPathOrUUID], path) !== -1) {
                         return;
                     }
                     associatedMap[urlOrPathOrUUID].push(path);
@@ -168,7 +198,7 @@ export class DependencyManager {
      * @param dependNames
      */
     add(type: string, key: string, depends: string | string[]) {
-        const typeMap = this.dependMap[type] = this.dependMap[type] || {};
+        const typeMap = this.dependMap[type] = this.dependMap[type] || createPathRecord<string[]>();
 
         const array = typeMap[key] = typeMap[key] || [];
 
@@ -176,7 +206,7 @@ export class DependencyManager {
             depends = [depends];
         }
         depends.forEach((depend) => {
-            if (depend && array.indexOf(depend) !== -1) {
+            if (depend && findPathAwareIndex(array, depend) !== -1) {
                 return;
             }
 
@@ -185,7 +215,7 @@ export class DependencyManager {
 
             // 记录到关联列表
             const associated = associatedMap[depend] = associatedMap[depend] || [];
-            if (associated.indexOf(key) === -1) {
+            if (findPathAwareIndex(associated, key) === -1) {
                 associated.push(key);
             }
         });
@@ -204,7 +234,10 @@ export class DependencyManager {
         // 删除依赖列表
         this.dependMap[type][key].forEach((str) => {
             const array = associatedMap[str];
-            const index = array.indexOf(key);
+            if (!array) {
+                return;
+            }
+            const index = findPathAwareIndex(array, key);
             if (index !== -1) {
                 array.splice(index, 1);
             }
@@ -214,6 +247,30 @@ export class DependencyManager {
         });
 
         delete this.dependMap[type][key];
+        this.save();
+    }
+
+    updatePathCase(previousPath: string, nextPath: string) {
+        for (const type in this.dependMap) {
+            const typeMap = this.dependMap[type];
+            replacePathRecordKey(typeMap, previousPath, nextPath);
+            Object.keys(typeMap).forEach((key) => {
+                typeMap[key].forEach((value, index) => {
+                    if (isSamePath(value, previousPath)) {
+                        typeMap[key][index] = nextPath;
+                    }
+                });
+            });
+        }
+
+        replacePathRecordKey(associatedMap, previousPath, nextPath);
+        Object.keys(associatedMap).forEach((key) => {
+            associatedMap[key].forEach((value, index) => {
+                if (isSamePath(value, previousPath)) {
+                    associatedMap[key][index] = nextPath;
+                }
+            });
+        });
         this.save();
     }
 
@@ -233,7 +290,7 @@ export class DependencyManager {
                     if (!associatedMap[str]) {
                         return;
                     }
-                    const index = associatedMap[str].indexOf(key);
+                    const index = findPathAwareIndex(associatedMap[str], key);
                     if (index !== -1) {
                         associatedMap[str].splice(index, 1);
                     }
