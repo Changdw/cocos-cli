@@ -6,6 +6,7 @@ import { EventEmitter } from 'events';
 import * as ObjectWalker from '../missing-reporter/object-walker';
 import utils from '../../../base/utils';
 import pathManager from './node-path-manager';
+import { validateNodeName } from './path-utils';
 
 const lodash = require('lodash');
 
@@ -28,6 +29,12 @@ export default class NodeManager extends EventEmitter {
     add(uuid: string, node: Node) {
         if (!this.allow) {
             return;
+        }
+        const nameError = validateNodeName(node.name);
+        if (nameError) {
+            console.warn(
+                `Node: preserving legacy node name "${node.name}". ${nameError}`,
+            );
         }
         this._map[uuid] = node;
 
@@ -62,8 +69,9 @@ export default class NodeManager extends EventEmitter {
             return;
         }
         const node = this._map[uuid];
+        const parentUuid = this._getParentUuid(uuid);
 
-        pathManager.remove(uuid);
+        pathManager.remove(uuid, parentUuid);
 
         // 清理父子关系
         this._cleanupParentRelations(uuid);
@@ -92,11 +100,18 @@ export default class NodeManager extends EventEmitter {
 
 
     /**
-     * 更新节点名称和路径
+     * Update node name and path.
+     * API entry points reject illegal names, but undo/redo may restore a legacy name directly.
+     * Preserve that display name and let NodePathManager sanitize only its system path segment.
      */
     updateNodeName(uuid: string, newName: string) {
         if (!this._map[uuid]) {
             return;
+        }
+
+        const error = validateNodeName(newName);
+        if (error) {
+            console.warn(`Node: preserving legacy node name "${newName}". ${error}`);
         }
 
         const node = this._map[uuid];
@@ -104,10 +119,6 @@ export default class NodeManager extends EventEmitter {
         // 获取父节点UUID
         const parentUuid = this._getParentUuid(uuid);
         pathManager.updateUuid(uuid, newName, parentUuid);
-        // 更新节点名称计数
-        if (parentUuid) {
-            this._updateNameCount(parentUuid, node.name, newName);
-        }
 
         // 更新节点对象的名称
         node.name = newName;
@@ -141,11 +152,6 @@ export default class NodeManager extends EventEmitter {
                 this._parentChildren.set(newParentUuid, new Set());
             }
             this._parentChildren.get(newParentUuid)!.add(uuid);
-        }
-
-        const finalName = newPath.split('/').pop();
-        if (finalName && node.name !== finalName) {
-            node.name = finalName;
         }
 
         return newPath;
@@ -324,7 +330,6 @@ export default class NodeManager extends EventEmitter {
         const parentUuid = this._getParentUuid(uuid);
         if (parentUuid) {
             this._parentChildren.get(parentUuid)?.delete(uuid);
-            this._updateNameCount(parentUuid, this._map[uuid]?.name, null);
         }
 
         // 递归清理所有子节点
@@ -334,24 +339,6 @@ export default class NodeManager extends EventEmitter {
                 this.remove(childUuid);
             }
             this._parentChildren.delete(uuid);
-        }
-    }
-
-    /**
-     * 更新名称计数
-     */
-    private _updateNameCount(parentUuid: string, oldName: string | null, newName: string | null) {
-        const nameSet = pathManager.getNameSet(parentUuid);
-        if (!nameSet) {
-            return;
-        }
-
-        if (oldName) {
-            nameSet.delete(oldName);
-        }
-
-        if (newName) {
-            nameSet.add(newName);
         }
     }
 }

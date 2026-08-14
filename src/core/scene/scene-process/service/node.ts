@@ -38,6 +38,7 @@ import NodeConfig from './node/node-type-config';
 import { RemoveNodeCommand } from './undo/commands/remove-node-command';
 import { RemoveComponentCommand } from './undo/commands/remove-component-command';
 import { broadcastAnimationPropertyCommitted } from './animation/property-commit-event';
+import { validateNodeName } from '../../../engine/editor-extends/manager/path-utils';
 
 const NodeMgr = EditorExtends.Node;
 
@@ -50,6 +51,7 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
     private readonly _undo = new NodeUndoHelper((event, ...args) => this.emit(event as any, ...args));
 
     async createByType(params: ICreateByNodeTypeParams): Promise<INode | null> {
+        this._validateCreateParams(params);
         try {
             await Service.Editor.lock();
             const beforeNodeUuids = this._collectSceneNodeUuidsForUndo();
@@ -80,6 +82,7 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
     }
 
     async createByAsset(params: ICreateByAssetParams): Promise<INode | null> {
+        this._validateCreateParams(params);
         try {
             await Service.Editor.lock();
             const beforeNodeUuids = this._collectSceneNodeUuidsForUndo();
@@ -175,12 +178,6 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
         }
 
         resultNode.setParent(parent, params.keepWorldTransform);
-        // setParent 后，node的path可能会变，node的name需要同步path中对应的name
-        const path = NodeMgr.getNodePath(resultNode);
-        const name = path.split('/').pop();
-        if (name && resultNode.name !== name) {
-            resultNode.name = name;
-        }
         // 挂到 prefab instance 下时，setParent 相关流程可能重新补回模板 prefab 信息。
         // 但在 prefab asset 编辑器中，新节点需要保留 setParent 补齐的 prefab 元数据。
         if (shouldUnlinkPrefab && Service.Editor.getCurrentEditorType() !== 'prefab') {
@@ -219,6 +216,27 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
         return await this._ensurePathExists(path, currentScene);
     }
 
+    private _validateCreateParams(params: ICreateByNodeTypeParams | ICreateByAssetParams): void {
+        this._validateRequestedNodeName(params.name);
+        this._validateRequestedNodePath(params.path);
+    }
+
+    private _validateRequestedNodeName(name: string | undefined): void {
+        if (name === undefined) {
+            return;
+        }
+        const error = validateNodeName(name);
+        if (error) {
+            throw new Error(error);
+        }
+    }
+
+    private _validateRequestedNodePath(path: string): void {
+        for (const segment of path.split('/').filter((part) => part.trim() !== '')) {
+            this._validateRequestedNodeName(segment);
+        }
+    }
+
     /**
      * 确保路径存在，如果不存在则创建空节点
      */
@@ -242,7 +260,11 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
         // 逐级检查并创建路径
         for (let i = 0; i < pathParts.length; i++) {
             const pathPart = pathParts[i];
-            let nextNode = currentParent.getChildByName(pathPart);
+            const currentParentPath = NodeMgr.getNodePath(currentParent);
+            const candidatePath = currentParentPath && currentParentPath !== '/'
+                ? `${currentParentPath}/${pathPart}`
+                : pathPart;
+            let nextNode = NodeMgr.getNodeByPath(candidatePath) as Node | null;
 
             if (!nextNode) {
                 if (pathPart === 'Canvas') {
@@ -498,8 +520,11 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
             },
         }, async () => {
             if (options.path === 'name' && options.dump.value !== node.name) {
-                // 这里相当于是做个hack的补充功能，因为setProperty并没有改变path。
-                // 而在cli上是期望改变path的，后期感觉可以通过node:change消息来实现这个功能
+                // Reject new illegal input at the API boundary; the lower-level manager accepts it only for legacy undo/redo restoration.
+                const nameError = validateNodeName(options.dump.value as string);
+                if (nameError) {
+                    throw new Error(nameError);
+                }
                 this.emit('node:before-change', node);
                 NodeMgr.updateNodeName(node.uuid, options.dump.value as string);
                 this.emit('node:change', node, { type: NodeEventType.SET_PROPERTY, propPath: 'name' });

@@ -68,6 +68,7 @@ import {
     queryAnimationComponent,
     queryAnimationRootNode,
     readPropertyValue,
+    resolveAnimationRelativeNodePath,
 } from './animation/scene-node';
 import {
     assertAnimationEditorOpened,
@@ -215,6 +216,8 @@ export class AnimationService extends BaseService<Record<string, any>> implement
             };
         }
 
+        this._refreshSessionRootPath(this._session);
+
         return {
             active: true,
             editorType,
@@ -275,6 +278,7 @@ export class AnimationService extends BaseService<Record<string, any>> implement
     async queryClip(options: IAnimationQueryClipOptions): Promise<IAnimationClipDump> {
         const hasTarget = Boolean(options.rootPath || options.rootUuid || options.nodePath || options.nodeUuid);
         if (this._session) {
+            this._refreshSessionRootPath(this._session);
             const uuid = options.clipUuid || this._session.clipUuid;
             const state = isCurrentAnimationSessionClipQuery(this._session, options, uuid, hasTarget)
                 ? this._animationStates.get(uuid)
@@ -312,6 +316,7 @@ export class AnimationService extends BaseService<Record<string, any>> implement
 
     async queryPropertyValueAtFrame(options: IAnimationQueryPropertyValueAtFrameOptions): Promise<IAnimationValue> {
         const session = requireAnimationSession(this._session);
+        this._refreshSessionRootPath(session);
         const uuid = options.clipUuid || session.clipUuid;
         if (uuid !== session.clipUuid) {
             throw new Error(`current edit clip: '${session.clipUuid}' but you want to operate: '${uuid}'`);
@@ -464,6 +469,13 @@ export class AnimationService extends BaseService<Record<string, any>> implement
                     await this._restoreFailedOperationSnapshot(clip, before, rootNode);
                 }
                 return inputFailure;
+            }
+            const targetFailure = validateAnimationPropertyTarget(inputOperation, rootNode, session.rootPath);
+            if (targetFailure) {
+                if (shouldRestoreOnFailure) {
+                    await this._restoreFailedOperationSnapshot(clip, before, rootNode);
+                }
+                return targetFailure;
             }
             if (isSkeleton && !isAllowedSkeletonAnimationOperation(inputOperation)) {
                 const skeletonFailure = {
@@ -841,6 +853,9 @@ export class AnimationService extends BaseService<Record<string, any>> implement
     }
 
     private _broadcastTimeChanged(reason: AnimationEventReason): void {
+        if (this._session) {
+            this._refreshSessionRootPath(this._session);
+        }
         const event = createAnimationServiceClipEvent(this._session, reason);
         if (!event) {
             return;
@@ -853,6 +868,9 @@ export class AnimationService extends BaseService<Record<string, any>> implement
     }
 
     private _broadcastClipChanged(reason: AnimationEventReason): void {
+        if (this._session) {
+            this._refreshSessionRootPath(this._session);
+        }
         const event = createAnimationServiceClipEvent(this._session, reason);
         if (!event) {
             return;
@@ -878,7 +896,23 @@ export class AnimationService extends BaseService<Record<string, any>> implement
     }
 
     private _getSessionRootNode(): Node {
-        return getAnimationSessionRootNode(requireAnimationSession(this._session));
+        const session = requireAnimationSession(this._session);
+        const rootNode = getAnimationSessionRootNode(session);
+        const rootPath = getNodePath(rootNode);
+        if (rootPath) {
+            session.rootPath = rootPath;
+        }
+        return rootNode;
+    }
+
+    private _refreshSessionRootPath(session: IAnimationSession): void {
+        const rootNode = getNodeByUuid(session.rootUuid);
+        if (rootNode) {
+            const rootPath = getNodePath(rootNode);
+            if (rootPath) {
+                session.rootPath = rootPath;
+            }
+        }
     }
 
     private async _discardAnimationSessionChanges(session: IAnimationSession): Promise<void> {
@@ -978,4 +1012,28 @@ export class AnimationService extends BaseService<Record<string, any>> implement
 
 function normalizeSceneNodePath(path: string): string {
     return String(path || '').replace(/^\/+|\/+$/g, '');
+}
+
+function validateAnimationPropertyTarget(
+    operation: IAnimationOperation,
+    rootNode: Node,
+    rootPath: string,
+): IAnimationOperationResult | null {
+    if (!('propKey' in operation)) {
+        return null;
+    }
+    if (resolveAnimationRelativeNodePath(rootNode, rootPath, operation) !== null) {
+        return null;
+    }
+
+    const target = operation.nodeUuid
+        ? `UUID "${operation.nodeUuid}"`
+        : `path "${operation.nodePath || '<root>'}"`;
+    const reason = `Animation property target ${target} is not bound by the current animation hierarchy.`;
+    console.warn(`[Animation] ${reason}`);
+    return {
+        state: 'failure',
+        result: false,
+        reason,
+    };
 }
