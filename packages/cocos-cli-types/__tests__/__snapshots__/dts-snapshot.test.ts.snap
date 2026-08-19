@@ -6083,6 +6083,7 @@ export declare interface IBaseCreateNodeParams {
     position?: IVec3;
     keepWorldTransform?: boolean;
     canvasRequired?: boolean;
+    prefabCanvasHandling?: PrefabCanvasHandling;
     unlinkPrefab?: boolean;
 }
 export declare interface IBaseIdentifier {
@@ -6197,6 +6198,12 @@ export declare interface ICreateByAssetParams extends IBaseCreateNodeParams {
 }
 export declare interface ICreateByNodeTypeParams extends IBaseCreateNodeParams {
     nodeType: NodeType;
+}
+export declare interface ICreateNodePreflightResult {
+    action: 'create' | 'choose-prefab-canvas-handling';
+    canvasRequired: boolean;
+    canvasPath: string | null;
+    uiTransformPath: string | null;
 }
 export declare interface ICreateOptions {
     type: ICreateType;
@@ -6363,6 +6370,7 @@ export declare interface INodeDumpOptions {
 export declare interface INodeService extends IServiceEvents {
     createByType(params: ICreateByNodeTypeParams): Promise<INode | null>;
     createByAsset(params: ICreateByAssetParams): Promise<INode | null>;
+    preflightCreate(params: ICreateByNodeTypeParams | ICreateByAssetParams): Promise<ICreateNodePreflightResult>;
     delete(params: IDeleteNodeParams): Promise<IDeleteNodeResult | null>;
     query(params?: IQueryNodeParams): Promise<INode | IScene | null>;
     queryNodeTree(params: IQueryNodeTreeParams): Promise<INodeTreeItem | null>;
@@ -7014,6 +7022,7 @@ export declare interface PrefabAssetUserData {
     persistent?: boolean;
     syncNodeName?: string;
 }
+export declare type PrefabCanvasHandling = 'add-root-ui-transform' | 'create-canvas';
 export declare enum PrefabState {
     NotAPrefab = 0,
     PrefabChild = 1,

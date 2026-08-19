@@ -6245,6 +6245,10 @@ declare module 'pink' {
 			keepWorldTransform?: boolean;
 			/** 是否需要 Canvas（2D UI 节点自动创建 Canvas） */
 			canvasRequired?: boolean;
+			/** prefab 模式下需要 Canvas 处理时，使用外部 UI 选择的处理方式 */
+			prefabCanvasHandling?: 'add-root-ui-transform' | 'create-canvas';
+			/** preflightCreate 返回的 token，用于验证 Canvas 决策仍然有效 */
+			preflightToken?: string;
 		}
 
 		/** 创建节点的参数 */

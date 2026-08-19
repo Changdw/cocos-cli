@@ -336,6 +336,7 @@ export class NodeUndoHelper {
             .filter((node): node is Node => !!node?.isValid)
             .map(node => ({ node, path: NodeMgr.getNodePath(node) }))
             .filter(target => !!target.path)
+            .filter(target => !this._containsExistingNode(target.node, beforeNodeUuids))
             .filter(target => !target.node.parent || !newUuids.has(target.node.parent.uuid))
             .sort((a, b) => a.node.getSiblingIndex() - b.node.getSiblingIndex());
     }
@@ -347,6 +348,15 @@ export class NodeUndoHelper {
             }
             return !targets.some(other => other.node !== target.node && target.node.isChildOf(other.node));
         });
+    }
+
+    private _containsExistingNode(node: Node, beforeNodeUuids: Set<string>): boolean {
+        for (const child of node.children ?? []) {
+            if (beforeNodeUuids.has(child.uuid) || this._containsExistingNode(child as Node, beforeNodeUuids)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private _captureChildOrderSnapshot(parent: Node): Map<string, INodeChildOrderSnapshot> {
