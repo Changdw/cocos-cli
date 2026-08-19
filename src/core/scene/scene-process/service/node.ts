@@ -41,7 +41,7 @@ import { RemoveNodeCommand } from './undo/commands/remove-node-command';
 import { RemoveComponentCommand } from './undo/commands/remove-component-command';
 import { PrefabPreviewCanvasCommand } from './undo/commands/prefab-preview-canvas-command';
 import { broadcastAnimationPropertyCommitted } from './animation/property-commit-event';
-import { validateNodeName } from '../../../engine/editor-extends/manager/path-utils';
+import { isRootNodePath, stripLeadingSlashes, validateNodeName } from '../../../engine/editor-extends/manager/path-utils';
 
 const NodeMgr = EditorExtends.Node;
 
@@ -488,10 +488,8 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
         // 逐级检查并创建路径
         for (let i = 0; i < pathParts.length; i++) {
             const pathPart = pathParts[i];
-            const currentParentPath = NodeMgr.getNodePath(currentParent);
-            const candidatePath = currentParentPath && currentParentPath !== '/'
-                ? `${currentParentPath}/${pathPart}`
-                : pathPart;
+            const parentPrefix = stripLeadingSlashes(NodeMgr.getNodePath(currentParent));
+            const candidatePath = parentPrefix ? `${parentPrefix}/${pathPart}` : pathPart;
             let nextNode = NodeMgr.getNodeByPath(candidatePath) as Node | null;
 
             if (!nextNode) {
@@ -567,7 +565,8 @@ export class NodeService extends BaseService<INodeEvents> implements INodeServic
             }
             const path = params?.path;
             let node: Node | null = root;
-            if (path && path !== '/') {
+            // '/' 指当前编辑器的根：场景模式下是场景，prefab 模式下是 prefab 根，而非承载它的虚拟场景
+            if (path && !isRootNodePath(path)) {
                 node = NodeMgr.getNodeByPath(path);
             }
             if (!node) return null;
