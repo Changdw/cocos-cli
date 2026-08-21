@@ -6143,6 +6143,7 @@ export declare interface IBaseCreateNodeParams {
     keepWorldTransform?: boolean;
     canvasRequired?: boolean;
     prefabCanvasHandling?: PrefabCanvasHandling;
+    preflightToken?: string;
     unlinkPrefab?: boolean;
 }
 export declare interface IBaseIdentifier {
@@ -6263,6 +6264,7 @@ export declare interface ICreateNodePreflightResult {
     canvasRequired: boolean;
     canvasPath: string | null;
     uiTransformPath: string | null;
+    preflightToken: string;
 }
 export declare interface ICreateOptions {
     type: ICreateType;
