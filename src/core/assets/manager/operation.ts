@@ -231,6 +231,9 @@ function getSceneOrPrefabJsonError(asset: IAsset, content: string | Buffer): str
 
 class AssetOperation extends EventEmitter {
 
+    private readonly _importTaskByTargetPath = new Map<string, Promise<void>>();
+    private readonly _reservedImportTargetPaths = new Map<string, number>();
+
     /**
      * 检查一个资源文件夹是否为只读
      */
@@ -251,10 +254,10 @@ class AssetOperation extends EventEmitter {
      * @param option 
      * @returns 返回新的文件路径
      */
-    _checkOverwrite(path: string, option?: AssetOperationOption) {
-        if (existsSync(path) && !option?.overwrite) {
+    _checkOverwrite(path: string, option?: AssetOperationOption, isOccupied: (path: string) => boolean = existsSync) {
+        if (isOccupied(path) && !option?.overwrite) {
             if (option?.rename) {
-                return utils.File.getName(path);
+                return utils.File.getName(path, isOccupied);
             }
             throw new Error(`file ${path} already exists, please use overwrite option to overwrite it or use rename option to auto rename it first.`);
         }
@@ -478,12 +481,26 @@ class AssetOperation extends EventEmitter {
      * @param options 
      */
     async importAsset(source: string, target: string, options?: AssetOperationOption): Promise<IAssetInfo[]> {
-        const targetPath = target.startsWith('db://') ? url2path(target) : target;
-        const assetTarget = this._pathToDbUrlIfInsideAssetDB(target);
+        const targetUrl = this._pathToDbUrlIfInsideAssetDB(target);
+        const targetPath = targetUrl.startsWith('db://') ? url2path(targetUrl) : target;
+        return this._queueImportByTargetPath(targetPath, () => this._importAsset(source, targetPath, options));
+    }
 
-        if (!this._isSameFilesystemPath(source, targetPath)) {
-            await copyPath(source, targetPath, options);
+    private async _importAsset(source: string, targetPath: string, options?: AssetOperationOption): Promise<IAssetInfo[]> {
+        const isSamePath = this._isSameFilesystemPath(source, targetPath);
+
+        if (!isSamePath) {
+            const reservation = this._reserveImportTargetPath(targetPath, options);
+            targetPath = reservation.targetPath;
+            try {
+                const copyOptions = options?.overwrite === undefined ? undefined : { overwrite: options.overwrite };
+                await copyPath(source, targetPath, copyOptions);
+            } finally {
+                reservation.release();
+            }
         }
+
+        const assetTarget = this._pathToDbUrlIfInsideAssetDB(targetPath);
         await this.refreshAsset(assetTarget);
         const assetInfo = assetQuery.queryAssetInfo(assetTarget);
         if (!assetInfo) {
@@ -495,6 +512,50 @@ class AssetOperation extends EventEmitter {
         return assetQuery.queryAssetInfos({
             pattern: `${assetInfo.url}/**/*`
         });
+    }
+
+    private _queueImportByTargetPath<T = unknown>(targetPath: string, task: () => Promise<T>): Promise<T> {
+        const targetKey = this._getImportTargetKey(targetPath);
+
+        const previousTask = this._importTaskByTargetPath.get(targetKey) ?? Promise.resolve();
+        const taskResult = previousTask.then(task);
+        const taskTail = taskResult.then(() => undefined, () => undefined); // never reject
+        this._importTaskByTargetPath.set(targetKey, taskTail);
+
+        return taskResult.finally(() => {
+            if (this._importTaskByTargetPath.get(targetKey) === taskTail) {
+                this._importTaskByTargetPath.delete(targetKey);
+            }
+        });
+    }
+
+    private _isPathOccupied = (path: string) => {
+        return existsSync(path) || this._reservedImportTargetPaths.has(this._getImportTargetKey(path));
+    };
+    private _reserveImportTargetPath(targetPath: string, options?: AssetOperationOption) {
+        const resolvedTargetPath = this._checkOverwrite(targetPath, options, this._isPathOccupied);
+        const targetKey = this._getImportTargetKey(resolvedTargetPath);
+        this._reservedImportTargetPaths.set(targetKey, (this._reservedImportTargetPaths.get(targetKey) ?? 0) + 1);
+
+        return {
+            targetPath: resolvedTargetPath,
+            release: () => {
+                const reservationCount = this._reservedImportTargetPaths.get(targetKey);
+                if (reservationCount === undefined || reservationCount <= 1) {
+                    this._reservedImportTargetPaths.delete(targetKey);
+                } else {
+                    this._reservedImportTargetPaths.set(targetKey, reservationCount - 1);
+                }
+            },
+        };
+    }
+
+    private _getImportTargetKey(targetPath: string) {
+        let targetKey = utils.Path.normalize(targetPath);
+        if (process.platform === 'win32') {
+            targetKey = targetKey.toLowerCase();
+        }
+        return targetKey;
     }
 
     /**
