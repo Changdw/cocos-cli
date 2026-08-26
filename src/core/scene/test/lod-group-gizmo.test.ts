@@ -1,3 +1,5 @@
+export {};
+
 const mockGetVisibleLOD = jest.fn();
 const mockRegisterGizmo = jest.fn();
 const mockControllerInstances: any[] = [];
