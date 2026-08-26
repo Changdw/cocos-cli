@@ -53,6 +53,10 @@ class LODGroupGizmo extends GizmoBase<LODGroup> {
     }
 
     private updateController(): void {
+        if (!this._isInitialized) {
+            return;
+        }
+
         const target = this.target;
         const editorCamera = getService()?.Camera?.getCamera?.();
         if (!target || !editorCamera?.camera || !editorCamera.node) {

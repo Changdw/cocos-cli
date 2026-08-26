@@ -149,6 +149,22 @@ describe('LODGroup Gizmo', () => {
         });
     });
 
+    it('ignores target and node updates before the controller is initialized', () => {
+        const target = Object.assign(new LODGroup(), {
+            objectSize: 1,
+            node: {
+                scale: { x: 1, y: 1, z: 1 },
+                getWorldPosition: jest.fn(),
+            },
+        });
+        const gizmo = new lodGroupGizmoModule.SelectGizmo(target);
+
+        expect(() => gizmo.onTargetUpdate()).not.toThrow();
+        expect(() => gizmo.onNodeChanged()).not.toThrow();
+        expect(mockControllerInstances).toHaveLength(0);
+        expect(mockService.Camera.getCamera).not.toHaveBeenCalled();
+    });
+
     it('shows the current LOD and refreshes from camera or node changes', () => {
         const worldPosition = new Vec3(10, 20, 30);
         const target = Object.assign(new LODGroup(), {
