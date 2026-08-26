@@ -1,4 +1,4 @@
-import { Component, Constructor, animation, Animation, Node, RigidBody, Collider, ERigidBodyType, EColliderType, MeshCollider, UITransform, director, Canvas, Scene } from 'cc';
+import { Component, Constructor, animation, Animation, Node, RigidBody, Collider, ERigidBodyType, EColliderType, MeshCollider, UITransform, director, Canvas, Scene, LODGroup } from 'cc';
 import { Rpc } from '../rpc';
 import { register, Service, BaseService } from './core';
 import {
@@ -12,7 +12,9 @@ import {
     IComponent,
     IQueryClassesOptions,
     ISetPropertyOptions,
-    IUndoRedoResult
+    IUndoRedoResult,
+    IRecalculateLODGroupBoundsOptions,
+    ILODGroupBoundsResult,
 } from '../../common';
 import dumpUtil from './dump';
 import compMgr from './component/index';
@@ -468,10 +470,11 @@ export class ComponentService extends BaseService<IComponentEvents> implements I
 
     private async _recordComponentSnapshot(
         component: Component,
-        options: { label: string; type: string },
+        options: { label: string; type: string; path?: string; record?: boolean },
         mutate: () => Promise<boolean>,
     ): Promise<boolean> {
         if (
+            options.record === false ||
             Service.Undo?.isApplying?.() ||
             Service.Undo?.hasActiveRecording?.(component.node.uuid) ||
             Service.Undo?.hasActiveRecording?.(component.uuid)
@@ -479,7 +482,8 @@ export class ComponentService extends BaseService<IComponentEvents> implements I
             return mutate();
         }
 
-        const before = this._captureComponentSnapshot(component, options.type);
+        const snapshotPath = options.path ?? options.type;
+        const before = this._captureComponentSnapshot(component, snapshotPath);
         const result = await mutate();
         if (!result) {
             return result;
@@ -495,7 +499,7 @@ export class ComponentService extends BaseService<IComponentEvents> implements I
             return result;
         }
 
-        const after = this._captureComponentSnapshot(latestComponent, options.type);
+        const after = this._captureComponentSnapshot(latestComponent, snapshotPath);
         if (this._snapshotMapsEqual(before, after)) {
             return result;
         }
@@ -894,6 +898,42 @@ export class ComponentService extends BaseService<IComponentEvents> implements I
             console.warn(e);
             return false;
         }
+    }
+
+    public async recalculateLODGroupBounds(
+        options: IRecalculateLODGroupBoundsOptions,
+    ): Promise<ILODGroupBoundsResult> {
+        const comp = await this.findComponent(options.path);
+        if (!comp) {
+            throw new Error(`LODGroup component not found: ${options.path}`);
+        }
+        if (!(comp instanceof LODGroup)) {
+            throw new Error(`Parameter error: component is not cc.LODGroup: ${options.path}`);
+        }
+
+        const componentIndex = comp.node.components.indexOf(comp);
+        await this._recordComponentSnapshot(comp, {
+            label: 'Recalculate LODGroup Bounds',
+            type: 'component:recalculate-lod-group-bounds',
+            path: componentIndex >= 0 ? `__comps__.${componentIndex}` : undefined,
+            record: options.record,
+        }, async () => {
+            comp.recalculateBounds();
+            return true;
+        });
+
+        // 当前 cc 模块声明遗漏了引擎中已存在的 public localBoundaryCenter getter。
+        const center = (comp as LODGroup & {
+            readonly localBoundaryCenter: Readonly<{ x: number; y: number; z: number }>;
+        }).localBoundaryCenter;
+        return {
+            localBoundaryCenter: {
+                x: center.x,
+                y: center.y,
+                z: center.z,
+            },
+            objectSize: comp.objectSize,
+        };
     }
 
     public async executeMethod(options: IExecuteComponentMethodOptions): Promise<any> {

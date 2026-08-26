@@ -2,6 +2,7 @@ import type { Component, Node } from 'cc';
 import type { IPropertyValueType, IProperty } from '../@types/public';
 import type { IServiceEvents } from '../scene-process/service/core';
 import type { IChangeNodeOptions, INodeEvents } from './node';
+import type { IVec3 } from './value-types';
 
 /**
  * 编辑器使用的组件详细信息，属性值以 IProperty 编码形式呈现，
@@ -41,6 +42,24 @@ export interface IRemovedComponentInfo {
  */
 export interface IQueryComponentOptions {
     path: string;
+}
+
+/**
+ * 重新计算 LODGroup 包围盒的选项
+ */
+export interface IRecalculateLODGroupBoundsOptions {
+    /** cc.LODGroup 组件路径 */
+    path: string;
+    /** 是否记录 undo，默认 true */
+    record?: boolean;
+}
+
+/**
+ * LODGroup 包围盒重算结果
+ */
+export interface ILODGroupBoundsResult {
+    localBoundaryCenter: IVec3;
+    objectSize: number;
 }
 
 /**
@@ -170,6 +189,15 @@ export interface IComponentService extends IServiceEvents {
      * @returns 组件类名数组，如 ['cc.Label', 'cc.Sprite', 'MyCustomComponent']
      */
     queryAll(): Promise<string[]>;
+
+    /**
+     * 根据 LOD 层级中的 Renderer 重新计算 cc.LODGroup 的局部包围盒
+     * @param options - 重算选项
+     * @param options.path - cc.LODGroup 组件路径
+     * @param options.record - 是否记录 undo，默认 true
+     * @returns 重算后的局部边界中心和对象尺寸
+     */
+    recalculateLODGroupBounds(options: IRecalculateLODGroupBoundsOptions): Promise<ILODGroupBoundsResult>;
 
     // ---- 编辑器相关接口 ----
 

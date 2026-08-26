@@ -6,6 +6,8 @@ import {
     SchemaQueryAllComponentResult,
     SchemaQueryComponent,
     SchemaRemoveComponent,
+    SchemaRecalculateLODGroupBoundsOptions,
+    SchemaLODGroupBoundsResult,
 
     TAddComponentInfo,
     TSetPropertyOptions,
@@ -13,6 +15,8 @@ import {
     TQueryAllComponentResult,
     TRemoveComponentOptions,
     TQueryComponentOptions,
+    TRecalculateLODGroupBoundsOptions,
+    TLODGroupBoundsResult,
 } from './component-schema';
 
 import { description, param, result, title, tool } from '../decorator/decorator.js';
@@ -131,6 +135,30 @@ export class ComponentApi {
             return {
                 code: getCommonErrorStatus(e),
                 reason: e instanceof Error ? e.message : String(e)
+            };
+        }
+    }
+
+    /**
+     * Recalculate LODGroup bounds // 重新计算 LODGroup 包围盒
+     */
+    @tool('scene-recalculate-lod-group-bounds')
+    @title('Recalculate LODGroup bounds') // 重新计算 LODGroup 包围盒
+    @description('Recalculate localBoundaryCenter and objectSize from all Renderers referenced by a cc.LODGroup. The path must identify a cc.LODGroup component, e.g. "Root/LOD/cc.LODGroup". Returns zero values when no valid Renderer exists.') // 根据 LODGroup 引用的 Renderer 重算边界；路径必须指向 cc.LODGroup 组件
+    @result(SchemaLODGroupBoundsResult)
+    async recalculateLODGroupBounds(
+        @param(SchemaRecalculateLODGroupBoundsOptions) options: TRecalculateLODGroupBoundsOptions,
+    ): Promise<CommonResultType<TLODGroupBoundsResult>> {
+        try {
+            const bounds = await Scene.Component.recalculateLODGroupBounds(options);
+            return {
+                code: COMMON_STATUS.SUCCESS,
+                data: bounds,
+            };
+        } catch (e) {
+            return {
+                code: getCommonErrorStatus(e),
+                reason: e instanceof Error ? e.message : String(e),
             };
         }
     }

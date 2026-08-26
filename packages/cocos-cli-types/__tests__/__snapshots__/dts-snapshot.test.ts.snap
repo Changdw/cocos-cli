@@ -6234,6 +6234,7 @@ export declare interface IComponentService extends IServiceEvents {
     setProperty(params: ISetPropertyOptions): Promise<boolean>;
     query(params: IQueryComponentOptions | string): Promise<IComponent | null>;
     queryAll(): Promise<string[]>;
+    recalculateLODGroupBounds(options: IRecalculateLODGroupBoundsOptions): Promise<ILODGroupBoundsResult>;
     reset(params: IQueryComponentOptions): Promise<boolean>;
     queryClasses(options?: IQueryClassesOptions): Promise<{
         name: string;
@@ -6379,6 +6380,10 @@ export declare interface IGizmoService {
 }
 export declare interface IIsPrefabInstanceParams {
     nodePath: string;
+}
+export declare interface ILODGroupBoundsResult {
+    localBoundaryCenter: IVec3;
+    objectSize: number;
 }
 export declare interface ImageAssetUserData {
     type: ImageImportType;
@@ -6599,6 +6604,10 @@ export declare interface IQueryNodeParams extends INodeDumpOptions {
 }
 export declare interface IQueryNodeTreeParams {
     path?: string;
+}
+export declare interface IRecalculateLODGroupBoundsOptions {
+    path: string;
+    record?: boolean;
 }
 export declare interface IRectSnapConfigData {
     enableSnapping: boolean;

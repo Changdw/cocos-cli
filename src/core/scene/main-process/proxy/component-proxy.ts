@@ -3,6 +3,8 @@ import {
     IRemoveComponentOptions,
     IQueryComponentOptions,
     IPublicComponentService,
+    IRecalculateLODGroupBoundsOptions,
+    ILODGroupBoundsResult,
 } from '../../common';
 import { IComponentInfo } from '../../common/cli/component';
 import { ISetPropertyOptionsInfo } from '../../common/cli/component';
@@ -107,5 +109,9 @@ export const ComponentProxy: IComponentProxy = {
 
     queryAll(): Promise<string[]> {
         return Rpc.getInstance().request('Component', 'queryAll');
+    },
+
+    recalculateLODGroupBounds(options: IRecalculateLODGroupBoundsOptions): Promise<ILODGroupBoundsResult> {
+        return Rpc.getInstance().request('Component', 'recalculateLODGroupBounds', [options]);
     },
 };

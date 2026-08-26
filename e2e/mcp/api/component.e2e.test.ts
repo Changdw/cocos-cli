@@ -239,4 +239,53 @@ describe('MCP Component API', () => {
             expect(allResult.data).toEqual(expect.arrayContaining(['cc.Label']));
         });
     });
+
+    describe('LODGroup 包围盒重算', () => {
+        it('should recalculate empty LODGroup bounds to zero values', async () => {
+            const addResult = await mcpClient.callTool('scene-add-component', {
+                addComponentInfo: {
+                    nodePath: testNodePath,
+                    component: 'cc.LODGroup',
+                },
+            });
+            expect(addResult.code).toBe(200);
+            expect(addResult.data).toBeDefined();
+            if (!addResult.data) return;
+
+            const recalculateResult = await mcpClient.callTool('scene-recalculate-lod-group-bounds', {
+                options: {
+                    path: addResult.data.path,
+                    record: false,
+                },
+            });
+
+            expect(recalculateResult.code).toBe(200);
+            expect(recalculateResult.data).toEqual({
+                localBoundaryCenter: { x: 0, y: 0, z: 0 },
+                objectSize: 0,
+            });
+        });
+
+        it('should reject a non-LODGroup component', async () => {
+            const addResult = await mcpClient.callTool('scene-add-component', {
+                addComponentInfo: {
+                    nodePath: testNodePath,
+                    component: 'cc.Label',
+                },
+            });
+            expect(addResult.code).toBe(200);
+            expect(addResult.data).toBeDefined();
+            if (!addResult.data) return;
+
+            const recalculateResult = await mcpClient.callTool('scene-recalculate-lod-group-bounds', {
+                options: {
+                    path: addResult.data.path,
+                    record: false,
+                },
+            });
+
+            expect(recalculateResult.code).toBe(400);
+            expect(recalculateResult.reason).toContain('component is not cc.LODGroup');
+        });
+    });
 });

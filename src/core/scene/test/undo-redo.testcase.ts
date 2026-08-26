@@ -208,6 +208,10 @@ const Component = {
         return true;
     },
     reset: (params: { path: string }) => request<boolean>('Component', 'reset', [params]),
+    recalculateLODGroupBounds: (params: { path: string; record?: boolean }) => request<{
+        localBoundaryCenter: { x: number; y: number; z: number };
+        objectSize: number;
+    }>('Component', 'recalculateLODGroupBounds', [params]),
 };
 
 const Prefab = {
@@ -1036,6 +1040,60 @@ describe('Undo/Redo 集成测试', () => {
             const redoResult = await Undo.redo();
             expectUndoSuccess(redoResult);
             expect((await queryComp(compPath))!.properties.string.value).toBe('label');
+        });
+    });
+
+    // ========================================================================
+    // LODGroup 包围盒重算（快照）
+    // ========================================================================
+    describe('LODGroup recalculate bounds (snapshot)', () => {
+        const path = 'UndoRecalculateLODGroupNode';
+        const compPath = `${path}/cc.LODGroup`;
+
+        beforeEach(async () => {
+            await Node.createByType({ path, nodeType: NodeType.EMPTY });
+            await Component.add({ nodePath: path, component: 'cc.LODGroup' });
+            await Component.setProperty({
+                componentPath: compPath,
+                properties: { _objectSize: 42 },
+                record: false,
+            });
+            await Undo.clearHistory();
+        });
+
+        afterEach(async () => {
+            await safeDelete(path);
+            await Undo.clearHistory();
+        });
+
+        it('recalculate pushes one snapshot and supports undo/redo', async () => {
+            expect((await queryComp(compPath))!.properties._objectSize.value).toBe(42);
+
+            const bounds = await Component.recalculateLODGroupBounds({ path: compPath });
+            expect(bounds).toEqual({
+                localBoundaryCenter: { x: 0, y: 0, z: 0 },
+                objectSize: 0,
+            });
+            expect((await queryComp(compPath))!.properties._objectSize.value).toBe(0);
+            expect(await Undo.canUndo()).toBe(true);
+
+            const undoResult = await Undo.undo();
+            expectUndoSuccess(undoResult);
+            expect((await queryComp(compPath))!.properties._objectSize.value).toBe(42);
+
+            const redoResult = await Undo.redo();
+            expectUndoSuccess(redoResult);
+            expect((await queryComp(compPath))!.properties._objectSize.value).toBe(0);
+        });
+
+        it('record=false does not push an undo snapshot', async () => {
+            const bounds = await Component.recalculateLODGroupBounds({
+                path: compPath,
+                record: false,
+            });
+
+            expect(bounds.objectSize).toBe(0);
+            expect(await Undo.canUndo()).toBe(false);
         });
     });
 

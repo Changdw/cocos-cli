@@ -1253,4 +1253,41 @@ describe('Component Proxy 测试', () => {
             expect(result).toContain('cc.Button');
         });
     });
+
+    describe('19. recalculateLODGroupBounds - 重算 LODGroup 包围盒', () => {
+        it('空 LODGroup 应返回零值边界', async () => {
+            const component = await ComponentProxy.add({
+                nodePath,
+                component: 'cc.LODGroup',
+            });
+            try {
+                const result = await ComponentProxy.recalculateLODGroupBounds({
+                    path: component.path,
+                    record: false,
+                });
+
+                expect(result).toEqual({
+                    localBoundaryCenter: { x: 0, y: 0, z: 0 },
+                    objectSize: 0,
+                });
+            } finally {
+                await ComponentProxy.remove({ path: component.path });
+            }
+        });
+
+        it('非 LODGroup 组件应拒绝重算', async () => {
+            const component = await ComponentProxy.add({
+                nodePath,
+                component: 'cc.Label',
+            });
+            try {
+                await expect(ComponentProxy.recalculateLODGroupBounds({
+                    path: component.path,
+                    record: false,
+                })).rejects.toThrow('component is not cc.LODGroup');
+            } finally {
+                await ComponentProxy.remove({ path: component.path });
+            }
+        });
+    });
 });
