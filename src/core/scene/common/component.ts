@@ -63,6 +63,48 @@ export interface ILODGroupBoundsResult {
 }
 
 /**
+ * 插入 LODGroup 层级的选项
+ */
+export interface IInsertLODOptions {
+    /** cc.LODGroup 组件路径 */
+    path: string;
+    /** 插入位置，范围为 0 到当前 lodCount */
+    index: number;
+    /** 屏幕占比，范围为 (0, 1]；省略时由引擎自动计算 */
+    screenUsagePercentage?: number;
+    /** 是否记录 undo，默认 true */
+    record?: boolean;
+}
+
+/**
+ * 删除 LODGroup 层级的选项
+ */
+export interface IEraseLODOptions {
+    /** cc.LODGroup 组件路径 */
+    path: string;
+    /** 删除位置，范围为 0 到 lodCount - 1 */
+    index: number;
+    /** 是否记录 undo，默认 true */
+    record?: boolean;
+}
+
+/**
+ * 查询 LODGroup 当前编辑器相机屏占比的选项
+ */
+export interface IQueryLODGroupRelativeHeightOptions {
+    /** cc.LODGroup 组件路径 */
+    path: string;
+}
+
+/**
+ * LODGroup 层级状态
+ */
+export interface ILODGroupLevelsResult {
+    lodCount: number;
+    screenUsagePercentages: number[];
+}
+
+/**
  * 编辑器设置组件属性的选项
  */
 export interface ISetPropertyOptions {
@@ -198,6 +240,27 @@ export interface IComponentService extends IServiceEvents {
      * @returns 重算后的局部边界中心和对象尺寸
      */
     recalculateLODGroupBounds(options: IRecalculateLODGroupBoundsOptions): Promise<ILODGroupBoundsResult>;
+
+    /**
+     * 在 cc.LODGroup 中插入一级 LOD
+     * @param options - 插入选项
+     * @returns 插入后的 LOD 层级状态
+     */
+    insertLOD(options: IInsertLODOptions): Promise<ILODGroupLevelsResult>;
+
+    /**
+     * 删除 cc.LODGroup 中的一级 LOD
+     * @param options - 删除选项
+     * @returns 删除后的 LOD 层级状态
+     */
+    eraseLOD(options: IEraseLODOptions): Promise<ILODGroupLevelsResult>;
+
+    /**
+     * 查询 cc.LODGroup 在当前编辑器相机下的屏幕相对高度
+     * @param options - 查询选项
+     * @returns 原始相对高度；不钳制到 [0, 1]
+     */
+    queryLODGroupRelativeHeight(options: IQueryLODGroupRelativeHeightOptions): Promise<number>;
 
     // ---- 编辑器相关接口 ----
 

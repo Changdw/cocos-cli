@@ -212,6 +212,14 @@ const Component = {
         localBoundaryCenter: { x: number; y: number; z: number };
         objectSize: number;
     }>('Component', 'recalculateLODGroupBounds', [params]),
+    insertLOD: (params: { path: string; index: number; screenUsagePercentage?: number; record?: boolean }) => request<{
+        lodCount: number;
+        screenUsagePercentages: number[];
+    }>('Component', 'insertLOD', [params]),
+    eraseLOD: (params: { path: string; index: number; record?: boolean }) => request<{
+        lodCount: number;
+        screenUsagePercentages: number[];
+    }>('Component', 'eraseLOD', [params]),
 };
 
 const Prefab = {
@@ -250,6 +258,12 @@ async function queryComp(path: string) {
         // scene-process 找不到组件时会抛错，而不是返回 null；这里统一当成“不存在”。
         return null;
     }
+}
+
+function getLODLevels(component: any): unknown[] {
+    const lodProperty = component?.properties?.LODs ?? component?.properties?._LODs;
+    expect(lodProperty).toBeDefined();
+    return lodProperty.value;
 }
 
 async function safeDelete(path: string) {
@@ -1093,6 +1107,60 @@ describe('Undo/Redo 集成测试', () => {
             });
 
             expect(bounds.objectSize).toBe(0);
+            expect(await Undo.canUndo()).toBe(false);
+        });
+    });
+
+    // ========================================================================
+    // LODGroup 层级增删（快照）
+    // ========================================================================
+    describe('LODGroup level mutations (snapshot)', () => {
+        const path = 'UndoLODGroupLevelsNode';
+        const compPath = `${path}/cc.LODGroup`;
+
+        beforeEach(async () => {
+            await Node.createByType({ path, nodeType: NodeType.EMPTY });
+            await Component.add({ nodePath: path, component: 'cc.LODGroup' });
+            await Undo.clearHistory();
+        });
+
+        afterEach(async () => {
+            await safeDelete(path);
+            await Undo.clearHistory();
+        });
+
+        it('insert pushes one snapshot and supports undo/redo', async () => {
+            const inserted = await Component.insertLOD({ path: compPath, index: 0 });
+            expect(inserted.lodCount).toBe(4);
+            expect(inserted.screenUsagePercentages).toHaveLength(4);
+            expect(getLODLevels(await queryComp(compPath))).toHaveLength(4);
+            expect(await Undo.canUndo()).toBe(true);
+
+            expectUndoSuccess(await Undo.undo());
+            expect(getLODLevels(await queryComp(compPath))).toHaveLength(3);
+
+            expectUndoSuccess(await Undo.redo());
+            expect(getLODLevels(await queryComp(compPath))).toHaveLength(4);
+        });
+
+        it('erase pushes one snapshot and supports undo', async () => {
+            await Component.insertLOD({ path: compPath, index: 0, record: false });
+            await Component.insertLOD({ path: compPath, index: 1, record: false });
+            await Undo.clearHistory();
+
+            const erased = await Component.eraseLOD({ path: compPath, index: 1 });
+            expect(erased.lodCount).toBe(4);
+            expect(getLODLevels(await queryComp(compPath))).toHaveLength(4);
+            expect(await Undo.canUndo()).toBe(true);
+
+            expectUndoSuccess(await Undo.undo());
+            expect(getLODLevels(await queryComp(compPath))).toHaveLength(5);
+        });
+
+        it('record=false does not push an undo snapshot', async () => {
+            await Component.insertLOD({ path: compPath, index: 0, record: false });
+
+            expect(getLODLevels(await queryComp(compPath))).toHaveLength(4);
             expect(await Undo.canUndo()).toBe(false);
         });
     });

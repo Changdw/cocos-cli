@@ -1,4 +1,4 @@
-import { Component, Constructor, animation, Animation, Node, RigidBody, Collider, ERigidBodyType, EColliderType, MeshCollider, UITransform, director, Canvas, Scene, LODGroup } from 'cc';
+import { Component, Constructor, animation, Animation, Node, RigidBody, Collider, ERigidBodyType, EColliderType, MeshCollider, UITransform, director, Canvas, Scene } from 'cc';
 import { Rpc } from '../rpc';
 import { register, Service, BaseService } from './core';
 import {
@@ -15,6 +15,10 @@ import {
     IUndoRedoResult,
     IRecalculateLODGroupBoundsOptions,
     ILODGroupBoundsResult,
+    IInsertLODOptions,
+    IEraseLODOptions,
+    IQueryLODGroupRelativeHeightOptions,
+    ILODGroupLevelsResult,
 } from '../../common';
 import dumpUtil from './dump';
 import compMgr from './component/index';
@@ -31,6 +35,14 @@ import { createUndoId, restoreComponentSnapshotDump, snapshotMapsEqual } from '.
 import { isUndoApplying } from './undo/applying-state';
 import { broadcastAnimationPropertyCommitted } from './animation/property-commit-event';
 import { isRootNodePath } from '../../../engine/editor-extends/manager/path-utils';
+import {
+    requireLODGroup,
+    queryLODGroupRelativeHeight,
+    serializeLODGroupBounds,
+    serializeLODGroupLevels,
+    validateLODErase,
+    validateLODInsert,
+} from './component/lod-group';
 
 const NodeMgr = EditorExtends.Node;
 
@@ -903,13 +915,7 @@ export class ComponentService extends BaseService<IComponentEvents> implements I
     public async recalculateLODGroupBounds(
         options: IRecalculateLODGroupBoundsOptions,
     ): Promise<ILODGroupBoundsResult> {
-        const comp = await this.findComponent(options.path);
-        if (!comp) {
-            throw new Error(`LODGroup component not found: ${options.path}`);
-        }
-        if (!(comp instanceof LODGroup)) {
-            throw new Error(`Parameter error: component is not cc.LODGroup: ${options.path}`);
-        }
+        const comp = requireLODGroup(await this.findComponent(options.path), options.path);
 
         const componentIndex = comp.node.components.indexOf(comp);
         await this._recordComponentSnapshot(comp, {
@@ -922,18 +928,64 @@ export class ComponentService extends BaseService<IComponentEvents> implements I
             return true;
         });
 
-        // 当前 cc 模块声明遗漏了引擎中已存在的 public localBoundaryCenter getter。
-        const center = (comp as LODGroup & {
-            readonly localBoundaryCenter: Readonly<{ x: number; y: number; z: number }>;
-        }).localBoundaryCenter;
-        return {
-            localBoundaryCenter: {
-                x: center.x,
-                y: center.y,
-                z: center.z,
-            },
-            objectSize: comp.objectSize,
-        };
+        return serializeLODGroupBounds(comp);
+    }
+
+    public async insertLOD(options: IInsertLODOptions): Promise<ILODGroupLevelsResult> {
+        const comp = requireLODGroup(await this.findComponent(options.path), options.path);
+        validateLODInsert(comp, options.index, options.screenUsagePercentage);
+
+        const componentIndex = comp.node.components.indexOf(comp);
+        await this._recordComponentSnapshot(comp, {
+            label: 'Insert LOD',
+            type: 'component:insert-lod',
+            path: componentIndex >= 0 ? `__comps__.${componentIndex}` : undefined,
+            record: options.record,
+        }, async () => {
+            comp.insertLOD(options.index, options.screenUsagePercentage);
+            return true;
+        });
+
+        return serializeLODGroupLevels(comp);
+    }
+
+    public async eraseLOD(options: IEraseLODOptions): Promise<ILODGroupLevelsResult> {
+        const comp = requireLODGroup(await this.findComponent(options.path), options.path);
+        validateLODErase(comp, options.index);
+
+        const componentIndex = comp.node.components.indexOf(comp);
+        await this._recordComponentSnapshot(comp, {
+            label: 'Erase LOD',
+            type: 'component:erase-lod',
+            path: componentIndex >= 0 ? `__comps__.${componentIndex}` : undefined,
+            record: options.record,
+        }, async () => {
+            comp.eraseLOD(options.index);
+            return true;
+        });
+
+        return serializeLODGroupLevels(comp);
+    }
+
+    public async queryLODGroupRelativeHeight(
+        options: IQueryLODGroupRelativeHeightOptions,
+    ): Promise<number> {
+        const comp = requireLODGroup(await this.findComponent(options.path), options.path);
+        // ICameraService 仅声明公开能力；场景进程实现额外提供编辑器 Camera 组件。
+        const editorCamera = (Service.Camera as any).getCamera?.();
+        const renderCamera = editorCamera?.camera;
+        if (!renderCamera) {
+            throw new Error('Editor camera is not ready');
+        }
+
+        try {
+            return queryLODGroupRelativeHeight(comp, renderCamera);
+        } catch (error) {
+            if (error instanceof Error) {
+                throw new Error(`${error.message}: ${options.path}`);
+            }
+            throw error;
+        }
     }
 
     public async executeMethod(options: IExecuteComponentMethodOptions): Promise<any> {

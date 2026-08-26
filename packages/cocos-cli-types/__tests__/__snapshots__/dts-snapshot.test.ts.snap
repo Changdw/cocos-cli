@@ -6235,6 +6235,9 @@ export declare interface IComponentService extends IServiceEvents {
     query(params: IQueryComponentOptions | string): Promise<IComponent | null>;
     queryAll(): Promise<string[]>;
     recalculateLODGroupBounds(options: IRecalculateLODGroupBoundsOptions): Promise<ILODGroupBoundsResult>;
+    insertLOD(options: IInsertLODOptions): Promise<ILODGroupLevelsResult>;
+    eraseLOD(options: IEraseLODOptions): Promise<ILODGroupLevelsResult>;
+    queryLODGroupRelativeHeight(options: IQueryLODGroupRelativeHeightOptions): Promise<number>;
     reset(params: IQueryComponentOptions): Promise<boolean>;
     queryClasses(options?: IQueryClassesOptions): Promise<{
         name: string;
@@ -6318,6 +6321,11 @@ export declare interface IEngineService extends IServiceEvents {
     enterAnimationMode(): void;
     exitAnimationMode(): void;
 }
+export declare interface IEraseLODOptions {
+    path: string;
+    index: number;
+    record?: boolean;
+}
 export declare interface IExecuteComponentMethodOptions {
     path: string;
     name: string;
@@ -6378,12 +6386,22 @@ export declare interface IGizmoService {
     hideSelectionRegion(): void;
     execGizmoMethods(name: string, funcName: string, params?: any[]): any;
 }
+export declare interface IInsertLODOptions {
+    path: string;
+    index: number;
+    screenUsagePercentage?: number;
+    record?: boolean;
+}
 export declare interface IIsPrefabInstanceParams {
     nodePath: string;
 }
 export declare interface ILODGroupBoundsResult {
     localBoundaryCenter: IVec3;
     objectSize: number;
+}
+export declare interface ILODGroupLevelsResult {
+    lodCount: number;
+    screenUsagePercentages: number[];
 }
 export declare interface ImageAssetUserData {
     type: ImageImportType;
@@ -6597,6 +6615,9 @@ export declare interface IQueryClassesOptions {
     excludeSelf?: boolean;
 }
 export declare interface IQueryComponentOptions {
+    path: string;
+}
+export declare interface IQueryLODGroupRelativeHeightOptions {
     path: string;
 }
 export declare interface IQueryNodeParams extends INodeDumpOptions {

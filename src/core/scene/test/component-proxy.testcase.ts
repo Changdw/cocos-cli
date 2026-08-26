@@ -1290,4 +1290,109 @@ describe('Component Proxy 测试', () => {
             }
         });
     });
+
+    describe('20. LODGroup level operations - LOD 层级操作', () => {
+        it('inserts and erases LOD levels with serialized state', async () => {
+            const component = await ComponentProxy.add({
+                nodePath,
+                component: 'cc.LODGroup',
+            });
+            try {
+                const first = await ComponentProxy.insertLOD({
+                    path: component.path,
+                    index: 0,
+                    record: false,
+                });
+                expect(first.lodCount).toBe(4);
+                expect(first.screenUsagePercentages).toHaveLength(4);
+                expect(first.screenUsagePercentages[0]).toBe(0.25);
+
+                const second = await ComponentProxy.insertLOD({
+                    path: component.path,
+                    index: 1,
+                    record: false,
+                });
+                expect(second.lodCount).toBe(5);
+                expect(second.screenUsagePercentages).toHaveLength(5);
+
+                const erased = await ComponentProxy.eraseLOD({
+                    path: component.path,
+                    index: 1,
+                    record: false,
+                });
+                expect(erased).toEqual(first);
+            } finally {
+                await ComponentProxy.remove({ path: component.path });
+            }
+        });
+
+        it('rejects invalid indices, zero screen usage, and erasing the final level', async () => {
+            const component = await ComponentProxy.add({
+                nodePath,
+                component: 'cc.LODGroup',
+            });
+            try {
+                await expect(ComponentProxy.insertLOD({
+                    path: component.path,
+                    index: 4,
+                    record: false,
+                })).rejects.toThrow('LOD insert index');
+                await expect(ComponentProxy.insertLOD({
+                    path: component.path,
+                    index: 0,
+                    screenUsagePercentage: 0,
+                    record: false,
+                })).rejects.toThrow('screenUsagePercentage must be in (0, 1]');
+
+                await ComponentProxy.eraseLOD({ path: component.path, index: 2, record: false });
+                await ComponentProxy.eraseLOD({ path: component.path, index: 1, record: false });
+                await expect(ComponentProxy.eraseLOD({
+                    path: component.path,
+                    index: 0,
+                    record: false,
+                })).rejects.toThrow('at least 1 LOD level');
+
+                for (let index = 1; index < 8; index++) {
+                    await ComponentProxy.insertLOD({
+                        path: component.path,
+                        index,
+                        record: false,
+                    });
+                }
+                await expect(ComponentProxy.insertLOD({
+                    path: component.path,
+                    index: 8,
+                    record: false,
+                })).rejects.toThrow('more than 8 LOD levels');
+            } finally {
+                await ComponentProxy.remove({ path: component.path });
+            }
+        });
+
+        it('queries raw relative height from the current editor camera', async () => {
+            const component = await ComponentProxy.add({
+                nodePath,
+                component: 'cc.LODGroup',
+            });
+            try {
+                const zeroSizeResult = await ComponentProxy.queryLODGroupRelativeHeight({
+                    path: component.path,
+                });
+                expect(zeroSizeResult).toBe(0);
+
+                await ComponentProxy.setProperty({
+                    componentPath: component.path,
+                    properties: { objectSize: 2 },
+                    record: false,
+                });
+                const result = await ComponentProxy.queryLODGroupRelativeHeight({
+                    path: component.path,
+                });
+                expect(Number.isFinite(result)).toBe(true);
+                expect(result).toBeGreaterThan(0);
+            } finally {
+                await ComponentProxy.remove({ path: component.path });
+            }
+        });
+    });
 });

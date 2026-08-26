@@ -140,6 +140,7 @@ jest.mock('../scene-process/service/gizmo/components/video-player', () => ({}));
 jest.mock('../scene-process/service/gizmo/components/web-view', () => ({}));
 jest.mock('../scene-process/service/gizmo/components/light-probe-group', () => ({}));
 jest.mock('../scene-process/service/gizmo/components/reflection-probe', () => ({}));
+jest.mock('../scene-process/service/gizmo/components/lod-group', () => ({}));
 
 describe('Gizmo editor lifecycle', () => {
     afterEach(() => {
