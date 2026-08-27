@@ -3,6 +3,12 @@ import {
     IRemoveComponentOptions,
     IQueryComponentOptions,
     IPublicComponentService,
+    IRecalculateLODGroupBoundsOptions,
+    ILODGroupBoundsResult,
+    IInsertLODOptions,
+    IEraseLODOptions,
+    IQueryLODGroupRelativeHeightOptions,
+    ILODGroupLevelsResult,
 } from '../../common';
 import { IComponentInfo } from '../../common/cli/component';
 import { ISetPropertyOptionsInfo } from '../../common/cli/component';
@@ -107,5 +113,21 @@ export const ComponentProxy: IComponentProxy = {
 
     queryAll(): Promise<string[]> {
         return Rpc.getInstance().request('Component', 'queryAll');
+    },
+
+    recalculateLODGroupBounds(options: IRecalculateLODGroupBoundsOptions): Promise<ILODGroupBoundsResult> {
+        return Rpc.getInstance().request('Component', 'recalculateLODGroupBounds', [options]);
+    },
+
+    insertLOD(options: IInsertLODOptions): Promise<ILODGroupLevelsResult> {
+        return Rpc.getInstance().request('Component', 'insertLOD', [options]);
+    },
+
+    eraseLOD(options: IEraseLODOptions): Promise<ILODGroupLevelsResult> {
+        return Rpc.getInstance().request('Component', 'eraseLOD', [options]);
+    },
+
+    queryLODGroupRelativeHeight(options: IQueryLODGroupRelativeHeightOptions): Promise<number> {
+        return Rpc.getInstance().request('Component', 'queryLODGroupRelativeHeight', [options]);
     },
 };

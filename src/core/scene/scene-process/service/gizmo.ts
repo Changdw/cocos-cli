@@ -41,6 +41,7 @@ import './gizmo/components/video-player';
 import './gizmo/components/web-view';
 import './gizmo/components/light-probe-group';
 import './gizmo/components/reflection-probe';
+import './gizmo/components/lod-group';
 
 type TGizmoType = 'icon' | 'persistent' | 'component';
 

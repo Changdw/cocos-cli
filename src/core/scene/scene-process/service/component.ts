@@ -12,7 +12,13 @@ import {
     IComponent,
     IQueryClassesOptions,
     ISetPropertyOptions,
-    IUndoRedoResult
+    IUndoRedoResult,
+    IRecalculateLODGroupBoundsOptions,
+    ILODGroupBoundsResult,
+    IInsertLODOptions,
+    IEraseLODOptions,
+    IQueryLODGroupRelativeHeightOptions,
+    ILODGroupLevelsResult,
 } from '../../common';
 import dumpUtil from './dump';
 import compMgr from './component/index';
@@ -29,6 +35,14 @@ import { createUndoId, restoreComponentSnapshotDump, snapshotMapsEqual } from '.
 import { isUndoApplying } from './undo/applying-state';
 import { broadcastAnimationPropertyCommitted } from './animation/property-commit-event';
 import { isRootNodePath } from '../../../engine/editor-extends/manager/path-utils';
+import {
+    requireLODGroup,
+    queryLODGroupRelativeHeight,
+    serializeLODGroupBounds,
+    serializeLODGroupLevels,
+    validateLODErase,
+    validateLODInsert,
+} from './component/lod-group';
 
 const NodeMgr = EditorExtends.Node;
 
@@ -468,10 +482,11 @@ export class ComponentService extends BaseService<IComponentEvents> implements I
 
     private async _recordComponentSnapshot(
         component: Component,
-        options: { label: string; type: string },
+        options: { label: string; type: string; path?: string; record?: boolean },
         mutate: () => Promise<boolean>,
     ): Promise<boolean> {
         if (
+            options.record === false ||
             Service.Undo?.isApplying?.() ||
             Service.Undo?.hasActiveRecording?.(component.node.uuid) ||
             Service.Undo?.hasActiveRecording?.(component.uuid)
@@ -479,7 +494,8 @@ export class ComponentService extends BaseService<IComponentEvents> implements I
             return mutate();
         }
 
-        const before = this._captureComponentSnapshot(component, options.type);
+        const snapshotPath = options.path ?? options.type;
+        const before = this._captureComponentSnapshot(component, snapshotPath);
         const result = await mutate();
         if (!result) {
             return result;
@@ -495,7 +511,7 @@ export class ComponentService extends BaseService<IComponentEvents> implements I
             return result;
         }
 
-        const after = this._captureComponentSnapshot(latestComponent, options.type);
+        const after = this._captureComponentSnapshot(latestComponent, snapshotPath);
         if (this._snapshotMapsEqual(before, after)) {
             return result;
         }
@@ -893,6 +909,82 @@ export class ComponentService extends BaseService<IComponentEvents> implements I
         } catch (e) {
             console.warn(e);
             return false;
+        }
+    }
+
+    public async recalculateLODGroupBounds(
+        options: IRecalculateLODGroupBoundsOptions,
+    ): Promise<ILODGroupBoundsResult> {
+        const comp = requireLODGroup(await this.findComponent(options.path), options.path);
+
+        const componentIndex = comp.node.components.indexOf(comp);
+        await this._recordComponentSnapshot(comp, {
+            label: 'Recalculate LODGroup Bounds',
+            type: 'component:recalculate-lod-group-bounds',
+            path: componentIndex >= 0 ? `__comps__.${componentIndex}` : undefined,
+            record: options.record,
+        }, async () => {
+            comp.recalculateBounds();
+            return true;
+        });
+
+        return serializeLODGroupBounds(comp);
+    }
+
+    public async insertLOD(options: IInsertLODOptions): Promise<ILODGroupLevelsResult> {
+        const comp = requireLODGroup(await this.findComponent(options.path), options.path);
+        validateLODInsert(comp, options.index, options.screenUsagePercentage);
+
+        const componentIndex = comp.node.components.indexOf(comp);
+        await this._recordComponentSnapshot(comp, {
+            label: 'Insert LOD',
+            type: 'component:insert-lod',
+            path: componentIndex >= 0 ? `__comps__.${componentIndex}` : undefined,
+            record: options.record,
+        }, async () => {
+            comp.insertLOD(options.index, options.screenUsagePercentage);
+            return true;
+        });
+
+        return serializeLODGroupLevels(comp);
+    }
+
+    public async eraseLOD(options: IEraseLODOptions): Promise<ILODGroupLevelsResult> {
+        const comp = requireLODGroup(await this.findComponent(options.path), options.path);
+        validateLODErase(comp, options.index);
+
+        const componentIndex = comp.node.components.indexOf(comp);
+        await this._recordComponentSnapshot(comp, {
+            label: 'Erase LOD',
+            type: 'component:erase-lod',
+            path: componentIndex >= 0 ? `__comps__.${componentIndex}` : undefined,
+            record: options.record,
+        }, async () => {
+            comp.eraseLOD(options.index);
+            return true;
+        });
+
+        return serializeLODGroupLevels(comp);
+    }
+
+    public async queryLODGroupRelativeHeight(
+        options: IQueryLODGroupRelativeHeightOptions,
+    ): Promise<number> {
+        const comp = requireLODGroup(await this.findComponent(options.path), options.path);
+        // ICameraService 仅声明公开能力；场景进程实现额外提供编辑器 Camera 组件。
+        const editorCamera = (Service.Camera as any).getCamera?.();
+        const renderCamera = editorCamera?.camera;
+        if (!renderCamera) {
+            throw new Error('Editor camera is not ready');
+        }
+
+        try {
+            return queryLODGroupRelativeHeight(comp, renderCamera);
+        } catch (error) {
+            if (error instanceof Error) {
+                throw new Error(`${error.message}: ${options.path}`);
+            }
+            throw error;
         }
     }
 
