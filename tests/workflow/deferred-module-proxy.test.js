@@ -1,4 +1,5 @@
 const {
+    DEFERRED_MODULE_CACHE_KEY,
     createDeferredModule,
     createDeferredModuleSource,
     getDeferredModule,
@@ -38,10 +39,44 @@ describe('scene bundle deferred module proxy', () => {
         expect(system.get).toHaveBeenCalledWith('named-module');
     });
 
+    it('reads a preloaded module when System.resolve is asynchronous', () => {
+        const moduleId = 'cc/editor/lod-group-utils';
+        const loadedModule = {
+            LODGroupEditorUtility: {
+                getVisibleLOD: jest.fn(),
+            },
+        };
+        const system = {
+            resolve: jest.fn(() => Promise.resolve('q-bundled:///fs/editor/exports/lod-group-utils.js')),
+            get: jest.fn(),
+        };
+        const moduleCache = {
+            [moduleId]: loadedModule,
+        };
+        const proxy = createDeferredModule(moduleId, () => system, getDeferredModule, () => moduleCache);
+
+        expect(proxy.LODGroupEditorUtility).toBe(loadedModule.LODGroupEditorUtility);
+        expect('LODGroupEditorUtility' in proxy).toBe(true);
+        expect(system.resolve).not.toHaveBeenCalled();
+        expect(system.get).not.toHaveBeenCalled();
+    });
+
+    it('does not pass an asynchronous resolver result to System.get', () => {
+        const system = {
+            resolve: jest.fn(() => Promise.resolve('resolved-module')),
+            get: jest.fn((id) => id === 'named-module' ? { value: 42 } : undefined),
+        };
+
+        expect(getDeferredModule(system, 'named-module')).toEqual({ value: 42 });
+        expect(system.get).toHaveBeenCalledTimes(1);
+        expect(system.get).toHaveBeenCalledWith('named-module');
+    });
+
     it('generates the same resolver used by the browser bundle', () => {
         const source = createDeferredModuleSource();
 
-        expect(source).toContain('resolvedId = system.resolve(id)');
-        expect(source).toContain('_createDeferredModule(id, _getSystem, _getDeferredModule)');
+        expect(source).toContain('const candidate = system.resolve(id)');
+        expect(source).toContain(`globalThis[${JSON.stringify(DEFERRED_MODULE_CACHE_KEY)}]`);
+        expect(source).toContain('_createDeferredModule(id, _getSystem, _getDeferredModule, _getModuleCache)');
     });
 });

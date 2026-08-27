@@ -23,6 +23,8 @@ export const Service = DecoratorService;
 
 declare const cc: any;
 
+const DEFERRED_MODULE_CACHE_KEY = '__cocosCliDeferredEngineModules';
+
 export async function startup(options: {
     serverURL: string;
 }) {
@@ -58,6 +60,8 @@ export async function startup(options: {
         'cc/editor/exotic-animation',
         'cc/editor/color-utils',
     ];
+    const deferredModuleCache: Record<string, unknown> = Object.create(null);
+    (globalThis as any)[DEFERRED_MODULE_CACHE_KEY] = deferredModuleCache;
 
     // IMPORTANT: We must NOT use import() here because Rollup's
     // resolveId hook aliases cc/editor/* to a cc re-export stub,
@@ -65,7 +69,7 @@ export async function startup(options: {
     // We use the __moduleImport placeholder which is replaced with SystemJS's module.import().
     for (const mod of requiredModules) {
         try {
-            await System.import(mod);
+            deferredModuleCache[mod] = await System.import(mod);
         } catch (e) {
             console.error('Failed to load engine module:', mod, 'e:', e);
         }

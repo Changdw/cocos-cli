@@ -60,8 +60,9 @@ describe('scene-process engine bootstrap', () => {
     beforeEach(() => {
         jest.clearAllMocks();
 
+        delete (globalThis as any).__cocosCliDeferredEngineModules;
         (globalThis as any).System = {
-            import: jest.fn(async () => ({})),
+            import: jest.fn(async (id: string) => ({ id })),
         };
         (globalThis as any).fetch = jest
             .fn()
@@ -171,6 +172,14 @@ describe('scene-process engine bootstrap', () => {
                 }),
             }),
         }));
+    });
+
+    it('caches imported engine modules for synchronous deferred proxies', async () => {
+        await startup({ serverURL: 'http://localhost:7456' });
+
+        expect((globalThis as any).__cocosCliDeferredEngineModules['cc/editor/lod-group-utils']).toEqual({
+            id: 'cc/editor/lod-group-utils',
+        });
     });
 
     it('keeps engine asset settings when querying scene editor settings', async () => {
