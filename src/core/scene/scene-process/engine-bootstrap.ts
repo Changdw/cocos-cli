@@ -2,6 +2,7 @@ import * as EditorExtends from '../../engine/editor-extends';
 import { Rpc } from './rpc';
 import { serviceManager } from './service/service-manager';
 import { Service as DecoratorService } from './service/core/decorator';
+import { ReferenceImageService } from './service/reference-image';
 import { messageManager } from './service/message';
 import { initLocalI18n } from './i18n';
 import { CUSTOM_PIPELINE_MODULE } from '../../engine/graphics-config';
@@ -20,6 +21,10 @@ if (EditorExtends.UuidUtils) {
 
 export { serviceManager, EditorExtends };
 export const Service = DecoratorService;
+// This value is intentionally exported through the preview bridge. Its module
+// registers the service with @register(), and this live export prevents the
+// web bundle from pruning that registration side effect.
+export { ReferenceImageService };
 
 declare const cc: any;
 
@@ -241,8 +246,12 @@ async function setupBrowserInvokeChannel(serverURL: string) {
                 invoke(msg.module, msg.method, msg.args);
             }
         });
-        // 连接建立时同步一次设计分辨率（首次进入 / 断线重连时补齐错过的变更）
-        socket.on('connect', () => invoke('Engine', 'syncDesignResolution', []));
+        // Reconcile feature-local runtime state after first connection or reconnect.
+        // Reference images need this because their Sprite objects are not persisted with configuration.
+        socket.on('connect', () => {
+            invoke('Engine', 'syncDesignResolution', []);
+            invoke('ReferenceImage', 'syncFromAuthority', []);
+        });
     } catch (e) {
         console.warn('[engine-bootstrap] setup browser-invoke channel failed:', e);
     }

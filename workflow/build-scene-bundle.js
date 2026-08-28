@@ -24,8 +24,9 @@ async function buildSceneBundle() {
             virtual({
                 entry: `
                     import * as Bridge from '${bridgeFile}';
-                    const { startup, serviceManager, EditorExtends, Service } = Bridge;
-                    export { startup, serviceManager, EditorExtends, Service };
+                    // Keep the decorated ReferenceImage service reachable so Rollup retains its registration side effect.
+                    const { startup, serviceManager, EditorExtends, Service, ReferenceImageService } = Bridge;
+                    export { startup, serviceManager, EditorExtends, Service, ReferenceImageService };
                 `
             }),
             {
