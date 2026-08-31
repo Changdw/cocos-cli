@@ -1,0 +1,801 @@
+'use strict';
+
+jest.mock('gl', () => {
+    const noop = () => undefined;
+    return () => ({
+        VERTEX_SHADER: 35633,
+        FRAGMENT_SHADER: 35632,
+        COMPILE_STATUS: 35713,
+        LINK_STATUS: 35714,
+        getSupportedExtensions: () => [],
+        getExtension: noop,
+        createShader: (type: number) => ({ type }),
+        shaderSource: noop,
+        compileShader: noop,
+        getShaderParameter: () => true,
+        getShaderInfoLog: () => '',
+        deleteShader: noop,
+        createProgram: () => ({}),
+        attachShader: noop,
+        linkProgram: noop,
+        getProgramParameter: () => true,
+        getProgramInfoLog: () => '',
+        deleteProgram: noop,
+    });
+});
+
+import { join } from 'path';
+import { readFileSync, remove } from 'fs-extra';
+import { globalSetup } from '../../test/global-setup';
+import { TestGlobalEnv } from '../../../tests/global-env';
+import { assetManager } from '..';
+import type { IProperty } from '../../scene/@types/public';
+
+describe('animation graph asset service', () => {
+    const name = `animation-graph-service-${Date.now()}`;
+
+    function getDefaultGraphContent(): string {
+        return readFileSync(join(
+            TestGlobalEnv.engineRoot,
+            'editor/assets/default_file_content/animation-graph/default.animgraph',
+        ), 'utf8');
+    }
+
+    beforeAll(async () => {
+        await globalSetup();
+    });
+
+    afterAll(async () => {
+        try {
+            await assetManager.removeAsset(TestGlobalEnv.testRootUrl);
+        } catch {
+            // A failed test may already have removed the shared fixture directory.
+        }
+        await remove(TestGlobalEnv.testRoot);
+        await remove(TestGlobalEnv.testRoot + '.meta');
+    });
+
+    it('queries, edits, mutates, saves and reloads one authoritative graph document', async () => {
+        const content = getDefaultGraphContent();
+        const asset = await assetManager.createAsset({
+            target: join(TestGlobalEnv.testRoot, `${name}.animgraph`),
+            content,
+            overwrite: true,
+        });
+
+        const initial = await assetManager.queryAnimationGraph(asset.uuid);
+        expect(initial).toMatchObject({
+            uuid: asset.uuid,
+            revision: 0,
+            persistedRevision: 0,
+            dirty: false,
+            externallyModified: false,
+        });
+        expect(initial.graph.layers).toHaveLength(1);
+        expect(initial.graph.layers[0].stateMachine.states.map((state) => state.type)).toEqual([
+            'entry',
+            'exit',
+            'any',
+        ]);
+
+        const layerTarget = { kind: 'layer' as const, layerIndex: 0 };
+        const layerInspector = await assetManager.queryAnimationGraphInspector(asset.uuid, layerTarget);
+        const layerDump = layerInspector.dump.value as Record<string, IProperty>;
+        expect(layerDump.weight).toMatchObject({ path: 'weight', value: 1, type: 'Number' });
+
+        const firstEdit = await assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+            target: layerTarget,
+            path: 'weight',
+            patch: { value: 0.5 },
+            expected: layerInspector,
+            sourceId: 'inspector',
+        });
+        expect(firstEdit).toMatchObject({ revision: 1, persistedRevision: 0, dirty: true });
+        expect((firstEdit.dump.value as Record<string, IProperty>).weight.value).toBe(0.5);
+
+        await expect(assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+            target: layerTarget,
+            path: 'weight',
+            patch: { value: 0.75 },
+            expected: layerInspector,
+        })).rejects.toMatchObject({ code: 'VERSION_CONFLICT' });
+
+        const withVariable = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'add-variable', name: 'speed', variableType: 0, initialValue: 1.5 },
+            expected: firstEdit,
+        });
+        expect(withVariable.graph.variables).toContainEqual(expect.objectContaining({
+            name: 'speed',
+            type: 0,
+            value: expect.objectContaining({ type: 'Number', value: 1.5, path: 'value' }),
+        }));
+        const withVariableValue = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'set-variable-value', name: 'speed', patch: 2.25 },
+            expected: withVariable,
+        });
+        expect(withVariableValue.graph.variables.find((variable) => variable.name === 'speed')?.value.value).toBe(2.25);
+
+        const withMotionState = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-state',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateType: 'motion',
+                name: 'Idle',
+                editorData: { centerX: 24, centerY: 48 },
+            },
+            expected: withVariableValue,
+            sourceId: 'canvas',
+        });
+        const motionState = withMotionState.graph.layers[0].stateMachine.states.find((state) => state.name === 'Idle');
+        expect(motionState).toMatchObject({ type: 'motion', editorData: { centerX: 24, centerY: 48 } });
+
+        const stateTarget = {
+            kind: 'state' as const,
+            layerIndex: 0,
+            stateMachinePath: [],
+            stateIndex: motionState!.index,
+        };
+        const stateInspector = await assetManager.queryAnimationGraphInspector(asset.uuid, stateTarget);
+        expect((stateInspector.dump.value as Record<string, IProperty>).speed.value).toBe(1);
+
+        const withComponent = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-state-component',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateIndex: motionState!.index,
+                componentType: 'cc.animation.StateMachineComponent',
+            },
+            expected: stateInspector,
+        });
+        expect(withComponent.graph.layers[0].stateMachine.states[motionState!.index].components).toHaveLength(1);
+        const componentInspector = await assetManager.queryAnimationGraphInspector(asset.uuid, {
+            kind: 'state-component',
+            layerIndex: 0,
+            stateMachinePath: [],
+            stateIndex: motionState!.index,
+            componentIndex: 0,
+        });
+        expect(componentInspector.dump).toMatchObject({ path: '', visible: true, readonly: false });
+
+        const withMotion = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'set-motion',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateIndex: motionState!.index,
+                motionType: 'blend-1d',
+            },
+            expected: componentInspector,
+        });
+        expect(withMotion.graph.layers[0].stateMachine.states[motionState!.index].motion).toMatchObject({
+            type: 'blend-1d',
+            level: [0],
+        });
+
+        const withChild = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-motion-child',
+                target: {
+                    kind: 'motion',
+                    layerIndex: 0,
+                    stateMachinePath: [],
+                    stateIndex: motionState!.index,
+                    level: [0],
+                },
+                motionType: 'clip',
+            },
+            expected: withMotion,
+        });
+        expect(withChild.graph.layers[0].stateMachine.states[motionState!.index].motion?.children).toHaveLength(1);
+
+        const withEmptyState = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-state',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateType: 'empty',
+                name: 'Done',
+            },
+            expected: withChild,
+        });
+        const emptyState = withEmptyState.graph.layers[0].stateMachine.states.find((state) => state.name === 'Done');
+        const withTransition = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-transition',
+                layerIndex: 0,
+                stateMachinePath: [],
+                fromStateIndex: motionState!.index,
+                toStateIndex: emptyState!.index,
+            },
+            expected: withEmptyState,
+        });
+        const transition = withTransition.graph.layers[0].stateMachine.transitions.find((item) => (
+            item.fromStateIndex === motionState!.index && item.toStateIndex === emptyState!.index
+        ));
+        expect(transition?.conditions).toEqual([]);
+
+        const transitionTarget = {
+            kind: 'transition' as const,
+            layerIndex: 0,
+            stateMachinePath: [],
+            transitionIndex: transition!.index,
+        };
+        const withCondition = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-transition-condition',
+                target: transitionTarget,
+                conditionType: 'binary',
+            },
+            expected: withTransition,
+        });
+        expect(withCondition.graph.layers[0].stateMachine.transitions[transition!.index].conditions[0]).toMatchObject({
+            type: 'BinaryCondition',
+            operator: 0,
+            rhs: 0,
+        });
+
+        const withEditedCondition = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'set-transition-condition-property',
+                target: transitionTarget,
+                conditionIndex: 0,
+                path: 'lhsBinding.variableName',
+                value: 'speed',
+            },
+            expected: withCondition,
+        });
+        expect(withEditedCondition.graph.layers[0].stateMachine.transitions[transition!.index].conditions[0]).toMatchObject({
+            type: 'BinaryCondition',
+            lhsBinding: { variableName: 'speed' },
+        });
+
+        const withRenamedVariable = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'rename-variable', name: 'speed', newName: 'velocity' },
+            expected: withEditedCondition,
+        });
+        expect(withRenamedVariable.graph.variables.some((variable) => variable.name === 'velocity')).toBe(true);
+        expect(withRenamedVariable.graph.layers[0].stateMachine.transitions[transition!.index].conditions[0]).toMatchObject({
+            type: 'BinaryCondition',
+            lhsBinding: { variableName: 'velocity' },
+        });
+
+        const withPoseState = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-state',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateType: 'procedural-pose',
+                name: 'Pose',
+            },
+            expected: withRenamedVariable,
+        });
+        const poseState = withPoseState.graph.layers[0].stateMachine.states.find((state) => state.name === 'Pose');
+        expect(poseState?.poseGraph?.nodes.length).toBeGreaterThan(0);
+        const outputNodeId = poseState!.poseGraph!.rootOutputNodeId;
+        const poseInspector = await assetManager.queryAnimationGraphInspector(asset.uuid, {
+            kind: 'pose-node',
+            layerIndex: 0,
+            stateMachinePath: [],
+            stateIndex: poseState!.index,
+            nodeId: outputNodeId,
+        });
+        expect(poseInspector.dump).toMatchObject({ path: '', visible: true });
+
+        const withPoseNode = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-pose-node',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateIndex: poseState!.index,
+                nodeType: 'cc.animation.PoseNodeBlendTwoPose',
+            },
+            expected: poseInspector,
+        });
+        const blendNode = withPoseNode.graph.layers[0].stateMachine.states[poseState!.index].poseGraph!.nodes.find((node) => (
+            node.id !== outputNodeId && node.type.includes('PoseNodeBlendTwoPose')
+        ));
+        const ratioInput = blendNode!.inputs.find((input) => input.id.includes('ratio'));
+        const inputTarget = {
+            kind: 'pose-input' as const,
+            layerIndex: 0,
+            stateMachinePath: [],
+            stateIndex: poseState!.index,
+            nodeId: blendNode!.id,
+            inputId: ratioInput!.id,
+        };
+        const inputInspector = await assetManager.queryAnimationGraphInspector(asset.uuid, inputTarget);
+        expect(inputInspector.dump).toMatchObject({ path: 'value', type: 'Number', value: 1 });
+        const withEditedInput = await assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+            target: inputTarget,
+            path: 'value',
+            patch: 0.25,
+            expected: inputInspector,
+        });
+        expect(withEditedInput.dump.value).toBe(0.25);
+
+        const concurrentResults = await Promise.allSettled([
+            assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+                target: layerTarget,
+                path: 'weight',
+                patch: 0.6,
+                expected: withEditedInput,
+            }),
+            assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+                target: layerTarget,
+                path: 'additive',
+                patch: true,
+                expected: withEditedInput,
+            }),
+        ]);
+        expect(concurrentResults.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
+        const afterConcurrentEdit = await assetManager.queryAnimationGraph(asset.uuid);
+        expect(afterConcurrentEdit.revision).toBe(withEditedInput.revision + 1);
+
+        await expect(assetManager.saveAsset(asset.uuid, content)).rejects.toMatchObject({ code: 'DIRTY_DOCUMENT' });
+
+        const saved = await assetManager.saveAnimationGraph(asset.uuid, afterConcurrentEdit);
+        expect(saved).toMatchObject({ dirty: false, persistedRevision: saved.revision });
+
+        const savedSource = readFileSync(asset.file, 'utf8');
+        const genericWriteRace = await Promise.allSettled([
+            assetManager.saveAsset(asset.uuid, `${savedSource}\n`),
+            assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+                target: layerTarget,
+                path: 'weight',
+                patch: 0.7,
+                expected: saved,
+            }),
+        ]);
+        expect(genericWriteRace[0].status).toBe('fulfilled');
+        expect(genericWriteRace[1]).toMatchObject({
+            status: 'rejected',
+            reason: expect.objectContaining({ code: 'SOURCE_CHANGED' }),
+        });
+        const externallyChanged = await assetManager.queryAnimationGraph(asset.uuid);
+        expect(externallyChanged.externallyModified).toBe(true);
+        await expect(assetManager.saveAnimationGraph(asset.uuid, externallyChanged)).rejects.toMatchObject({
+            code: 'SOURCE_CHANGED',
+        });
+
+        const reloaded = await assetManager.reloadAnimationGraph(asset.uuid, { expected: externallyChanged });
+        expect(reloaded.documentId).not.toBe(saved.documentId);
+        expect(reloaded.revision).toBe(0);
+        expect(reloaded.graph.layers[0].weight).toBe(0.6);
+        expect(reloaded.graph.layers[0].stateMachine.states.some((state) => state.name === 'Idle')).toBe(true);
+
+        // A direct Graph delete is coordinated by the same document queue. This also
+        // guards against re-entering the queue through the delete operation's refresh.
+        await expect(assetManager.removeAsset(asset.uuid, { useTrash: false })).resolves.toMatchObject({
+            uuid: asset.uuid,
+        });
+    });
+
+    it('keeps no-op and failed mutations transactional and rejects duplicate names', async () => {
+        const asset = await assetManager.createAsset({
+            target: join(TestGlobalEnv.testRoot, `${name}-transaction.animgraph`),
+            content: getDefaultGraphContent(),
+            overwrite: true,
+        });
+        const initial = await assetManager.queryAnimationGraph(asset.uuid);
+
+        const noOp = await assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+            target: { kind: 'layer', layerIndex: 0 },
+            path: 'weight',
+            patch: 1,
+            expected: initial,
+        });
+        expect(noOp).toMatchObject({ revision: initial.revision, dirty: false });
+
+        const withVariable = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'add-variable', name: 'speed', variableType: 0, initialValue: 1 },
+            expected: noOp,
+        });
+        await expect(assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'add-variable', name: 'speed', variableType: 0, initialValue: 2 },
+            expected: withVariable,
+        })).rejects.toMatchObject({ code: 'NAME_CONFLICT' });
+        expect((await assetManager.queryAnimationGraph(asset.uuid)).revision).toBe(withVariable.revision);
+
+        const withSecondVariable = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'add-variable', name: 'direction', variableType: 0, initialValue: 0 },
+            expected: withVariable,
+        });
+        const sameName = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'rename-variable', name: 'speed', newName: 'speed' },
+            expected: withSecondVariable,
+        });
+        expect(sameName.revision).toBe(withSecondVariable.revision);
+        await expect(assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'rename-variable', name: 'speed', newName: 'direction' },
+            expected: sameName,
+        })).rejects.toMatchObject({ code: 'NAME_CONFLICT' });
+        const afterVariableConflict = await assetManager.queryAnimationGraph(asset.uuid);
+        expect(afterVariableConflict.revision).toBe(withSecondVariable.revision);
+        expect(afterVariableConflict.graph.variables.map((variable) => variable.name)).toEqual(['speed', 'direction']);
+
+        const withStash = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'add-stash', layerIndex: 0, name: 'Locomotion' },
+            expected: afterVariableConflict,
+        });
+        await expect(assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'add-stash', layerIndex: 0, name: 'Locomotion' },
+            expected: withStash,
+        })).rejects.toMatchObject({ code: 'NAME_CONFLICT' });
+        expect((await assetManager.queryAnimationGraph(asset.uuid)).revision).toBe(withStash.revision);
+
+        const withSecondStash = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'add-stash', layerIndex: 0, name: 'Secondary' },
+            expected: withStash,
+        });
+        await expect(assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'rename-stash', layerIndex: 0, name: 'Secondary', newName: 'Locomotion' },
+            expected: withSecondStash,
+        })).rejects.toMatchObject({ code: 'NAME_CONFLICT' });
+        const afterStashConflict = await assetManager.queryAnimationGraph(asset.uuid);
+        expect(afterStashConflict.revision).toBe(withSecondStash.revision);
+        expect(afterStashConflict.graph.layers[0].stashes).toEqual(['Locomotion', 'Secondary']);
+
+        const withDirectState = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-state',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateType: 'motion',
+                name: 'Direct',
+            },
+            expected: afterStashConflict,
+        });
+        const stateIndex = withDirectState.graph.layers[0].stateMachine.states.find((state) => state.name === 'Direct')!.index;
+        const withDirectMotion = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'set-motion',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateIndex,
+                motionType: 'blend-direct',
+            },
+            expected: withDirectState,
+        });
+        const directTarget = withDirectMotion.graph.layers[0].stateMachine.states[stateIndex].motion!.target;
+        const withDirectChild = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'add-motion-child', target: directTarget, motionType: 'clip' },
+            expected: withDirectMotion,
+        });
+        expect(withDirectChild.graph.layers[0].stateMachine.states[stateIndex].motion!.children![0].weight).toEqual({
+            value: 0,
+            variable: '',
+        });
+
+        await expect(assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'set-direct-blend-weight',
+                target: directTarget,
+                childIndex: 0,
+                value: 0.75,
+                variable: 1 as unknown as string,
+            },
+            expected: withDirectChild,
+        })).rejects.toMatchObject({ code: 'INVALID_PROPERTY_PATCH' });
+        const afterRollback = await assetManager.queryAnimationGraph(asset.uuid);
+        expect(afterRollback.revision).toBe(withDirectChild.revision);
+        expect(afterRollback.graph.layers[0].stateMachine.states[stateIndex].motion!.children![0].weight).toEqual({
+            value: 0,
+            variable: '',
+        });
+
+        const withWeight = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'set-direct-blend-weight',
+                target: directTarget,
+                childIndex: 0,
+                value: 0.75,
+                variable: 'speed',
+            },
+            expected: afterRollback,
+        });
+        expect(withWeight.graph.layers[0].stateMachine.states[stateIndex].motion!.children![0].weight).toEqual({
+            value: 0.75,
+            variable: 'speed',
+        });
+
+        await assetManager.saveAnimationGraph(asset.uuid, withWeight);
+    });
+
+    it('supports value types, integer transition bindings and nested Creator graph contexts', async () => {
+        const asset = await assetManager.createAsset({
+            target: join(TestGlobalEnv.testRoot, `${name}-contexts.animgraph`),
+            content: getDefaultGraphContent(),
+            overwrite: true,
+        });
+        let snapshot = await assetManager.queryAnimationGraph(asset.uuid);
+
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'add-variable', name: 'position', variableType: 4 },
+            expected: snapshot,
+        });
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'set-variable-value', name: 'position', patch: { x: 1, y: 0, z: -2 } },
+            expected: snapshot,
+        });
+        expect(snapshot.graph.variables.find((variable) => variable.name === 'position')?.value.value).toEqual({ x: 1, y: 0, z: -2 });
+
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'add-variable', name: 'rotation', variableType: 5 },
+            expected: snapshot,
+        });
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'set-variable-value', name: 'rotation', patch: { x: 0, y: 0.5, z: 0, w: 0.5 } },
+            expected: snapshot,
+        });
+        expect(snapshot.graph.variables.find((variable) => variable.name === 'rotation')?.value.value).toEqual({ x: 0, y: 0.5, z: 0, w: 0.5 });
+
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'add-stash', layerIndex: 0, name: 'Nested' },
+            expected: snapshot,
+        });
+        const stashPoseGraph = snapshot.graph.layers[0].stashPoseGraphs.find((stash) => stash.name === 'Nested')!.poseGraph;
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-pose-node',
+                poseGraph: stashPoseGraph.context,
+                nodeType: 'cc.animation.PoseNodeStateMachine',
+            },
+            expected: snapshot,
+        });
+        const updatedStash = snapshot.graph.layers[0].stashPoseGraphs.find((stash) => stash.name === 'Nested')!.poseGraph;
+        const stateMachineNode = updatedStash.nodes.find((node) => node.type.includes('PoseNodeStateMachine'))!;
+        expect(stateMachineNode.stateMachine?.states.map((state) => state.type)).toEqual(['entry', 'exit', 'any']);
+
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-state',
+                stateMachine: stateMachineNode.stateMachine!.context,
+                stateType: 'procedural-pose',
+                name: 'Nested Pose',
+            },
+            expected: snapshot,
+        });
+        const nestedStash = snapshot.graph.layers[0].stashPoseGraphs.find((stash) => stash.name === 'Nested')!.poseGraph;
+        const nestedStateMachine = nestedStash.nodes.find((node) => node.id === stateMachineNode.id)!.stateMachine!;
+        expect(nestedStateMachine.states.some((state) => state.name === 'Nested Pose' && !!state.poseGraph)).toBe(true);
+        const nestedPoseState = nestedStateMachine.states.find((state) => state.name === 'Nested Pose')!;
+        const nestedStateInspector = await assetManager.queryAnimationGraphInspector(asset.uuid, {
+            kind: 'state',
+            stateMachine: nestedStateMachine.context,
+            stateIndex: nestedPoseState.index,
+        });
+        expect((nestedStateInspector.dump.value as Record<string, IProperty>).name.value).toBe('Nested Pose');
+
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-pose-node',
+                poseGraph: updatedStash.context,
+                nodeType: 'cc.animation.PoseNodePlayMotion',
+                createArg: { type: 'animation-blend-1d' },
+            },
+            expected: snapshot,
+        });
+        const motionNode = snapshot.graph.layers[0].stashPoseGraphs.find((stash) => stash.name === 'Nested')!
+            .poseGraph.nodes.find((node) => node.type.includes('PoseNodePlayMotion'))!;
+        expect(motionNode.motion?.type).toBe('blend-1d');
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'add-motion-child', target: motionNode.motion!.target, motionType: 'clip' },
+            expected: snapshot,
+        });
+        const motionAfterChild = snapshot.graph.layers[0].stashPoseGraphs.find((stash) => stash.name === 'Nested')!
+            .poseGraph.nodes.find((node) => node.id === motionNode.id)!.motion;
+        expect(motionAfterChild?.children).toHaveLength(1);
+
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-state',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateType: 'motion',
+                name: 'From',
+            },
+            expected: snapshot,
+        });
+        const fromIndex = snapshot.graph.layers[0].stateMachine.states.find((state) => state.name === 'From')!.index;
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-state',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateType: 'empty',
+                name: 'To',
+            },
+            expected: snapshot,
+        });
+        const toIndex = snapshot.graph.layers[0].stateMachine.states.find((state) => state.name === 'To')!.index;
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'add-transition', layerIndex: 0, stateMachinePath: [], fromStateIndex: fromIndex, toStateIndex: toIndex },
+            expected: snapshot,
+        });
+        const transitionIndex = snapshot.graph.layers[0].stateMachine.transitions.find((transition) => (
+            transition.fromStateIndex === fromIndex && transition.toStateIndex === toIndex
+        ))!.index;
+        const transitionTarget = { kind: 'transition' as const, layerIndex: 0, stateMachinePath: [], transitionIndex };
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'add-transition-condition', target: transitionTarget, conditionType: 'binary' },
+            expected: snapshot,
+        });
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'set-transition-condition-property',
+                target: transitionTarget,
+                conditionIndex: 0,
+                path: 'lhsBinding.type',
+                value: 3,
+            },
+            expected: snapshot,
+        });
+        expect(snapshot.graph.layers[0].stateMachine.transitions[transitionIndex].conditions[0]).toMatchObject({ isRhsInteger: true });
+
+        const poseStateIndex = nestedPoseState.index;
+        const nestedPoseGraph = snapshot.graph.layers[0].stashPoseGraphs.find((stash) => stash.name === 'Nested')!
+            .poseGraph.nodes.find((node) => node.id === stateMachineNode.id)!.stateMachine!.states[poseStateIndex].poseGraph!;
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-pose-node',
+                poseGraph: nestedPoseGraph.context,
+                nodeType: 'cc.animation.PoseNodeApplyTransform',
+            },
+            expected: snapshot,
+        });
+        const applyTransformNode = snapshot.graph.layers[0].stashPoseGraphs.find((stash) => stash.name === 'Nested')!
+            .poseGraph.nodes.find((node) => node.id === stateMachineNode.id)!.stateMachine!.states[poseStateIndex].poseGraph!
+            .nodes.find((node) => node.type.includes('PoseNodeApplyTransform'))!;
+        const poseNodeTarget = { kind: 'pose-node' as const, poseGraph: nestedPoseGraph.context, nodeId: applyTransformNode.id };
+        let inspector = await assetManager.queryAnimationGraphInspector(asset.uuid, poseNodeTarget);
+        inspector = await assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+            target: poseNodeTarget,
+            path: 'positionOperation',
+            patch: 1,
+            expected: inspector,
+        });
+        const positionInput = applyTransformNode.inputs.find((input) => input.id.includes('position'))!;
+        const positionTarget = { ...poseNodeTarget, kind: 'pose-input' as const, inputId: positionInput.id };
+        const positionInspector = await assetManager.queryAnimationGraphInspector(asset.uuid, positionTarget);
+        const updatedPosition = await assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+            target: positionTarget,
+            path: 'value',
+            patch: { x: 3, y: 0, z: -4 },
+            expected: positionInspector,
+        });
+        expect(updatedPosition.dump.value).toEqual({ x: 3, y: 0, z: -4 });
+
+        let rotationNodeInspector = await assetManager.queryAnimationGraphInspector(asset.uuid, poseNodeTarget);
+        rotationNodeInspector = await assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+            target: poseNodeTarget,
+            path: 'rotationOperation',
+            patch: 1,
+            expected: rotationNodeInspector,
+        });
+        const rotationInput = applyTransformNode.inputs.find((input) => input.id.includes('rotation'))!;
+        const rotationTarget = { ...poseNodeTarget, kind: 'pose-input' as const, inputId: rotationInput.id };
+        const rotationInspector = await assetManager.queryAnimationGraphInspector(asset.uuid, rotationTarget);
+        const updatedRotation = await assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+            target: rotationTarget,
+            path: 'value',
+            patch: { x: 0, y: 0.25, z: 0, w: 0.75 },
+            expected: rotationInspector,
+        });
+        expect(updatedRotation.dump.value).toEqual({ x: 0, y: 0.25, z: 0, w: 0.75 });
+
+        await assetManager.saveAnimationGraph(asset.uuid, updatedRotation);
+    });
+
+    it('sets and clears Animation Graph asset references through inspector dumps', async () => {
+        const asset = await assetManager.createAsset({
+            target: join(TestGlobalEnv.testRoot, `${name}-references.animgraph`),
+            content: getDefaultGraphContent(),
+            overwrite: true,
+        });
+        const mask = await assetManager.createAsset({
+            target: join(TestGlobalEnv.testRoot, `${name}.animask`),
+            content: readFileSync(join(
+                TestGlobalEnv.engineRoot,
+                'editor/assets/default_file_content/animation-mask/default.animask',
+            ), 'utf8'),
+            overwrite: true,
+        });
+        const clip = await assetManager.createAsset({
+            target: join(TestGlobalEnv.testRoot, `${name}.anim`),
+            content: readFileSync(join(
+                TestGlobalEnv.engineRoot,
+                'editor/assets/default_file_content/animation-clip/default.anim',
+            ), 'utf8'),
+            overwrite: true,
+        });
+
+        let inspector = await assetManager.queryAnimationGraphInspector(asset.uuid, { kind: 'layer', layerIndex: 0 });
+        inspector = await assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+            target: { kind: 'layer', layerIndex: 0 },
+            path: 'mask',
+            patch: { uuid: mask.uuid },
+            expected: inspector,
+        });
+        expect((inspector.dump.value as Record<string, IProperty>).mask.value).toEqual({ uuid: mask.uuid });
+        inspector = await assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+            target: { kind: 'layer', layerIndex: 0 },
+            path: 'mask',
+            patch: { uuid: '' },
+            expected: inspector,
+        });
+        expect((inspector.dump.value as Record<string, IProperty>).mask.value).toEqual({ uuid: '' });
+
+        let snapshot = await assetManager.queryAnimationGraph(asset.uuid);
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-state',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateType: 'motion',
+                name: 'Clip',
+            },
+            expected: snapshot,
+        });
+        const stateIndex = snapshot.graph.layers[0].stateMachine.states.find((state) => state.name === 'Clip')!.index;
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'set-motion',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateIndex,
+                motionType: 'clip',
+                clipUuid: clip.uuid,
+            },
+            expected: snapshot,
+        });
+        const motionTarget = snapshot.graph.layers[0].stateMachine.states[stateIndex].motion!.target;
+        let motionInspector = await assetManager.queryAnimationGraphInspector(asset.uuid, motionTarget);
+        expect((motionInspector.dump.value as Record<string, IProperty>).clip.value).toEqual({ uuid: clip.uuid });
+        motionInspector = await assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+            target: motionTarget,
+            path: 'clip',
+            patch: { uuid: '' },
+            expected: motionInspector,
+        });
+        expect((motionInspector.dump.value as Record<string, IProperty>).clip.value).toEqual({ uuid: '' });
+
+        await assetManager.saveAnimationGraph(asset.uuid, motionInspector);
+    });
+
+    it('blocks generic overwrite and directory mutations while a graph document is dirty', async () => {
+        const directoryName = `${name}-dirty-directory`;
+        const directoryPath = join(TestGlobalEnv.testRoot, directoryName);
+        const targetPath = join(directoryPath, 'target.animgraph');
+        const sourcePath = join(TestGlobalEnv.testRoot, `${name}-source.animgraph`);
+        const renameSourcePath = join(directoryPath, 'rename-source.animgraph');
+        const source = await assetManager.createAsset({ target: sourcePath, content: getDefaultGraphContent(), overwrite: true });
+        const renameSource = await assetManager.createAsset({ target: renameSourcePath, content: getDefaultGraphContent(), overwrite: true });
+        const target = await assetManager.createAsset({ target: targetPath, content: getDefaultGraphContent(), overwrite: true });
+        const initial = await assetManager.queryAnimationGraph(target.uuid);
+        const dirty = await assetManager.setAnimationGraphInspectorProperty(target.uuid, {
+            target: { kind: 'layer', layerIndex: 0 },
+            path: 'weight',
+            patch: 0.25,
+            expected: initial,
+        });
+
+        await expect(assetManager.createAsset({ target: targetPath, content: getDefaultGraphContent(), overwrite: true }))
+            .rejects.toMatchObject({ code: 'DIRTY_DOCUMENT' });
+        await expect(assetManager.importAsset(sourcePath, targetPath, { overwrite: true }))
+            .rejects.toMatchObject({ code: 'DIRTY_DOCUMENT' });
+        await expect(assetManager.copyAsset(source.uuid, targetPath, { overwrite: true }))
+            .rejects.toMatchObject({ code: 'DIRTY_DOCUMENT' });
+        await expect(assetManager.moveAsset(sourcePath, targetPath, { overwrite: true }))
+            .rejects.toMatchObject({ code: 'DIRTY_DOCUMENT' });
+        await expect(assetManager.renameAsset(renameSource.uuid, 'target.animgraph', { overwrite: true }))
+            .rejects.toMatchObject({ code: 'DIRTY_DOCUMENT' });
+        await expect(assetManager.refreshAsset(directoryPath)).rejects.toMatchObject({ code: 'DIRTY_DOCUMENT' });
+        await expect(assetManager.moveAsset(directoryPath, join(TestGlobalEnv.testRoot, `${directoryName}-moved`), { overwrite: true }))
+            .rejects.toMatchObject({ code: 'DIRTY_DOCUMENT' });
+        await expect(assetManager.removeAsset(directoryPath, { useTrash: false })).rejects.toMatchObject({ code: 'DIRTY_DOCUMENT' });
+
+        await assetManager.saveAnimationGraph(target.uuid, dirty);
+    });
+});
