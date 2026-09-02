@@ -6,6 +6,8 @@ import type {
     AnimationGraphChangedEvent,
     AnimationGraphCommand,
     AnimationGraphExpectedVersion,
+    AnimationGraphInspectorPropertyCapabilities,
+    AnimationGraphInspectorPropertyOperationRequest,
     AnimationGraphInspectorSnapshot,
     AnimationGraphLayerView,
     AnimationGraphMotionType,
@@ -31,9 +33,13 @@ import assetOperation from './manager/operation';
 import assetQuery from './manager/query';
 import {
     applyEncodedPropertyPatch,
+    applyEncodedPropertyOperation,
+    applyPropertyObjectOperation,
     applyPropertyObjectPatch,
     encodePropertyObject,
     encodeSerializedObject,
+    getEncodedPropertyOperationCapabilities,
+    queryPropertyObjectOperationCapabilities,
 } from './serialized-data';
 import { serialize as editorSerialize } from '../engine/editor-extends';
 
@@ -63,8 +69,16 @@ interface AnimationGraphDocument {
 
 interface InspectorBinding {
     dump: IProperty;
+    propertyCapabilities: Record<string, AnimationGraphInspectorPropertyCapabilities>;
     apply(path: string, patch: IProperty | unknown): Promise<void>;
+    reset(path: string): Promise<void>;
+    create(path: string): Promise<void>;
 }
+
+type InspectorOperation =
+    | { type: 'set'; patch: IProperty | unknown }
+    | { type: 'reset' }
+    | { type: 'create' };
 
 interface AdapterProperty {
     get(): unknown;
@@ -113,6 +127,31 @@ class AnimationGraphAssetService {
         uuidOrUrlOrPath: string,
         request: SetAnimationGraphInspectorPropertyRequest,
     ): Promise<AnimationGraphInspectorSnapshot> {
+        return this._applyInspectorOperation(uuidOrUrlOrPath, request, {
+            type: 'set',
+            patch: request.patch,
+        });
+    }
+
+    async resetInspectorProperty(
+        uuidOrUrlOrPath: string,
+        request: AnimationGraphInspectorPropertyOperationRequest,
+    ): Promise<AnimationGraphInspectorSnapshot> {
+        return this._applyInspectorOperation(uuidOrUrlOrPath, request, { type: 'reset' });
+    }
+
+    async createInspectorProperty(
+        uuidOrUrlOrPath: string,
+        request: AnimationGraphInspectorPropertyOperationRequest,
+    ): Promise<AnimationGraphInspectorSnapshot> {
+        return this._applyInspectorOperation(uuidOrUrlOrPath, request, { type: 'create' });
+    }
+
+    private async _applyInspectorOperation(
+        uuidOrUrlOrPath: string,
+        request: AnimationGraphInspectorPropertyOperationRequest,
+        operation: InspectorOperation,
+    ): Promise<AnimationGraphInspectorSnapshot> {
         const asset = this._queryAnimationGraphAsset(uuidOrUrlOrPath);
         return this._enqueue(asset.uuid, async () => {
             const document = await this._getOrLoad(asset);
@@ -122,13 +161,27 @@ class AnimationGraphAssetService {
             const draft = this._cloneDocumentForMutation(document, before);
             const binding = this._resolveInspectorBinding(draft, request.target);
             try {
-                await binding.apply(request.path, request.patch);
+                switch (operation.type) {
+                    case 'set':
+                        await binding.apply(request.path, operation.patch);
+                        break;
+                    case 'reset':
+                        await binding.reset(request.path);
+                        break;
+                    case 'create':
+                        await binding.create(request.path);
+                        break;
+                }
             } catch (error) {
                 if (error instanceof AnimationGraphEditError) {
                     throw error;
                 }
                 const message = error instanceof Error ? error.message : String(error);
-                const code = /readonly|hidden/i.test(message) ? 'READONLY_PROPERTY' : 'INVALID_PROPERTY_PATCH';
+                const code = /readonly|hidden/i.test(message)
+                    ? 'READONLY_PROPERTY'
+                    : /does not support (reset|create)/i.test(message)
+                        ? 'UNSUPPORTED_PROPERTY_OPERATION'
+                        : 'INVALID_PROPERTY_PATCH';
                 throw new AnimationGraphEditError(code, message, this._version(document));
             }
             if (this._serialize(draft.graph) === before) {
@@ -427,11 +480,13 @@ class AnimationGraphAssetService {
     }
 
     private _inspectorSnapshot(document: AnimationGraphDocument, target: AnimationGraphTarget): AnimationGraphInspectorSnapshot {
+        const binding = this._resolveInspectorBinding(document, target);
         return {
             uuid: document.uuid,
             target: clonePlain(target),
             ...this._version(document),
-            dump: this._resolveInspectorBinding(document, target).dump,
+            dump: binding.dump,
+            propertyCapabilities: clonePlain(binding.propertyCapabilities),
         };
     }
 
@@ -825,20 +880,36 @@ class AnimationGraphAssetService {
         const metadata = api.poseGraphOp.getInputMetadata(node, key) || {};
         const currentValue = api.poseGraphOp.getInputConstantValue(node, key);
         const pseudo = { value: currentValue };
-        const dump = encodeSerializedObject(currentValue, { ...attrs, visible: isInputVisible(node, attrs) }, node, 'value');
+        const propertyAttrs = { ...attrs, visible: isInputVisible(node, attrs) };
+        const dump = encodeSerializedObject(currentValue, propertyAttrs, node, 'value');
         dump.path = 'value';
         dump.displayName ||= getPoseInputDisplayName(key, metadata);
         if (api.poseGraphOp.getInputBinding(poseGraph, node, key)) {
             dump.visible = false;
         }
+        const applyOperation = (operation: 'reset' | 'create'): void => {
+            applyEncodedPropertyOperation(pseudo, 'value', dump, propertyAttrs, operation);
+            setPoseInputValue(node, key, pseudo.value);
+        };
         return {
             dump,
+            propertyCapabilities: {
+                value: getEncodedPropertyOperationCapabilities(dump, propertyAttrs),
+            },
             apply: async (path, patch) => {
                 if (path !== 'value') {
                     throw new Error(`Unknown property dump path: ${path}`);
                 }
                 await applyEncodedPropertyPatch(pseudo, 'value', dump, patch);
                 setPoseInputValue(node, key, pseudo.value);
+            },
+            reset: async (path) => {
+                assertInspectorBindingPath(path, 'value');
+                applyOperation('reset');
+            },
+            create: async (path) => {
+                assertInspectorBindingPath(path, 'value');
+                applyOperation('create');
             },
         };
     }
@@ -1771,6 +1842,7 @@ function nestedProperty(owner: any, key: string, attrs?: Record<string, unknown>
 function createAdapterBinding(type: string, properties: Record<string, AdapterProperty>): InspectorBinding {
     const holder: Record<string, unknown> = {};
     const value: Record<string, IProperty> = {};
+    const propertyCapabilities: Record<string, AnimationGraphInspectorPropertyCapabilities> = {};
     for (const [key, property] of Object.entries(properties)) {
         Object.defineProperty(holder, key, {
             enumerable: true,
@@ -1781,6 +1853,7 @@ function createAdapterBinding(type: string, properties: Record<string, AdapterPr
         const dump = encodeSerializedObject(property.get(), property.attrs || {}, holder, key);
         dump.path = key;
         value[key] = dump;
+        propertyCapabilities[key] = getEncodedPropertyOperationCapabilities(dump, property.attrs);
     }
     const root: IProperty = {
         name: type,
@@ -1792,12 +1865,29 @@ function createAdapterBinding(type: string, properties: Record<string, AdapterPr
     };
     return {
         dump: root,
+        propertyCapabilities,
         apply: async (path, patch) => {
             const current = value[path];
             if (!current || !properties[path]) {
                 throw new Error(`Unknown property dump path: ${path}`);
             }
             await applyEncodedPropertyPatch(holder, path, current, patch);
+        },
+        reset: async (path) => {
+            const current = value[path];
+            const property = properties[path];
+            if (!current || !property) {
+                throw new Error(`Unknown property dump path: ${path}`);
+            }
+            applyEncodedPropertyOperation(holder, path, current, property.attrs, 'reset');
+        },
+        create: async (path) => {
+            const current = value[path];
+            const property = properties[path];
+            if (!current || !property) {
+                throw new Error(`Unknown property dump path: ${path}`);
+            }
+            applyEncodedPropertyOperation(holder, path, current, property.attrs, 'create');
         },
     };
 }
@@ -1806,8 +1896,17 @@ function createDecoratedBinding(instance: any, name: string): InspectorBinding {
     const dump = encodePropertyObject(instance, name);
     return {
         dump,
+        propertyCapabilities: queryPropertyObjectOperationCapabilities(instance, dump),
         apply: (path, patch) => applyPropertyObjectPatch(instance, path, patch),
+        reset: async (path) => applyPropertyObjectOperation(instance, path, 'reset'),
+        create: async (path) => applyPropertyObjectOperation(instance, path, 'create'),
     };
+}
+
+function assertInspectorBindingPath(path: string, expected: string): void {
+    if (path !== expected) {
+        throw new Error(`Unknown property dump path: ${path}`);
+    }
 }
 
 function enumList(enumType: Record<string, string | number>): Array<{ name: string; value: number }> {

@@ -63,6 +63,8 @@ class AssetManager extends EventEmitter {
     queryAnimationGraph = animationGraph.query.bind(animationGraph);
     queryAnimationGraphInspector = animationGraph.queryInspector.bind(animationGraph);
     setAnimationGraphInspectorProperty = animationGraph.setInspectorProperty.bind(animationGraph);
+    resetAnimationGraphInspectorProperty = animationGraph.resetInspectorProperty.bind(animationGraph);
+    createAnimationGraphInspectorProperty = animationGraph.createInspectorProperty.bind(animationGraph);
     executeAnimationGraphCommand = animationGraph.execute.bind(animationGraph);
     saveAnimationGraph = animationGraph.save.bind(animationGraph);
     reloadAnimationGraph = animationGraph.reload.bind(animationGraph);
@@ -391,6 +393,8 @@ export interface TypedAssetManager extends EventEmitter {
     queryAnimationGraph: typeof animationGraph.query;
     queryAnimationGraphInspector: typeof animationGraph.queryInspector;
     setAnimationGraphInspectorProperty: typeof animationGraph.setInspectorProperty;
+    resetAnimationGraphInspectorProperty: typeof animationGraph.resetInspectorProperty;
+    createAnimationGraphInspectorProperty: typeof animationGraph.createInspectorProperty;
     executeAnimationGraphCommand: typeof animationGraph.execute;
     saveAnimationGraph: typeof animationGraph.save;
     reloadAnimationGraph: typeof animationGraph.reload;

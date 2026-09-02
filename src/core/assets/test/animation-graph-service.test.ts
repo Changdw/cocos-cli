@@ -314,24 +314,30 @@ describe('animation graph asset service', () => {
             expected: inputInspector,
         });
         expect(withEditedInput.dump.value).toBe(0.25);
+        const withResetInput = await assetManager.resetAnimationGraphInspectorProperty(asset.uuid, {
+            target: inputTarget,
+            path: 'value',
+            expected: withEditedInput,
+        });
+        expect(withResetInput.dump.value).toBe(1);
 
         const concurrentResults = await Promise.allSettled([
             assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
                 target: layerTarget,
                 path: 'weight',
                 patch: 0.6,
-                expected: withEditedInput,
+                expected: withResetInput,
             }),
             assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
                 target: layerTarget,
                 path: 'additive',
                 patch: true,
-                expected: withEditedInput,
+                expected: withResetInput,
             }),
         ]);
         expect(concurrentResults.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
         const afterConcurrentEdit = await assetManager.queryAnimationGraph(asset.uuid);
-        expect(afterConcurrentEdit.revision).toBe(withEditedInput.revision + 1);
+        expect(afterConcurrentEdit.revision).toBe(withResetInput.revision + 1);
 
         await expect(assetManager.saveAsset(asset.uuid, content)).rejects.toMatchObject({ code: 'DIRTY_DOCUMENT' });
 
@@ -501,6 +507,66 @@ describe('animation graph asset service', () => {
         });
 
         await assetManager.saveAnimationGraph(asset.uuid, withWeight);
+    });
+
+    it('resets and creates Inspector properties through the authoritative Graph document', async () => {
+        const asset = await assetManager.createAsset({
+            target: join(TestGlobalEnv.testRoot, `${name}-property-operations.animgraph`),
+            content: getDefaultGraphContent(),
+            overwrite: true,
+        });
+        const target = { kind: 'layer' as const, layerIndex: 0 };
+        const initial = await assetManager.queryAnimationGraphInspector(asset.uuid, target);
+        expect(initial.propertyCapabilities).toMatchObject({
+            weight: { set: true, reset: true, create: true },
+            additive: { set: true, reset: true, create: true },
+            mask: { set: true, reset: true, create: true },
+        });
+
+        const unchangedWeight = await assetManager.resetAnimationGraphInspectorProperty(asset.uuid, {
+            target,
+            path: 'weight',
+            expected: initial,
+        });
+        expect(unchangedWeight.revision).toBe(initial.revision);
+
+        const editedWeight = await assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+            target,
+            path: 'weight',
+            patch: 0.25,
+            expected: unchangedWeight,
+        });
+        const resetWeight = await assetManager.resetAnimationGraphInspectorProperty(asset.uuid, {
+            target,
+            path: 'weight',
+            expected: editedWeight,
+            sourceId: 'inspector-reset',
+        });
+        expect(resetWeight).toMatchObject({ revision: editedWeight.revision + 1, dirty: true });
+        expect((resetWeight.dump.value as Record<string, IProperty>).weight.value).toBe(1);
+
+        const editedAdditive = await assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+            target,
+            path: 'additive',
+            patch: true,
+            expected: resetWeight,
+        });
+        const createdAdditive = await assetManager.createAnimationGraphInspectorProperty(asset.uuid, {
+            target,
+            path: 'additive',
+            expected: editedAdditive,
+            sourceId: 'inspector-create',
+        });
+        expect(createdAdditive.revision).toBe(editedAdditive.revision + 1);
+        expect((createdAdditive.dump.value as Record<string, IProperty>).additive.value).toBe(false);
+
+        await expect(assetManager.resetAnimationGraphInspectorProperty(asset.uuid, {
+            target,
+            path: 'weight',
+            expected: initial,
+        })).rejects.toMatchObject({ code: 'VERSION_CONFLICT' });
+
+        await assetManager.saveAnimationGraph(asset.uuid, createdAdditive);
     });
 
     it('supports value types, integer transition bindings and nested Creator graph contexts', async () => {

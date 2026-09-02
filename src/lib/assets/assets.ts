@@ -1,4 +1,4 @@
-import type { AnimationGraphChangedEvent, AnimationGraphExpectedVersion, AnimationGraphInspectorSnapshot, AnimationGraphSnapshot, AnimationGraphTarget, AssetOperationOption, AssetPropertySchemaMap, CreateAssetByTypeOptions, DeleteAssetOptions, ExecuteAnimationGraphCommandRequest, IAssetFileSystemProvider, IAssetInfo, IAssetMeta, ISupportCreateType, MaterialDump, MaterialEffectInfo, MaterialTechniqueDump, QueryAssetsOption, ReloadAnimationGraphOptions, SerializedAssetPatch, SerializedAssetQueryResult, SetAnimationGraphInspectorPropertyRequest, AnimationMaskChange, AnimationMaskDump } from '../../core/assets/@types/public';
+import type { AnimationGraphChangedEvent, AnimationGraphExpectedVersion, AnimationGraphInspectorPropertyOperationRequest, AnimationGraphInspectorSnapshot, AnimationGraphSnapshot, AnimationGraphTarget, AssetOperationOption, AssetPropertySchemaMap, CreateAssetByTypeOptions, DeleteAssetOptions, ExecuteAnimationGraphCommandRequest, IAssetFileSystemProvider, IAssetInfo, IAssetMeta, ISupportCreateType, MaterialDump, MaterialEffectInfo, MaterialTechniqueDump, QueryAssetsOption, ReloadAnimationGraphOptions, SerializedAssetPatch, SerializedAssetQueryResult, SetAnimationGraphInspectorPropertyRequest, AnimationMaskChange, AnimationMaskDump } from '../../core/assets/@types/public';
 import type { CreateAssetOptions, IAssetConfig, IAssetDBInfo, ICreateMenuInfo, IUerDataConfigItem, QueryAssetType, ThumbnailInfo, ThumbnailSize } from '../../core/assets/@types/protected';
 import type { FilterPluginOptions, IPluginScriptInfo } from '../../core/scripting/interface';
 import { assetDBManager, assetManager } from '../../core/assets';
@@ -227,6 +227,20 @@ export const animationGraph = {
         request: SetAnimationGraphInspectorPropertyRequest,
     ): Promise<AnimationGraphInspectorSnapshot> {
         return assetManager.setAnimationGraphInspectorProperty(uuidOrUrlOrPath, request);
+    },
+
+    resetInspectorProperty(
+        uuidOrUrlOrPath: string,
+        request: AnimationGraphInspectorPropertyOperationRequest,
+    ): Promise<AnimationGraphInspectorSnapshot> {
+        return assetManager.resetAnimationGraphInspectorProperty(uuidOrUrlOrPath, request);
+    },
+
+    createInspectorProperty(
+        uuidOrUrlOrPath: string,
+        request: AnimationGraphInspectorPropertyOperationRequest,
+    ): Promise<AnimationGraphInspectorSnapshot> {
+        return assetManager.createAnimationGraphInspectorProperty(uuidOrUrlOrPath, request);
     },
 
     execute(

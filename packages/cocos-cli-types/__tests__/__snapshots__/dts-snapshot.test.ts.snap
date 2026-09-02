@@ -8,6 +8,8 @@ export declare const animationGraph: {
     query(uuidOrUrlOrPath: string): Promise<AnimationGraphSnapshot>;
     queryInspector(uuidOrUrlOrPath: string, target: AnimationGraphTarget): Promise<AnimationGraphInspectorSnapshot>;
     setInspectorProperty(uuidOrUrlOrPath: string, request: SetAnimationGraphInspectorPropertyRequest): Promise<AnimationGraphInspectorSnapshot>;
+    resetInspectorProperty(uuidOrUrlOrPath: string, request: AnimationGraphInspectorPropertyOperationRequest): Promise<AnimationGraphInspectorSnapshot>;
+    createInspectorProperty(uuidOrUrlOrPath: string, request: AnimationGraphInspectorPropertyOperationRequest): Promise<AnimationGraphInspectorSnapshot>;
     execute(uuidOrUrlOrPath: string, request: ExecuteAnimationGraphCommandRequest): Promise<AnimationGraphSnapshot>;
     save(uuidOrUrlOrPath: string, expected: AnimationGraphExpectedVersion, sourceId?: string): Promise<AnimationGraphSnapshot>;
     reload(uuidOrUrlOrPath: string, options?: ReloadAnimationGraphOptions, sourceId?: string): Promise<AnimationGraphSnapshot>;
@@ -67,6 +69,7 @@ export declare type AnimationGraphEditErrorCode =
 | 'SOURCE_CHANGED'
 | 'TARGET_NOT_FOUND'
 | 'UNSUPPORTED_TARGET'
+| 'UNSUPPORTED_PROPERTY_OPERATION'
 | 'INVALID_PROPERTY_PATCH'
 | 'READONLY_PROPERTY'
 | 'NAME_CONFLICT'
@@ -75,10 +78,22 @@ export declare interface AnimationGraphExpectedVersion {
     documentId: string;
     revision: number;
 }
+export declare interface AnimationGraphInspectorPropertyCapabilities {
+    set: boolean;
+    reset: boolean;
+    create: boolean;
+}
+export declare interface AnimationGraphInspectorPropertyOperationRequest {
+    target: AnimationGraphTarget;
+    path: string;
+    expected: AnimationGraphExpectedVersion;
+    sourceId?: string;
+}
 export declare interface AnimationGraphInspectorSnapshot extends AnimationGraphVersion {
     uuid: string;
     target: AnimationGraphTarget;
     dump: IProperty;
+    propertyCapabilities?: Record<string, AnimationGraphInspectorPropertyCapabilities>;
 }
 export declare interface AnimationGraphLayerView {
     index: number;
@@ -1077,12 +1092,8 @@ export declare const serializedData: {
     query: typeof querySerializedData;
     save: typeof saveSerializedData;
 };
-export declare interface SetAnimationGraphInspectorPropertyRequest {
-    target: AnimationGraphTarget;
-    path: string;
+export declare interface SetAnimationGraphInspectorPropertyRequest extends AnimationGraphInspectorPropertyOperationRequest {
     patch: IProperty | unknown;
-    expected: AnimationGraphExpectedVersion;
-    sourceId?: string;
 }
 export declare function setFileSystemProvider(provider: IAssetFileSystemProvider): void;
 export declare interface SimplifyOptions {
@@ -7921,6 +7932,8 @@ export declare const animationGraph: {
     query(uuidOrUrlOrPath: string): Promise<AnimationGraphSnapshot>;
     queryInspector(uuidOrUrlOrPath: string, target: AnimationGraphTarget): Promise<AnimationGraphInspectorSnapshot>;
     setInspectorProperty(uuidOrUrlOrPath: string, request: SetAnimationGraphInspectorPropertyRequest): Promise<AnimationGraphInspectorSnapshot>;
+    resetInspectorProperty(uuidOrUrlOrPath: string, request: AnimationGraphInspectorPropertyOperationRequest): Promise<AnimationGraphInspectorSnapshot>;
+    createInspectorProperty(uuidOrUrlOrPath: string, request: AnimationGraphInspectorPropertyOperationRequest): Promise<AnimationGraphInspectorSnapshot>;
     execute(uuidOrUrlOrPath: string, request: ExecuteAnimationGraphCommandRequest): Promise<AnimationGraphSnapshot>;
     save(uuidOrUrlOrPath: string, expected: AnimationGraphExpectedVersion, sourceId?: string): Promise<AnimationGraphSnapshot>;
     reload(uuidOrUrlOrPath: string, options?: ReloadAnimationGraphOptions, sourceId?: string): Promise<AnimationGraphSnapshot>;
@@ -7980,6 +7993,7 @@ export declare type AnimationGraphEditErrorCode =
 | 'SOURCE_CHANGED'
 | 'TARGET_NOT_FOUND'
 | 'UNSUPPORTED_TARGET'
+| 'UNSUPPORTED_PROPERTY_OPERATION'
 | 'INVALID_PROPERTY_PATCH'
 | 'READONLY_PROPERTY'
 | 'NAME_CONFLICT'
@@ -7988,10 +8002,22 @@ export declare interface AnimationGraphExpectedVersion {
     documentId: string;
     revision: number;
 }
+export declare interface AnimationGraphInspectorPropertyCapabilities {
+    set: boolean;
+    reset: boolean;
+    create: boolean;
+}
+export declare interface AnimationGraphInspectorPropertyOperationRequest {
+    target: AnimationGraphTarget;
+    path: string;
+    expected: AnimationGraphExpectedVersion;
+    sourceId?: string;
+}
 export declare interface AnimationGraphInspectorSnapshot extends AnimationGraphVersion {
     uuid: string;
     target: AnimationGraphTarget;
     dump: IProperty;
+    propertyCapabilities?: Record<string, AnimationGraphInspectorPropertyCapabilities>;
 }
 export declare interface AnimationGraphLayerView {
     index: number;
@@ -8368,7 +8394,9 @@ export declare namespace Assets {
         AnimationGraphVariableView,
         AnimationGraphViewDump,
         AnimationGraphSnapshot,
+        AnimationGraphInspectorPropertyCapabilities,
         AnimationGraphInspectorSnapshot,
+        AnimationGraphInspectorPropertyOperationRequest,
         SetAnimationGraphInspectorPropertyRequest,
         AnimationGraphStateType,
         AnimationGraphMotionType,
@@ -9750,12 +9778,8 @@ export declare namespace Server {
     }
 }
 export declare function set<T>(key: string, value: T, scope?: ConfigurationScope): Promise<boolean>;
-export declare interface SetAnimationGraphInspectorPropertyRequest {
-    target: AnimationGraphTarget;
-    path: string;
+export declare interface SetAnimationGraphInspectorPropertyRequest extends AnimationGraphInspectorPropertyOperationRequest {
     patch: IProperty | unknown;
-    expected: AnimationGraphExpectedVersion;
-    sourceId?: string;
 }
 export declare function setCommandProvider(provider: ISceneCommandProvider): SceneCommandProviderRegistration;
 export declare function setFileSystemProvider(provider: IAssetFileSystemProvider): void;

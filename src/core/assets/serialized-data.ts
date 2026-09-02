@@ -17,6 +17,14 @@ import i18n from '../base/i18n';
 export type SerializedAssetDump = Record<string, IProperty> | IProperty;
 export type SerializedAssetPatch = SerializedAssetDump | Partial<Record<string, IProperty | unknown>>;
 
+export type EncodedPropertyOperation = 'reset' | 'create';
+
+export interface EncodedPropertyOperationCapabilities {
+    set: boolean;
+    reset: boolean;
+    create: boolean;
+}
+
 export interface SerializedAssetQueryResult {
     uuid: string;
     url: string;
@@ -244,6 +252,90 @@ export async function applyEncodedPropertyPatch(
     await setValue(owner, { [key]: next }, key);
 }
 
+/**
+ * Applies Creator-compatible reset/create semantics to a decorated object property.
+ * The operation is resolved from the current engine instance instead of caller-provided dump
+ * metadata so default factories, cloneable values and constructors remain authoritative.
+ */
+export function applyPropertyObjectOperation(
+    instance: any,
+    path: string,
+    operation: EncodedPropertyOperation,
+): void {
+    const currentRoot = encodePropertyObject(instance);
+    const current = findPropertyDump(currentRoot, path);
+    if (!current) {
+        throw new Error(`Unknown property dump path: ${path}`);
+    }
+
+    const { owner, key } = resolvePropertyOwner(instance, path);
+    const attributes = getPropertyAttributes(owner, key);
+    applyEncodedPropertyOperation(owner, key, current, attributes, operation);
+}
+
+/**
+ * Applies reset/create to a property whose dump and attributes are already known. This is used
+ * by virtual properties such as Pose Graph input constants and explicit Graph adapters.
+ */
+export function applyEncodedPropertyOperation(
+    owner: any,
+    key: string,
+    current: IProperty,
+    attributes: any,
+    operation: EncodedPropertyOperation,
+): void {
+    assertEditablePropertyOperation(current.path || key, current);
+    const supported = operation === 'create'
+        ? canCreatePropertyValue(attributes)
+        : canResetPropertyValue(attributes);
+    if (!supported) {
+        throw new Error(`Property ${current.path || key} does not support ${operation}.`);
+    }
+
+    const value = operation === 'create'
+        ? getPropertyCreateValue(attributes)
+        : getPropertyResetValue(attributes);
+    owner[key] = value;
+}
+
+/**
+ * Returns per-path operation support for one decorated instance. Graph Inspector snapshots use
+ * this to avoid presenting reset/create actions that the engine attributes can not fulfill.
+ */
+export function queryPropertyObjectOperationCapabilities(
+    instance: any,
+    rootDump: IProperty = encodePropertyObject(instance),
+): Record<string, EncodedPropertyOperationCapabilities> {
+    const capabilities: Record<string, EncodedPropertyOperationCapabilities> = {};
+    visitPropertyDumps(rootDump, (path, current) => {
+        if (!path) {
+            return;
+        }
+        try {
+            const { owner, key } = resolvePropertyOwner(instance, path);
+            capabilities[path] = getEncodedPropertyOperationCapabilities(
+                current,
+                getPropertyAttributes(owner, key),
+            );
+        } catch {
+            capabilities[path] = getEncodedPropertyOperationCapabilities(current, undefined);
+        }
+    });
+    return capabilities;
+}
+
+export function getEncodedPropertyOperationCapabilities(
+    current: IProperty,
+    attributes: any,
+): EncodedPropertyOperationCapabilities {
+    const editable = current.visible !== false && current.readonly !== true;
+    return {
+        set: editable,
+        reset: editable && canResetPropertyValue(attributes),
+        create: editable && canCreatePropertyValue(attributes),
+    };
+}
+
 function assignPropertyPaths(property: IProperty, path = ''): void {
     property.path = path;
     if (Array.isArray(property.value)) {
@@ -286,6 +378,29 @@ function findPropertyDump(root: IProperty, path: string): IProperty | undefined 
     return current;
 }
 
+function visitPropertyDumps(
+    root: IProperty,
+    visitor: (path: string, property: IProperty) => void,
+): void {
+    visitor(root.path || '', root);
+    if (Array.isArray(root.value)) {
+        root.value.forEach((child) => {
+            if (isPropertyLike(child)) {
+                visitPropertyDumps(child, visitor);
+            }
+        });
+        return;
+    }
+    if (!isRecord(root.value)) {
+        return;
+    }
+    Object.values(root.value).forEach((child) => {
+        if (isPropertyLike(child)) {
+            visitPropertyDumps(child, visitor);
+        }
+    });
+}
+
 function resolvePropertyOwner(instance: any, path: string): { owner: any; key: string } {
     const segments = path.split('.').filter(Boolean);
     if (!segments.length) {
@@ -300,6 +415,19 @@ function resolvePropertyOwner(instance: any, path: string): { owner: any; key: s
         owner = owner[segment];
     }
     return { owner, key };
+}
+
+function getPropertyAttributes(owner: any, key: string): any {
+    if (owner === null || owner === undefined) {
+        return undefined;
+    }
+    return cc.Class.attr(owner, key);
+}
+
+function assertEditablePropertyOperation(path: string, current: IProperty): void {
+    if (current.visible === false || current.readonly === true) {
+        throw new Error(`Property ${path} is readonly or hidden and can not be modified.`);
+    }
 }
 
 function validateEditablePropertyPatch(path: string, current: IProperty, next: IProperty): void {
@@ -480,6 +608,46 @@ export function encodeSerializedObject(
 
 function getPropertyDefault(attribute: any) {
     return typeof attribute.default === 'function' ? attribute.default() : attribute.default;
+}
+
+function getPropertyResetValue(attribute: any): any {
+    let value = getPropertyDefault(attribute);
+    if (value && typeof value === 'object') {
+        if (typeof value.clone === 'function') {
+            value = value.clone();
+        } else if (Array.isArray(value)) {
+            value = [];
+        }
+    }
+    return value;
+}
+
+function getPropertyCreateValue(attribute: any): any {
+    const value = getPropertyResetValue(attribute);
+    if ((value === null || value === undefined) && typeof attribute.ctor === 'function') {
+        return new attribute.ctor();
+    }
+    return value;
+}
+
+function canResetPropertyValue(attribute: any): boolean {
+    return !!attribute
+        && typeof attribute === 'object'
+        && Object.prototype.hasOwnProperty.call(attribute, 'default');
+}
+
+function canCreatePropertyValue(attribute: any): boolean {
+    if (!attribute || typeof attribute !== 'object') {
+        return false;
+    }
+    if (typeof attribute.ctor === 'function') {
+        return true;
+    }
+    if (!canResetPropertyValue(attribute)) {
+        return false;
+    }
+    return typeof attribute.default === 'function'
+        || (attribute.default !== null && attribute.default !== undefined);
 }
 
 function getPropertyConstructor(object: any, attribute: any) {

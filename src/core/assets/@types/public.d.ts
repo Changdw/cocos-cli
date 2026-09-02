@@ -217,18 +217,28 @@ export interface AnimationGraphSnapshot extends AnimationGraphVersion {
     graph: AnimationGraphViewDump;
 }
 
+export interface AnimationGraphInspectorPropertyCapabilities {
+    set: boolean;
+    reset: boolean;
+    create: boolean;
+}
+
 export interface AnimationGraphInspectorSnapshot extends AnimationGraphVersion {
     uuid: string;
     target: AnimationGraphTarget;
     dump: IProperty;
+    propertyCapabilities?: Record<string, AnimationGraphInspectorPropertyCapabilities>;
 }
 
-export interface SetAnimationGraphInspectorPropertyRequest {
+export interface AnimationGraphInspectorPropertyOperationRequest {
     target: AnimationGraphTarget;
     path: string;
-    patch: IProperty | unknown;
     expected: AnimationGraphExpectedVersion;
     sourceId?: string;
+}
+
+export interface SetAnimationGraphInspectorPropertyRequest extends AnimationGraphInspectorPropertyOperationRequest {
+    patch: IProperty | unknown;
 }
 
 export type AnimationGraphStateType = 'motion' | 'empty' | 'sub-state-machine' | 'procedural-pose';
@@ -298,6 +308,7 @@ export type AnimationGraphEditErrorCode =
     | 'SOURCE_CHANGED'
     | 'TARGET_NOT_FOUND'
     | 'UNSUPPORTED_TARGET'
+    | 'UNSUPPORTED_PROPERTY_OPERATION'
     | 'INVALID_PROPERTY_PATCH'
     | 'READONLY_PROPERTY'
     | 'NAME_CONFLICT'
