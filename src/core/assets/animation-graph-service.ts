@@ -576,6 +576,9 @@ class AnimationGraphAssetService {
             editorData: getEditorData(state),
         };
         if (state instanceof api.MotionState) {
+            view.speed = state.speed;
+            view.speedMultiplier = state.speedMultiplier;
+            view.speedMultiplierEnabled = !!state.speedMultiplierEnabled;
             view.motion = state.motion ? this._queryMotion(state.motion, {
                 kind: 'motion',
                 stateMachine: clonePlain(context),
@@ -600,7 +603,7 @@ class AnimationGraphAssetService {
     private _queryTransition(stateMachine: any, states: any[], transition: any, index: number): AnimationGraphTransitionView {
         const api = getNewGenAnim();
         const outgoings = Array.from(stateMachine.getOutgoings(transition.from) as Iterable<any>);
-        return {
+        const view: AnimationGraphTransitionView = {
             index,
             type: api.isAnimationTransition(transition)
                 ? 'animation'
@@ -617,6 +620,21 @@ class AnimationGraphAssetService {
                 : [],
             editorData: getEditorData(transition),
         };
+        if (
+            api.isAnimationTransition(transition)
+            || transition instanceof api.EmptyStateTransition
+            || transition instanceof api.ProceduralPoseTransition
+        ) {
+            view.duration = transition.duration;
+            view.destinationStart = transition.destinationStart;
+            view.relativeDestinationStart = !!transition.relativeDestinationStart;
+        }
+        if (api.isAnimationTransition(transition)) {
+            view.relativeDuration = !!transition.relativeDuration;
+            view.exitConditionEnabled = !!transition.exitConditionEnabled;
+            view.exitCondition = transition.exitCondition;
+        }
+        return view;
     }
 
     private _queryTransitionCondition(condition: any, index: number): AnimationGraphTransitionConditionView {
@@ -672,6 +690,15 @@ class AnimationGraphAssetService {
         if (motion instanceof api.ClipMotion) {
             view.clipUuid = getAssetUuid(motion.clip);
         }
+        if (motion instanceof api.AnimationBlend1D) {
+            view.variable = motion.param.variable;
+            view.value = motion.param.value;
+        } else if (motion instanceof api.AnimationBlend2D) {
+            view.variableX = motion.paramX.variable;
+            view.valueX = motion.paramX.value;
+            view.variableY = motion.paramY.variable;
+            view.valueY = motion.paramY.value;
+        }
         if (threshold !== undefined) {
             view.threshold = isVec2Like(threshold)
                 ? { x: threshold.x, y: threshold.y }
@@ -717,7 +744,7 @@ class AnimationGraphAssetService {
                     inputs: api.poseGraphOp.getInputKeys(node).map((key: unknown) => {
                         const metadata = api.poseGraphOp.getInputMetadata(node, key) || {};
                         const binding = api.poseGraphOp.getInputBinding(poseGraph, node, key);
-                        return {
+                        const input: import('./@types/public').AnimationGraphPoseInputView = {
                             id: JSON.stringify(key),
                             displayName: getPoseInputDisplayName(key, metadata),
                             type: metadata.type,
@@ -727,6 +754,10 @@ class AnimationGraphAssetService {
                             producerNodeId: binding ? this._nodeId(document, binding.producer) : undefined,
                             producerOutputId: binding?.outputIndex,
                         };
+                        if (!binding) {
+                            input.value = this._encodePoseInputValue(node, key, metadata).dump;
+                        }
+                        return input;
                     }),
                     inputInsertInfos: clonePlain(api.poseGraphOp.getInputInsertInfos(node)),
                     editorData: getEditorData(node),
@@ -878,12 +909,8 @@ class AnimationGraphAssetService {
         }
         const attrs = api.getPoseGraphNodeInputAttrs(node, key) || {};
         const metadata = api.poseGraphOp.getInputMetadata(node, key) || {};
-        const currentValue = api.poseGraphOp.getInputConstantValue(node, key);
+        const { currentValue, propertyAttrs, dump } = this._encodePoseInputValue(node, key, metadata, attrs);
         const pseudo = { value: currentValue };
-        const propertyAttrs = { ...attrs, visible: isInputVisible(node, attrs) };
-        const dump = encodeSerializedObject(currentValue, propertyAttrs, node, 'value');
-        dump.path = 'value';
-        dump.displayName ||= getPoseInputDisplayName(key, metadata);
         if (api.poseGraphOp.getInputBinding(poseGraph, node, key)) {
             dump.visible = false;
         }
@@ -912,6 +939,20 @@ class AnimationGraphAssetService {
                 applyOperation('create');
             },
         };
+    }
+
+    private _encodePoseInputValue(
+        node: any,
+        key: unknown,
+        metadata: any,
+        attrs = getNewGenAnim().getPoseGraphNodeInputAttrs(node, key) || {},
+    ): { currentValue: unknown; propertyAttrs: Record<string, unknown>; dump: IProperty } {
+        const currentValue = getNewGenAnim().poseGraphOp.getInputConstantValue(node, key);
+        const propertyAttrs = { ...attrs, visible: isInputVisible(node, attrs) };
+        const dump = encodeSerializedObject(currentValue, propertyAttrs, node, 'value');
+        dump.path = 'value';
+        dump.displayName ||= getPoseInputDisplayName(key, metadata);
+        return { currentValue, propertyAttrs, dump };
     }
 
     private _getLayer(document: AnimationGraphDocument, layerIndex: number): any {
@@ -1226,6 +1267,11 @@ class AnimationGraphAssetService {
             case 'remove-motion':
                 this._removeMotion(document, command.target);
                 return;
+            case 'set-motion-editor-data': {
+                const motion = this._resolveMotion(document, command.target);
+                assignEditorData(motion, command.editorData);
+                return;
+            }
             case 'set-motion-threshold': {
                 const motion = this._resolveMotion(document, command.target);
                 const items = isBlendMotion(motion, api) ? Array.from(motion.items as Iterable<any>) : [];
@@ -1465,6 +1511,45 @@ class AnimationGraphAssetService {
                 }
                 return;
             }
+            case 'stash-pose-graph': {
+                const layer = this._getLayer(document, command.layerIndex);
+                if (getPoseGraphContextLayerIndex(command.poseGraph) !== command.layerIndex) {
+                    throw this._targetNotFound(document, command.poseGraph);
+                }
+                const poseGraph = this._getPoseGraphByContext(document, command.poseGraph);
+                const originalNodes = Array.from(poseGraph.nodes() as Iterable<any>);
+                const stashName = command.stashName ?? uniqueStashName(layer);
+                if (layer.getStash(stashName)) {
+                    throw this._nameConflict(document, 'stash', stashName);
+                }
+                for (const node of originalNodes) {
+                    assignEditorData(node, {});
+                }
+                const result = withSerializableEditorExtras(collectEditorExtrasConstructors(poseGraph), () => (
+                    api.stashPoseGraph(layer, poseGraph, stashName)
+                ));
+                if (!result) {
+                    throw new AnimationGraphEditError(
+                        'INVALID_PROPERTY_PATCH',
+                        `Animation Graph Pose Graph can not be stashed as: ${stashName}`,
+                        this._version(document),
+                    );
+                }
+                const remainingNodes = new Set(poseGraph.nodes() as Iterable<any>);
+                for (const node of originalNodes) {
+                    if (remainingNodes.has(node)) {
+                        continue;
+                    }
+                    const nodeId = document.nodeIds.get(node);
+                    if (nodeId !== undefined) {
+                        document.nodesById.delete(nodeId);
+                    }
+                    document.nodeIds.delete(node);
+                }
+                assignEditorData(result.useStashNode, command.editorData);
+                this._nodeId(document, result.useStashNode);
+                return;
+            }
             default:
                 throw new AnimationGraphEditError('UNSUPPORTED_TARGET', 'Unsupported Animation Graph command.', this._version(document));
         }
@@ -1544,13 +1629,17 @@ class AnimationGraphAssetService {
     }
 
     private _serialize(graph: any): string {
-        const serialized = getEditorSerialize()(graph);
-        return typeof serialized === 'string' ? serialized : JSON.stringify(serialized, null, 2);
+        return withSerializableEditorExtras(collectEditorExtrasConstructors(graph), () => {
+            const serialized = getEditorSerialize()(graph);
+            return typeof serialized === 'string' ? serialized : JSON.stringify(serialized, null, 2);
+        });
     }
 
     private _deserializeGraph(serialized: unknown, uuid: string): any {
         const data = typeof serialized === 'string' ? JSON.parse(serialized) : serialized;
-        const graph = deserializeAssetSource(data as object);
+        const graph = withSerializableEditorExtras(collectSerializedEditorExtrasConstructors(data), () => (
+            deserializeAssetSource(data as object)
+        ));
         const { AnimationGraph } = getNewGenAnim();
         if (!(graph instanceof AnimationGraph)) {
             throw new Error(`Asset is not an AnimationGraph: ${uuid}`);
@@ -1729,6 +1818,137 @@ function assignEditorData(value: any, data?: Record<string, unknown>): void {
     }
     const tag = getCC().editorExtrasTag;
     Object.assign(value[tag] ||= {}, clonePlain(data));
+}
+
+interface ClassSerializationState {
+    constructor: any;
+    props?: PropertyDescriptor;
+    values?: PropertyDescriptor;
+    deserialize?: PropertyDescriptor;
+}
+
+function withSerializableEditorExtras<T>(constructors: Iterable<any>, action: () => T): T {
+    const tag = getCC().editorExtrasTag || '__editorExtras__';
+    const states: ClassSerializationState[] = [];
+    let operationFailed = false;
+    try {
+        for (const constructor of new Set(constructors)) {
+            if (typeof constructor !== 'function' || !Array.isArray(constructor.__values__) || constructor.__values__.includes(tag)) {
+                continue;
+            }
+            const state: ClassSerializationState = {
+                constructor,
+                props: Object.getOwnPropertyDescriptor(constructor, '__props__'),
+                values: Object.getOwnPropertyDescriptor(constructor, '__values__'),
+                deserialize: Object.getOwnPropertyDescriptor(constructor, '__deserialize__'),
+            };
+            states.push(state);
+            if (Array.isArray(constructor.__props__) && !constructor.__props__.includes(tag)) {
+                constructor.__props__ = [...constructor.__props__, tag];
+            }
+            constructor.__values__ = [...constructor.__values__, tag];
+            if (!state.deserialize || state.deserialize.configurable !== false) {
+                delete constructor.__deserialize__;
+            }
+        }
+        return action();
+    } catch (error) {
+        operationFailed = true;
+        throw error;
+    } finally {
+        let restorationFailed = false;
+        let restorationError: unknown;
+        for (const state of states.reverse()) {
+            for (const [key, descriptor] of [
+                ['__deserialize__', state.deserialize],
+                ['__values__', state.values],
+                ['__props__', state.props],
+            ] as const) {
+                try {
+                    restoreOwnProperty(state.constructor, key, descriptor);
+                } catch (error) {
+                    if (!restorationFailed) {
+                        restorationFailed = true;
+                        restorationError = error;
+                    }
+                }
+            }
+        }
+        if (restorationFailed && !operationFailed) {
+            throw restorationError;
+        }
+    }
+}
+
+function restoreOwnProperty(owner: object, key: string, descriptor?: PropertyDescriptor): void {
+    if (descriptor) {
+        Object.defineProperty(owner, key, descriptor);
+    } else {
+        delete (owner as Record<string, unknown>)[key];
+    }
+}
+
+function collectEditorExtrasConstructors(root: unknown): Set<any> {
+    const tag = getCC().editorExtrasTag || '__editorExtras__';
+    const constructors = new Set<any>();
+    visitObjectGraph(root, (value) => {
+        if (Object.prototype.hasOwnProperty.call(value, tag) && typeof value.constructor === 'function') {
+            constructors.add(value.constructor);
+        }
+    });
+    return constructors;
+}
+
+function collectSerializedEditorExtrasConstructors(root: unknown): Set<any> {
+    const cc = getCC();
+    const tag = cc.editorExtrasTag || '__editorExtras__';
+    const constructors = new Set<any>();
+    visitObjectGraph(root, (value) => {
+        if (!Object.prototype.hasOwnProperty.call(value, tag) || typeof value.__type__ !== 'string') {
+            return;
+        }
+        const constructor = cc.js.getClassById?.(value.__type__) || cc.js.getClassByName?.(value.__type__);
+        if (constructor) {
+            constructors.add(constructor);
+        }
+    });
+    return constructors;
+}
+
+function visitObjectGraph(root: unknown, visitor: (value: Record<string, any>) => void): void {
+    const pending: unknown[] = [root];
+    const visited = new WeakSet<object>();
+    while (pending.length) {
+        const current = pending.pop();
+        if (!current || typeof current !== 'object' || visited.has(current)) {
+            continue;
+        }
+        visited.add(current);
+        const object = current as Record<string, any>;
+        visitor(object);
+        if (ArrayBuffer.isView(current)) {
+            continue;
+        }
+        if (current instanceof Map) {
+            for (const [key, value] of current) {
+                pending.push(key, value);
+            }
+            continue;
+        }
+        if (current instanceof Set) {
+            for (const value of current) {
+                pending.push(value);
+            }
+            continue;
+        }
+        for (const key of Object.keys(object)) {
+            try {
+                pending.push(object[key]);
+            } catch {
+                // Ignore engine accessors that are unavailable outside their owning runtime.
+            }
+        }
+    }
 }
 
 function getStateComponents(state: any): any[] {
@@ -1927,6 +2147,31 @@ function uniqueStateName(stateMachine: any, requested: string): string {
         candidate = `${requested}-${String(index).padStart(3, '0')}`;
     }
     return candidate;
+}
+
+function uniqueStashName(layer: any): string {
+    let index = 1;
+    while (layer.getStash(`Stash${index}`)) {
+        index += 1;
+    }
+    return `Stash${index}`;
+}
+
+function getPoseGraphContextLayerIndex(context: AnimationGraphPoseGraphContext): number {
+    return context.kind === 'layer-stash'
+        ? context.layerIndex
+        : getStateMachineContextLayerIndex(context.stateMachine);
+}
+
+function getStateMachineContextLayerIndex(context: AnimationGraphStateMachineContext): number {
+    switch (context.kind) {
+        case 'layer-state-machine':
+            return context.layerIndex;
+        case 'pose-node-state-machine':
+            return getPoseGraphContextLayerIndex(context.poseGraph);
+        case 'sub-state-machine':
+            return getStateMachineContextLayerIndex(context.stateMachine);
+    }
 }
 
 function defaultStateName(type: AnimationGraphStateView['type'] | import('./@types/public').AnimationGraphStateType): string {

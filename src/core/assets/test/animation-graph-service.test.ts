@@ -29,6 +29,7 @@ import { readFileSync, remove } from 'fs-extra';
 import { globalSetup } from '../../test/global-setup';
 import { TestGlobalEnv } from '../../../tests/global-env';
 import { assetManager } from '..';
+import animationGraph from '../animation-graph-service';
 import type { IProperty } from '../../scene/@types/public';
 
 describe('animation graph asset service', () => {
@@ -128,7 +129,13 @@ describe('animation graph asset service', () => {
             sourceId: 'canvas',
         });
         const motionState = withMotionState.graph.layers[0].stateMachine.states.find((state) => state.name === 'Idle');
-        expect(motionState).toMatchObject({ type: 'motion', editorData: { centerX: 24, centerY: 48 } });
+        expect(motionState).toMatchObject({
+            type: 'motion',
+            speed: 1,
+            speedMultiplier: '',
+            speedMultiplierEnabled: false,
+            editorData: { centerX: 24, centerY: 48 },
+        });
 
         const stateTarget = {
             kind: 'state' as const,
@@ -172,6 +179,27 @@ describe('animation graph asset service', () => {
         expect(withMotion.graph.layers[0].stateMachine.states[motionState!.index].motion).toMatchObject({
             type: 'blend-1d',
             level: [0],
+            variable: '',
+            value: 0,
+        });
+        const blendTarget = withMotion.graph.layers[0].stateMachine.states[motionState!.index].motion!.target;
+        let blendInspector = await assetManager.queryAnimationGraphInspector(asset.uuid, blendTarget);
+        blendInspector = await assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+            target: blendTarget,
+            path: 'variable',
+            patch: 'speed',
+            expected: blendInspector,
+        });
+        blendInspector = await assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+            target: blendTarget,
+            path: 'value',
+            patch: 0.4,
+            expected: blendInspector,
+        });
+        const withBlendParameters = await assetManager.queryAnimationGraph(asset.uuid);
+        expect(withBlendParameters.graph.layers[0].stateMachine.states[motionState!.index].motion).toMatchObject({
+            variable: 'speed',
+            value: 0.4,
         });
 
         const withChild = await assetManager.executeAnimationGraphCommand(asset.uuid, {
@@ -186,7 +214,7 @@ describe('animation graph asset service', () => {
                 },
                 motionType: 'clip',
             },
-            expected: withMotion,
+            expected: withBlendParameters,
         });
         expect(withChild.graph.layers[0].stateMachine.states[motionState!.index].motion?.children).toHaveLength(1);
 
@@ -260,6 +288,10 @@ describe('animation graph asset service', () => {
             type: 'BinaryCondition',
             lhsBinding: { variableName: 'velocity' },
         });
+        expect(withRenamedVariable.graph.layers[0].stateMachine.states[motionState!.index].motion).toMatchObject({
+            variable: 'velocity',
+            value: 0.4,
+        });
 
         const withPoseState = await assetManager.executeAnimationGraphCommand(asset.uuid, {
             command: {
@@ -297,6 +329,7 @@ describe('animation graph asset service', () => {
             node.id !== outputNodeId && node.type.includes('PoseNodeBlendTwoPose')
         ));
         const ratioInput = blendNode!.inputs.find((input) => input.id.includes('ratio'));
+        expect(ratioInput?.value).toMatchObject({ path: 'value', type: 'Number', value: 1 });
         const inputTarget = {
             kind: 'pose-input' as const,
             layerIndex: 0,
@@ -752,6 +785,388 @@ describe('animation graph asset service', () => {
         expect(updatedRotation.dump.value).toEqual({ x: 0, y: 0.25, z: 0, w: 0.75 });
 
         await assetManager.saveAnimationGraph(asset.uuid, updatedRotation);
+    });
+
+    it('returns Creator state, blend and transition values and persists editor extras', async () => {
+        const asset = await assetManager.createAsset({
+            target: join(TestGlobalEnv.testRoot, `${name}-creator-values.animgraph`),
+            content: getDefaultGraphContent(),
+            overwrite: true,
+        });
+        let snapshot = await assetManager.queryAnimationGraph(asset.uuid);
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'add-variable', name: 'speed', variableType: 0, initialValue: 1 },
+            expected: snapshot,
+        });
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'add-variable', name: 'direction', variableType: 0, initialValue: 0 },
+            expected: snapshot,
+        });
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-state',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateType: 'motion',
+                name: 'Blend',
+                editorData: { centerX: 120, centerY: 48, collapsed: true },
+            },
+            expected: snapshot,
+        });
+        const stateIndex = snapshot.graph.layers[0].stateMachine.states.find((state) => state.name === 'Blend')!.index;
+        const stateTarget = { kind: 'state' as const, layerIndex: 0, stateMachinePath: [], stateIndex };
+        let inspector = await assetManager.queryAnimationGraphInspector(asset.uuid, stateTarget);
+        for (const [path, patch] of [
+            ['speed', 1.75],
+            ['speedMultiplier', 'speed'],
+            ['speedMultiplierEnabled', true],
+        ] as const) {
+            inspector = await assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+                target: stateTarget,
+                path,
+                patch,
+                expected: inspector,
+            });
+        }
+        snapshot = await assetManager.queryAnimationGraph(asset.uuid);
+        expect(snapshot.graph.layers[0].stateMachine.states[stateIndex]).toMatchObject({
+            speed: 1.75,
+            speedMultiplier: 'speed',
+            speedMultiplierEnabled: true,
+            editorData: { centerX: 120, centerY: 48, collapsed: true },
+        });
+
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'set-motion',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateIndex,
+                motionType: 'blend-2d',
+            },
+            expected: snapshot,
+        });
+        const motionTarget = snapshot.graph.layers[0].stateMachine.states[stateIndex].motion!.target;
+        inspector = await assetManager.queryAnimationGraphInspector(asset.uuid, motionTarget);
+        for (const [path, patch] of [
+            ['variableX', 'speed'],
+            ['valueX', 0.25],
+            ['variableY', 'direction'],
+            ['valueY', -0.5],
+        ] as const) {
+            inspector = await assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+                target: motionTarget,
+                path,
+                patch,
+                expected: inspector,
+            });
+        }
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'set-motion-editor-data',
+                target: motionTarget,
+                editorData: { centerX: 16, centerY: 32, autoThreshold: false },
+            },
+            expected: inspector,
+        });
+        expect(snapshot.graph.layers[0].stateMachine.states[stateIndex].motion).toMatchObject({
+            type: 'blend-2d',
+            variableX: 'speed',
+            valueX: 0.25,
+            variableY: 'direction',
+            valueY: -0.5,
+            editorData: { centerX: 16, centerY: 32, autoThreshold: false },
+        });
+
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-state',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateType: 'empty',
+                name: 'Destination',
+            },
+            expected: snapshot,
+        });
+        const destinationIndex = snapshot.graph.layers[0].stateMachine.states.find((state) => state.name === 'Destination')!.index;
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-transition',
+                layerIndex: 0,
+                stateMachinePath: [],
+                fromStateIndex: stateIndex,
+                toStateIndex: destinationIndex,
+            },
+            expected: snapshot,
+        });
+        const transitionIndex = snapshot.graph.layers[0].stateMachine.transitions.find((transition) => (
+            transition.fromStateIndex === stateIndex && transition.toStateIndex === destinationIndex
+        ))!.index;
+        const transitionTarget = {
+            kind: 'transition' as const,
+            layerIndex: 0,
+            stateMachinePath: [],
+            transitionIndex,
+        };
+        inspector = await assetManager.queryAnimationGraphInspector(asset.uuid, transitionTarget);
+        for (const [path, patch] of [
+            ['duration', 0.45],
+            ['relativeDuration', true],
+            ['exitConditionEnabled', false],
+            ['exitCondition', 0.8],
+            ['destinationStart', 0.2],
+            ['relativeDestinationStart', true],
+        ] as const) {
+            inspector = await assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+                target: transitionTarget,
+                path,
+                patch,
+                expected: inspector,
+            });
+        }
+        snapshot = await assetManager.queryAnimationGraph(asset.uuid);
+        expect(snapshot.graph.layers[0].stateMachine.transitions[transitionIndex]).toMatchObject({
+            duration: 0.45,
+            relativeDuration: true,
+            exitConditionEnabled: false,
+            exitCondition: 0.8,
+            destinationStart: 0.2,
+            relativeDestinationStart: true,
+        });
+        expect(snapshot.graph.layers[0].stateMachine.transitions[transitionIndex]).not.toHaveProperty('interruptible');
+
+        const saved = await assetManager.saveAnimationGraph(asset.uuid, snapshot);
+        const reloaded = await assetManager.reloadAnimationGraph(asset.uuid, { expected: saved });
+        expect(reloaded.graph.layers[0].stateMachine.states[stateIndex]).toMatchObject({
+            speed: 1.75,
+            speedMultiplier: 'speed',
+            speedMultiplierEnabled: true,
+            editorData: { centerX: 120, centerY: 48, collapsed: true },
+            motion: expect.objectContaining({
+                variableX: 'speed',
+                valueX: 0.25,
+                variableY: 'direction',
+                valueY: -0.5,
+                editorData: { centerX: 16, centerY: 32, autoThreshold: false },
+            }),
+        });
+        expect(reloaded.graph.layers[0].stateMachine.transitions[transitionIndex]).toMatchObject({
+            duration: 0.45,
+            exitCondition: 0.8,
+            destinationStart: 0.2,
+        });
+    });
+
+    it('keeps serialized Creator editor extras through load, mutation, save and reload', async () => {
+        const content = JSON.parse(getDefaultGraphContent());
+        content[2].__editorExtras__ = { centerX: 8, centerY: 12, name: 'Root Machine' };
+        content[3].__editorExtras__ = { centerX: -40, centerY: 0, name: 'Entry' };
+        const stateConstructor = require('cc').js.getClassByName('cc.animation.State');
+        const stateValues = stateConstructor.__values__;
+        const stateProps = stateConstructor.__props__;
+        const stateDeserializer = Object.getOwnPropertyDescriptor(stateConstructor, '__deserialize__');
+        const asset = await assetManager.createAsset({
+            target: join(TestGlobalEnv.testRoot, `${name}-editor-extras.animgraph`),
+            content: JSON.stringify(content, null, 2),
+            overwrite: true,
+        });
+
+        let snapshot = await assetManager.queryAnimationGraph(asset.uuid);
+        expect(snapshot.graph.layers[0].stateMachine.editorData).toEqual({ centerX: 8, centerY: 12, name: 'Root Machine' });
+        expect(snapshot.graph.layers[0].stateMachine.states[0].editorData).toEqual({ centerX: -40, centerY: 0, name: 'Entry' });
+        expect(stateConstructor.__values__).toBe(stateValues);
+        expect(stateConstructor.__props__).toBe(stateProps);
+        expect(Object.getOwnPropertyDescriptor(stateConstructor, '__deserialize__')).toEqual(stateDeserializer);
+
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'set-state-editor-data',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateIndex: 0,
+                editorData: { centerX: -24 },
+            },
+            expected: snapshot,
+        });
+        expect(snapshot.graph.layers[0].stateMachine.states[0].editorData).toEqual({
+            centerX: -24,
+            centerY: 0,
+            name: 'Entry',
+        });
+        const saved = await assetManager.saveAnimationGraph(asset.uuid, snapshot);
+        const reloaded = await assetManager.reloadAnimationGraph(asset.uuid, { expected: saved });
+        expect(reloaded.graph.layers[0].stateMachine.editorData).toEqual({ centerX: 8, centerY: 12, name: 'Root Machine' });
+        expect(reloaded.graph.layers[0].stateMachine.states[0].editorData).toEqual({
+            centerX: -24,
+            centerY: 0,
+            name: 'Entry',
+        });
+        expect(stateConstructor.__values__).toBe(stateValues);
+        expect(stateConstructor.__props__).toBe(stateProps);
+        expect(Object.getOwnPropertyDescriptor(stateConstructor, '__deserialize__')).toEqual(stateDeserializer);
+    });
+
+    it('stashes a Pose Graph with links, editor data, conflicts and Creator auto naming', async () => {
+        const asset = await assetManager.createAsset({
+            target: join(TestGlobalEnv.testRoot, `${name}-stash-pose-graph.animgraph`),
+            content: getDefaultGraphContent(),
+            overwrite: true,
+        });
+        let snapshot = await assetManager.queryAnimationGraph(asset.uuid);
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-state',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateType: 'procedural-pose',
+                name: 'Procedural',
+            },
+            expected: snapshot,
+        });
+        const stateIndex = snapshot.graph.layers[0].stateMachine.states.find((state) => state.name === 'Procedural')!.index;
+        let poseGraph = snapshot.graph.layers[0].stateMachine.states[stateIndex].poseGraph!;
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-pose-node',
+                poseGraph: poseGraph.context,
+                nodeType: 'cc.animation.PoseNodeBlendTwoPose',
+                editorData: { centerX: -80, centerY: 24 },
+            },
+            expected: snapshot,
+        });
+        poseGraph = snapshot.graph.layers[0].stateMachine.states[stateIndex].poseGraph!;
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-pose-node',
+                poseGraph: poseGraph.context,
+                nodeType: 'cc.animation.PoseNodeApplyTransform',
+                editorData: { centerX: 40, centerY: 24 },
+            },
+            expected: snapshot,
+        });
+        poseGraph = snapshot.graph.layers[0].stateMachine.states[stateIndex].poseGraph!;
+        const blendNode = poseGraph.nodes.find((node) => node.type.includes('PoseNodeBlendTwoPose'))!;
+        const transformNode = poseGraph.nodes.find((node) => node.type.includes('PoseNodeApplyTransform'))!;
+        const transformPoseInput = transformNode.inputs.find((input) => input.type === blendNode.outputTypes[0])!;
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'connect-pose-nodes',
+                poseGraph: poseGraph.context,
+                producerNodeId: blendNode.id,
+                producerOutputId: 0,
+                consumerNodeId: transformNode.id,
+                consumerInputId: transformPoseInput.id,
+            },
+            expected: snapshot,
+        });
+        poseGraph = snapshot.graph.layers[0].stateMachine.states[stateIndex].poseGraph!;
+        const connectedInput = poseGraph.nodes.find((node) => node.id === transformNode.id)!.inputs.find((input) => input.id === transformPoseInput.id)!;
+        expect(connectedInput.connected).toBe(true);
+        expect(connectedInput).not.toHaveProperty('value');
+
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'stash-pose-graph',
+                poseGraph: poseGraph.context,
+                layerIndex: 0,
+                stashName: 'Locomotion',
+                editorData: { centerX: 160, centerY: 24 },
+            },
+            expected: snapshot,
+        });
+        const stashed = snapshot.graph.layers[0].stashPoseGraphs.find((stash) => stash.name === 'Locomotion')!.poseGraph;
+        expect(stashed.nodes.find((node) => node.type.includes('PoseNodeBlendTwoPose'))?.editorData).toEqual({ centerX: -80, centerY: 24 });
+        expect(stashed.nodes.find((node) => node.type.includes('PoseNodeApplyTransform'))?.editorData).toEqual({ centerX: 40, centerY: 24 });
+        expect(stashed.nodes.some((node) => node.inputs.some((input) => input.connected))).toBe(true);
+        const original = snapshot.graph.layers[0].stateMachine.states[stateIndex].poseGraph!;
+        const useStashNode = original.nodes.find((node) => node.type.includes('PoseNodeUseStashedPose'))!;
+        expect(useStashNode.editorData).toEqual({ centerX: 160, centerY: 24 });
+        expect(original.nodes).toHaveLength(2);
+        const document = (animationGraph as unknown as {
+            _documents: Map<string, { nodesById: Map<number, object> }>;
+        })._documents.get(asset.uuid)!;
+        expect(document.nodesById.has(blendNode.id)).toBe(false);
+        expect(document.nodesById.has(transformNode.id)).toBe(false);
+
+        await expect(assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'stash-pose-graph',
+                poseGraph: original.context,
+                layerIndex: 0,
+                stashName: 'Locomotion',
+            },
+            expected: snapshot,
+        })).rejects.toMatchObject({ code: 'NAME_CONFLICT' });
+        expect((await assetManager.queryAnimationGraph(asset.uuid)).revision).toBe(snapshot.revision);
+
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'stash-pose-graph', poseGraph: original.context, layerIndex: 0 },
+            expected: snapshot,
+        });
+        expect(snapshot.graph.layers[0].stashes).toEqual(expect.arrayContaining(['Locomotion', 'Stash1']));
+        const saved = await assetManager.saveAnimationGraph(asset.uuid, snapshot);
+        const reloaded = await assetManager.reloadAnimationGraph(asset.uuid, { expected: saved });
+        expect(reloaded.graph.layers[0].stashes).toEqual(expect.arrayContaining(['Locomotion', 'Stash1']));
+        expect(reloaded.graph.layers[0].stashPoseGraphs.find((stash) => stash.name === 'Locomotion')!.poseGraph.nodes)
+            .toEqual(expect.arrayContaining([
+                expect.objectContaining({ editorData: { centerX: -80, centerY: 24 } }),
+                expect.objectContaining({ editorData: { centerX: 40, centerY: 24 } }),
+            ]));
+    });
+
+    it('restores temporary editor extras class state when registration fails', async () => {
+        const asset = await assetManager.createAsset({
+            target: join(TestGlobalEnv.testRoot, `${name}-editor-extras-registration-error.animgraph`),
+            content: getDefaultGraphContent(),
+            overwrite: true,
+        });
+        let snapshot = await assetManager.queryAnimationGraph(asset.uuid);
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-state',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateType: 'procedural-pose',
+                name: 'Registration Error',
+            },
+            expected: snapshot,
+        });
+        const poseGraph = snapshot.graph.layers[0].stateMachine.states
+            .find((state) => state.name === 'Registration Error')!.poseGraph!;
+        const outputConstructor = require('cc').js.getClassByName('cc.animation.PoseGraphOutputNode');
+        const propsDescriptor = Object.getOwnPropertyDescriptor(outputConstructor, '__props__');
+        const valuesDescriptor = Object.getOwnPropertyDescriptor(outputConstructor, '__values__')!;
+        const deserializeDescriptor = Object.getOwnPropertyDescriptor(outputConstructor, '__deserialize__');
+        expect(valuesDescriptor.value).not.toContain('__editorExtras__');
+        const readonlyValuesDescriptor = { ...valuesDescriptor, writable: false };
+        Object.defineProperty(outputConstructor, '__values__', readonlyValuesDescriptor);
+        try {
+            await expect(assetManager.executeAnimationGraphCommand(asset.uuid, {
+                command: {
+                    type: 'stash-pose-graph',
+                    poseGraph: poseGraph.context,
+                    layerIndex: 0,
+                    stashName: 'Should Fail',
+                },
+                expected: snapshot,
+            })).rejects.toThrow();
+            expect(Object.getOwnPropertyDescriptor(outputConstructor, '__props__')).toEqual(propsDescriptor);
+            expect(Object.getOwnPropertyDescriptor(outputConstructor, '__values__')).toEqual(readonlyValuesDescriptor);
+            expect(Object.getOwnPropertyDescriptor(outputConstructor, '__deserialize__')).toEqual(deserializeDescriptor);
+            expect((await assetManager.queryAnimationGraph(asset.uuid)).revision).toBe(snapshot.revision);
+        } finally {
+            if (deserializeDescriptor) {
+                Object.defineProperty(outputConstructor, '__deserialize__', deserializeDescriptor);
+            } else {
+                delete outputConstructor.__deserialize__;
+            }
+            Object.defineProperty(outputConstructor, '__values__', valuesDescriptor);
+            if (propsDescriptor) {
+                Object.defineProperty(outputConstructor, '__props__', propsDescriptor);
+            } else {
+                delete outputConstructor.__props__;
+            }
+        }
     });
 
     it('sets and clears Animation Graph asset references through inspector dumps', async () => {

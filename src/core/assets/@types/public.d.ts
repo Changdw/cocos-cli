@@ -94,6 +94,12 @@ export interface AnimationGraphMotionView {
     type: 'clip' | 'blend-1d' | 'blend-2d' | 'blend-direct' | 'unknown';
     name: string;
     clipUuid?: string | null;
+    variable?: string;
+    value?: number;
+    variableX?: string;
+    valueX?: number;
+    variableY?: string;
+    valueY?: number;
     threshold?: number | { x: number; y: number };
     weight?: { value: number; variable: string };
     children?: AnimationGraphMotionView[];
@@ -109,6 +115,7 @@ export interface AnimationGraphPoseInputView {
     connected: boolean;
     producerNodeId?: number;
     producerOutputId?: number;
+    value?: IProperty;
 }
 
 export interface AnimationGraphPoseNodeView {
@@ -136,6 +143,9 @@ export interface AnimationGraphStateView {
     incomingTransitionIndices: number[];
     outgoingTransitionIndices: number[];
     components: AnimationGraphComponentView[];
+    speed?: number;
+    speedMultiplier?: string;
+    speedMultiplierEnabled?: boolean;
     motion?: AnimationGraphMotionView | null;
     stateMachine?: AnimationGraphStateMachineView;
     poseGraph?: AnimationGraphPoseView;
@@ -149,6 +159,12 @@ export interface AnimationGraphTransitionView {
     toStateIndex: number;
     priority: number;
     conditions: AnimationGraphTransitionConditionView[];
+    duration?: number;
+    relativeDuration?: boolean;
+    exitConditionEnabled?: boolean;
+    exitCondition?: number;
+    destinationStart?: number;
+    relativeDestinationStart?: boolean;
     editorData?: Record<string, unknown>;
 }
 
@@ -262,6 +278,7 @@ export type AnimationGraphCommand =
     | ({ type: 'set-motion'; motionType: AnimationGraphMotionType | 'none'; clipUuid?: string } & (AnimationGraphStateAddress | { poseGraph: AnimationGraphPoseGraphContext; nodeId: number }))
     | { type: 'add-motion-child'; target: Extract<AnimationGraphTarget, { kind: 'motion' }>; motionType: AnimationGraphMotionType; clipUuid?: string }
     | { type: 'remove-motion'; target: Extract<AnimationGraphTarget, { kind: 'motion' }> }
+    | { type: 'set-motion-editor-data'; target: Extract<AnimationGraphTarget, { kind: 'motion' }>; editorData: Record<string, unknown> }
     | { type: 'set-motion-threshold'; target: Extract<AnimationGraphTarget, { kind: 'motion' }>; childIndex: number; threshold: number | { x: number; y: number } }
     | { type: 'set-direct-blend-weight'; target: Extract<AnimationGraphTarget, { kind: 'motion' }>; childIndex: number; value?: number; variable?: string }
     | ({ type: 'add-state-component'; componentType: string } & AnimationGraphStateAddress)
@@ -281,7 +298,8 @@ export type AnimationGraphCommand =
     | { type: 'rename-variable'; name: string; newName: string }
     | { type: 'add-stash'; layerIndex: number; name: string }
     | { type: 'remove-stash'; layerIndex: number; name: string }
-    | { type: 'rename-stash'; layerIndex: number; name: string; newName: string };
+    | { type: 'rename-stash'; layerIndex: number; name: string; newName: string }
+    | { type: 'stash-pose-graph'; poseGraph: AnimationGraphPoseGraphContext; layerIndex: number; stashName?: string; editorData?: Record<string, unknown> };
 
 export interface ExecuteAnimationGraphCommandRequest {
     command: AnimationGraphCommand;
