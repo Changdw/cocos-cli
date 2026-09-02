@@ -6538,6 +6538,7 @@ export declare interface IComponentService extends IServiceEvents {
     add(params: IAddComponentOptions): Promise<IComponent>;
     remove(params: IRemoveComponentOptions): Promise<boolean>;
     setProperty(params: ISetPropertyOptions): Promise<boolean>;
+    regeneratePolygon2DPoints(options: IRegeneratePolygon2DPointsOptions): Promise<IRegeneratePolygon2DPointsResult>;
     query(params: IQueryComponentOptions | string): Promise<IComponent | null>;
     queryAll(): Promise<string[]>;
     recalculateLODGroupBounds(options: IRecalculateLODGroupBoundsOptions): Promise<ILODGroupBoundsResult>;
@@ -7013,6 +7014,16 @@ export declare interface IReferenceImageState {
 export declare interface IReferenceImageVisibilityOptions {
     desiredVisible: boolean;
 }
+export declare interface IRegeneratePolygon2DPointsOptions {
+    path: string;
+    record?: boolean;
+}
+export declare interface IRegeneratePolygon2DPointsResult {
+    path: string;
+    changed: boolean;
+    pointCount: number;
+    source: Polygon2DPointsSource;
+}
 export declare interface IReloadOptions {
     urlOrUUID?: string;
     preserveUndoHistory?: boolean;
@@ -7481,6 +7492,7 @@ export declare interface PluginScriptUserData {
     loadPluginInMiniGame?: boolean;
     loadPluginInNative?: boolean;
 }
+export declare type Polygon2DPointsSource = 'sprite-alpha' | 'rect-fallback';
 export declare interface PrefabAssetUserData {
     persistent?: boolean;
     syncNodeName?: string;
