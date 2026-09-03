@@ -1495,6 +1495,32 @@ describe('animation graph asset service', () => {
         expect(clipState!.motion?.clipUuid).toBe(clip.uuid);
         expect(clipState!.editorData).toEqual({ centerX: 30, centerY: 60 });
 
+        const withBlend1DState = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-state',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateType: 'motion',
+                name: 'Blend 1D',
+                motionType: 'blend-1d',
+            },
+            expected: withClipState,
+        });
+        expect(withBlend1DState.graph.layers[0].stateMachine.states.find((state) => state.name === 'Blend 1D')!.motion).toMatchObject({ type: 'blend-1d' });
+
+        const withBlend2DState = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-state',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateType: 'motion',
+                name: 'Blend 2D',
+                motionType: 'blend-2d',
+            },
+            expected: withBlend1DState,
+        });
+        expect(withBlend2DState.graph.layers[0].stateMachine.states.find((state) => state.name === 'Blend 2D')!.motion).toMatchObject({ type: 'blend-2d' });
+
         await expect(assetManager.executeAnimationGraphCommand(asset.uuid, {
             command: {
                 type: 'add-state',
@@ -1503,7 +1529,7 @@ describe('animation graph asset service', () => {
                 stateType: 'empty',
                 clipUuid: clip.uuid,
             },
-            expected: withClipState,
+            expected: withBlend2DState,
         })).rejects.toMatchObject({ code: 'INVALID_PROPERTY_PATCH' });
 
         await expect(assetManager.executeAnimationGraphCommand(asset.uuid, {
@@ -1514,7 +1540,7 @@ describe('animation graph asset service', () => {
                 stateType: 'motion',
                 clipUuid: 'missing-asset-uuid',
             },
-            expected: withClipState,
+            expected: withBlend2DState,
         })).rejects.toMatchObject({ message: expect.stringContaining('missing-asset-uuid') });
     });
 });

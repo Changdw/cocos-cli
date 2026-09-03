@@ -28,7 +28,7 @@ export declare type AnimationGraphCommand =
 | { type: 'add-layer'; name?: string }
 | { type: 'remove-layer'; layerIndex: number }
 | { type: 'move-layer'; layerIndex: number; newIndex: number }
-| ({ type: 'add-state'; stateType: AnimationGraphStateType; name?: string; clipUuid?: string; editorData?: Record<string, unknown> } & AnimationGraphStateMachineAddress)
+| ({ type: 'add-state'; stateType: AnimationGraphStateType; name?: string; motionType?: AnimationGraphMotionType; clipUuid?: string; editorData?: Record<string, unknown> } & AnimationGraphStateMachineAddress)
 | ({ type: 'remove-state' } & AnimationGraphStateAddress)
 | ({ type: 'duplicate-state'; includeTransitions?: boolean; editorData?: Record<string, unknown> } & AnimationGraphStateAddress)
 | ({ type: 'set-state-editor-data'; editorData: Record<string, unknown> } & AnimationGraphStateAddress)
@@ -109,7 +109,7 @@ export declare interface AnimationGraphLayerView {
     additive: boolean;
     maskUuid: string | null;
     stashes: string[];
-    stashPoseGraphs: Array<{ name: string; poseGraph: AnimationGraphPoseView }>;
+    stashPoseGraphs: Array<{ name: string; poseGraph: AnimationGraphPoseView; referenceCount?: number }>;
     stateMachine: AnimationGraphStateMachineView;
 }
 export declare type AnimationGraphMotionAddress =
@@ -133,6 +133,11 @@ export declare interface AnimationGraphMotionView {
     children?: AnimationGraphMotionView[];
     editorData?: Record<string, unknown>;
 }
+export declare interface AnimationGraphPoseGraphAddNodeInfo {
+    typeId: string;
+    args: unknown;
+    menu: string;
+}
 export declare type AnimationGraphPoseGraphAddress =
 | { layerIndex: number; stateMachinePath: number[]; stateIndex: number }
 | { poseGraph: AnimationGraphPoseGraphContext };
@@ -143,6 +148,12 @@ export declare interface AnimationGraphPoseGraphAssetDragHandlerInfo {
 export declare interface AnimationGraphPoseGraphAssetDragHandlersEntry {
     assetType: string;
     handlers: AnimationGraphPoseGraphAssetDragHandlerInfo[];
+}
+export declare interface AnimationGraphPoseGraphAssetDragHandlersView {
+    handlers: Record<string, AnimationGraphPoseGraphAssetDragHandlerView>;
+}
+export declare interface AnimationGraphPoseGraphAssetDragHandlerView {
+    displayName: string;
 }
 export declare type AnimationGraphPoseGraphContext =
 | { kind: 'state-pose-graph'; stateMachine: AnimationGraphStateMachineContext; stateIndex: number }
@@ -179,6 +190,8 @@ export declare interface AnimationGraphPoseView {
     context: AnimationGraphPoseGraphContext;
     rootOutputNodeId: number;
     nodes: AnimationGraphPoseNodeView[];
+    addNodeInfos: AnimationGraphPoseGraphAddNodeInfo[];
+    assetDragHandlersMap: Record<string, AnimationGraphPoseGraphAssetDragHandlersView>;
 }
 export declare interface AnimationGraphSnapshot extends AnimationGraphVersion {
     uuid: string;
@@ -7991,7 +8004,7 @@ export declare type AnimationGraphCommand =
 | { type: 'add-layer'; name?: string }
 | { type: 'remove-layer'; layerIndex: number }
 | { type: 'move-layer'; layerIndex: number; newIndex: number }
-| ({ type: 'add-state'; stateType: AnimationGraphStateType; name?: string; clipUuid?: string; editorData?: Record<string, unknown> } & AnimationGraphStateMachineAddress)
+| ({ type: 'add-state'; stateType: AnimationGraphStateType; name?: string; motionType?: AnimationGraphMotionType; clipUuid?: string; editorData?: Record<string, unknown> } & AnimationGraphStateMachineAddress)
 | ({ type: 'remove-state' } & AnimationGraphStateAddress)
 | ({ type: 'duplicate-state'; includeTransitions?: boolean; editorData?: Record<string, unknown> } & AnimationGraphStateAddress)
 | ({ type: 'set-state-editor-data'; editorData: Record<string, unknown> } & AnimationGraphStateAddress)
@@ -8072,7 +8085,7 @@ export declare interface AnimationGraphLayerView {
     additive: boolean;
     maskUuid: string | null;
     stashes: string[];
-    stashPoseGraphs: Array<{ name: string; poseGraph: AnimationGraphPoseView }>;
+    stashPoseGraphs: Array<{ name: string; poseGraph: AnimationGraphPoseView; referenceCount?: number }>;
     stateMachine: AnimationGraphStateMachineView;
 }
 export declare type AnimationGraphMotionAddress =
@@ -8096,6 +8109,11 @@ export declare interface AnimationGraphMotionView {
     children?: AnimationGraphMotionView[];
     editorData?: Record<string, unknown>;
 }
+export declare interface AnimationGraphPoseGraphAddNodeInfo {
+    typeId: string;
+    args: unknown;
+    menu: string;
+}
 export declare type AnimationGraphPoseGraphAddress =
 | { layerIndex: number; stateMachinePath: number[]; stateIndex: number }
 | { poseGraph: AnimationGraphPoseGraphContext };
@@ -8106,6 +8124,12 @@ export declare interface AnimationGraphPoseGraphAssetDragHandlerInfo {
 export declare interface AnimationGraphPoseGraphAssetDragHandlersEntry {
     assetType: string;
     handlers: AnimationGraphPoseGraphAssetDragHandlerInfo[];
+}
+export declare interface AnimationGraphPoseGraphAssetDragHandlersView {
+    handlers: Record<string, AnimationGraphPoseGraphAssetDragHandlerView>;
+}
+export declare interface AnimationGraphPoseGraphAssetDragHandlerView {
+    displayName: string;
 }
 export declare type AnimationGraphPoseGraphContext =
 | { kind: 'state-pose-graph'; stateMachine: AnimationGraphStateMachineContext; stateIndex: number }
@@ -8142,6 +8166,8 @@ export declare interface AnimationGraphPoseView {
     context: AnimationGraphPoseGraphContext;
     rootOutputNodeId: number;
     nodes: AnimationGraphPoseNodeView[];
+    addNodeInfos: AnimationGraphPoseGraphAddNodeInfo[];
+    assetDragHandlersMap: Record<string, AnimationGraphPoseGraphAssetDragHandlersView>;
 }
 export declare interface AnimationGraphSnapshot extends AnimationGraphVersion {
     uuid: string;
@@ -8464,6 +8490,9 @@ export declare namespace Assets {
         AnimationGraphPoseInputView,
         AnimationGraphPoseNodeEnterInfo,
         AnimationGraphPoseNodeView,
+        AnimationGraphPoseGraphAddNodeInfo,
+        AnimationGraphPoseGraphAssetDragHandlerView,
+        AnimationGraphPoseGraphAssetDragHandlersView,
         AnimationGraphPoseView,
         AnimationGraphPoseGraphAssetDragHandlerInfo,
         AnimationGraphPoseGraphAssetDragHandlersEntry,
