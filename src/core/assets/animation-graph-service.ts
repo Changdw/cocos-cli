@@ -12,6 +12,9 @@ import type {
     AnimationGraphLayerView,
     AnimationGraphMotionType,
     AnimationGraphMotionView,
+    AnimationGraphPoseGraphAssetDragHandlersEntry,
+    AnimationGraphPoseGraphAssetDragHandlersView,
+    AnimationGraphPoseGraphAddNodeInfo,
     AnimationGraphPoseGraphContext,
     AnimationGraphPoseView,
     AnimationGraphSnapshot,
@@ -121,6 +124,106 @@ class AnimationGraphAssetService {
             await this._refreshExternalState(document);
             return this._inspectorSnapshot(document, target);
         });
+    }
+
+    async queryPoseGraphAssetDragHandlers(): Promise<AnimationGraphPoseGraphAssetDragHandlersEntry[]> {
+        const api = getNewGenAnim();
+        const js = getCC().js;
+        const result: AnimationGraphPoseGraphAssetDragHandlersEntry[] = [];
+        for (const [ctor, info] of api.getPoseGraphAssetDragHandlersMap()) {
+            result.push({
+                assetType: js.getClassName(ctor) || ctor.name,
+                handlers: Object.entries<{ displayName: string }>(info.handlers).map(([id, handler]) => ({
+                    id,
+                    displayName: handler.displayName,
+                })),
+            });
+        }
+        return result;
+    }
+
+    /**
+     * Projects the engine's registered pose-node factories and drag handlers for the webview.
+     *
+     * ```mermaid
+     * flowchart LR
+     *     Registry[cc.js class registry] --> Factories[getCreatePoseGraphNodeEntries]
+     *     Factories --> Menu[serialized add-node menu]
+     *     Drag[pose-graph drag registry] --> Handlers[serialized handler map]
+     * ```
+     */
+    private _queryPoseGraphEditingMetadata(
+        document: AnimationGraphDocument,
+        layerIndex: number,
+    ): {
+        addNodeInfos: AnimationGraphPoseGraphAddNodeInfo[];
+        assetDragHandlersMap: Record<string, AnimationGraphPoseGraphAssetDragHandlersView>;
+    } {
+        const api = getNewGenAnim();
+        const js = getCC().js;
+        const poseNodeBase = js.getClassByName('cc.animation.PoseNode');
+        const pureValueNodeBase = js.getClassByName('cc.animation.PureValueNode');
+        const registered = (js._nameToClass ?? js._registeredClassNames) as Record<string, new (...args: any[]) => object> | undefined;
+        const addNodeInfos: AnimationGraphPoseGraphAddNodeInfo[] = [];
+        if (registered && poseNodeBase && pureValueNodeBase) {
+            const constructors = new Set(Object.values(registered));
+            for (const ctor of constructors) {
+                if (ctor === poseNodeBase || ctor === pureValueNodeBase
+                    || (!js.isChildClassOf(ctor, poseNodeBase) && !js.isChildClassOf(ctor, pureValueNodeBase))) {
+                    continue;
+                }
+                const typeId = js.getClassName(ctor) || Object.keys(registered).find(name => registered[name] === ctor);
+                if (!typeId) {
+                    continue;
+                }
+                for (const entry of api.getCreatePoseGraphNodeEntries(ctor as any, {
+                    animationGraph: document.graph,
+                    layerIndex,
+                })) {
+                    const menu = [
+                        entry.category,
+                        `i18n:ENGINE.classes.${typeId}.displayName`,
+                        entry.subMenu,
+                    ].filter((segment): segment is string => typeof segment === 'string' && segment.length > 0)
+                        .map(segment => segment.replace(/\/+$/, ''))
+                        .join('/');
+                    addNodeInfos.push({ typeId, args: entry.arg ?? null, menu });
+                }
+            }
+        }
+
+        const assetDragHandlersMap: Record<string, AnimationGraphPoseGraphAssetDragHandlersView> = {};
+        for (const [ctor, info] of api.getPoseGraphAssetDragHandlersMap()) {
+            const assetType = js.getClassName(ctor) || ctor.name;
+            if (assetType) {
+                assetDragHandlersMap[assetType] = {
+                    handlers: Object.fromEntries(Object.entries(info.handlers as Record<string, { displayName: string }>).map(([id, handler]) => [id, {
+                        displayName: handler.displayName,
+                    }])),
+                };
+            }
+        }
+        return { addNodeInfos, assetDragHandlersMap };
+    }
+
+    async queryStateMachineComponentTypes(): Promise<string[]> {
+        const js = getCC().js;
+        const base = js.getClassByName('cc.animation.StateMachineComponent');
+        if (!base) {
+            throw new Error('State machine component base class can not be found: cc.animation.StateMachineComponent');
+        }
+        const result: string[] = [];
+        // 当前引擎版本的 cc.js 直接暴露 js-typed 的 _nameToClass，_registeredClassNames 仅作兼容兜底。
+        const registered = (js._nameToClass ?? js._registeredClassNames) as Record<string, new () => object> | undefined;
+        if (!registered) {
+            throw new Error('The engine js class registry is not available.');
+        }
+        for (const [name, ctor] of Object.entries(registered)) {
+            if (ctor !== base && js.isChildClassOf(ctor, base)) {
+                result.push(name);
+            }
+        }
+        return result.sort();
     }
 
     async setInspectorProperty(
@@ -528,6 +631,7 @@ class AnimationGraphAssetService {
                     layerIndex: index,
                     stashName: name,
                 }),
+                referenceCount: countStashReferences(layer, name),
             })),
             stateMachine: this._queryStateMachine(document, layer.stateMachine, stateMachineContext, []),
         };
@@ -634,6 +738,8 @@ class AnimationGraphAssetService {
             view.exitConditionEnabled = !!transition.exitConditionEnabled;
             view.exitCondition = transition.exitCondition;
         }
+        view.startEvent = transition.startEventBinding?.methodName ?? '';
+        view.endEvent = transition.endEventBinding?.methodName ?? '';
         return view;
     }
 
@@ -646,6 +752,7 @@ class AnimationGraphAssetService {
                 operator: condition.operator,
                 lhs: condition.lhs,
                 lhsBinding: dumpTransitionConditionBinding(condition.lhsBinding),
+                bindingClass: getClassName(condition.lhsBinding),
                 rhs: condition.rhs,
                 isRhsInteger: condition.lhsBinding?.getValueType?.() === api.TCBindingValueType.INTEGER,
             };
@@ -731,9 +838,11 @@ class AnimationGraphAssetService {
         const api = getNewGenAnim();
         const nodes = Array.from(poseGraph.nodes() as Iterable<any>);
         const rootOutputNodeId = this._nodeId(document, poseGraph.outputNode);
+        const editingMetadata = this._queryPoseGraphEditingMetadata(document, getPoseGraphLayerIndex(context));
         return {
             context: clonePlain(context),
             rootOutputNodeId,
+            ...editingMetadata,
             nodes: nodes.map((node) => {
                 const id = this._nodeId(document, node);
                 const view: import('./@types/public').AnimationGraphPoseNodeView = {
@@ -762,7 +871,15 @@ class AnimationGraphAssetService {
                     inputInsertInfos: clonePlain(api.poseGraphOp.getInputInsertInfos(node)),
                     editorData: getEditorData(node),
                 };
-                const enterInfo = node.getEnterInfo?.();
+                const enterInfo = getPoseNodeEnterInfo(node, api);
+                if (enterInfo) {
+                    view.enterInfo = {
+                        type: enterInfo.type,
+                        ...(enterInfo.type === 'stash' && typeof enterInfo.stashName === 'string'
+                            ? { stashName: enterInfo.stashName }
+                            : {}),
+                    };
+                }
                 const nestedStateMachine = enterInfo?.type === 'state-machine'
                     ? enterInfo.target
                     : isStateMachineLike(node.stateMachine) ? node.stateMachine : undefined;
@@ -986,7 +1103,7 @@ class AnimationGraphAssetService {
                     poseGraph: context.poseGraph,
                     nodeId: context.nodeId,
                 });
-                const enterInfo = node.getEnterInfo?.();
+                const enterInfo = getPoseNodeEnterInfo(node, getNewGenAnim());
                 const stateMachine = enterInfo?.type === 'state-machine'
                     ? enterInfo.target
                     : isStateMachineLike(node.stateMachine) ? node.stateMachine : undefined;
@@ -1155,6 +1272,14 @@ class AnimationGraphAssetService {
                 const stateMachine = this._getStateMachineForAddress(document, command);
                 const state = createState(stateMachine, command.stateType);
                 state.name = command.name || uniqueStateName(stateMachine, defaultStateName(command.stateType));
+                if (command.clipUuid !== undefined) {
+                    // clipUuid 仅对动画状态有效：创建后立即挂上 ClipMotion（等价 add-state + set-motion 一次完成）。
+                    const api = getNewGenAnim();
+                    if (!(state instanceof api.MotionState)) {
+                        throw new AnimationGraphEditError('INVALID_PROPERTY_PATCH', 'A clip can only be attached to a motion state.', this._version(document));
+                    }
+                    state.motion = this._createMotion('clip', command.clipUuid);
+                }
                 assignEditorData(state, command.editorData);
                 return;
             }
@@ -1227,6 +1352,29 @@ class AnimationGraphAssetService {
                     throw this._targetNotFound(document, command);
                 }
                 setTransitionConditionProperty(condition, command.path, command.value, api);
+                return;
+            }
+            case 'set-transition-condition-binding-class': {
+                const { transition } = this._resolveTransition(document, command.target);
+                const condition = transition.conditions[command.conditionIndex];
+                if (!(condition instanceof api.BinaryCondition)) {
+                    throw this._targetNotFound(document, command);
+                }
+                const bindingClass = requireTransitionConditionBindingClass('bindingClass', command.bindingClass);
+                const ctor = getCC().js.getClassByName(bindingClass);
+                if (!ctor) {
+                    throw new AnimationGraphEditError('TARGET_NOT_FOUND', `Transition condition binding class can not be found: ${bindingClass}`, this._version(document));
+                }
+                condition.lhsBinding = new ctor();
+                return;
+            }
+            case 'set-transition-event-binding': {
+                const { transition } = this._resolveTransition(document, command);
+                const binding = command.which === 'start' ? transition.startEventBinding : transition.endEventBinding;
+                if (!binding) {
+                    throw this._targetNotFound(document, command);
+                }
+                binding.methodName = requireString('methodName', command.methodName);
                 return;
             }
             case 'set-motion': {
@@ -1347,6 +1495,57 @@ class AnimationGraphAssetService {
                     throw new AnimationGraphEditError('TARGET_NOT_FOUND', `Pose node type can not be found: ${command.nodeType}`, this._version(document));
                 }
                 const node = api.createPoseGraphNode(ctor, command.createArg);
+                poseGraph.addNode(node);
+                assignEditorData(node, command.editorData);
+                this._nodeId(document, node);
+                return;
+            }
+            case 'create-pose-node-on-asset-drag': {
+                const poseGraph = this._resolvePoseGraph(document, command);
+                const js = getCC().js;
+                const asset = assetQuery.queryAsset(command.assetUuid);
+                if (!asset) {
+                    throw new AnimationGraphEditError('TARGET_NOT_FOUND', `Asset can not be found: ${command.assetUuid}`, this._version(document));
+                }
+                const assetType = assetQuery.queryAssetProperty(asset, 'type') as string;
+                const assetCtor = typeof assetType === 'string' ? js.getClassByName(assetType) : undefined;
+                if (!assetCtor || !js.isChildClassOf(assetCtor, getCC().Asset)) {
+                    throw new AnimationGraphEditError('TARGET_NOT_FOUND', `Asset type can not be found: ${assetType}`, this._version(document));
+                }
+                // 引擎按资产构造器精确匹配注册表（registry.get(asset.constructor)），
+                // 这里先自行校验，把引擎的 console.warn + undefined 转换为明确的错误。
+                let registered: { handlers: Record<string, { displayName: string }> } | undefined;
+                for (const [ctor, info] of api.getPoseGraphAssetDragHandlersMap()) {
+                    if (ctor === assetCtor) {
+                        registered = info;
+                        break;
+                    }
+                }
+                if (!registered) {
+                    throw new AnimationGraphEditError(
+                        'TARGET_NOT_FOUND',
+                        `No pose graph asset drag handlers for asset type: ${assetType}`,
+                        this._version(document),
+                    );
+                }
+                if (!(command.handlerId in registered.handlers)) {
+                    throw new AnimationGraphEditError(
+                        'TARGET_NOT_FOUND',
+                        `Pose graph asset drag handler can not be found: ${command.handlerId}, existing handlers are ${Object.keys(registered.handlers).join(',')}`,
+                        this._version(document),
+                    );
+                }
+                // serialize.asAsset 生成的 stub 是资产构造器的真实实例（仅设置 _uuid），
+                // 内置 handler 只是把它赋给 motion.clip 字段，因此 stub 即可满足。
+                const reference = this._createAssetReference(command.assetUuid, assetCtor);
+                const node = api.createPoseNodeOnAssetDrag(reference, command.handlerId);
+                if (!node) {
+                    throw new AnimationGraphEditError(
+                        'INVALID_PROPERTY_PATCH',
+                        `Pose graph asset drag handler ${command.handlerId} did not create a pose node for asset: ${command.assetUuid}`,
+                        this._version(document),
+                    );
+                }
                 poseGraph.addNode(node);
                 assignEditorData(node, command.editorData);
                 this._nodeId(document, node);
@@ -1707,7 +1906,7 @@ class AnimationGraphAssetService {
             visitedPoseGraphs.add(poseGraph);
             for (const node of poseGraph.nodes() as Iterable<any>) {
                 nodes.push(node);
-                const enterInfo = node.getEnterInfo?.();
+                const enterInfo = getPoseNodeEnterInfo(node, getNewGenAnim());
                 const stateMachine = enterInfo?.type === 'state-machine'
                     ? enterInfo.target
                     : isStateMachineLike(node.stateMachine) ? node.stateMachine : undefined;
@@ -1797,6 +1996,34 @@ function getClassName(value: any): string {
         return '';
     }
     return getCC().js.getClassName(value) || value.constructor?.name || 'Unknown';
+}
+
+/** Counts the pose nodes that reference a Layer Stash; failures degrade to 0 with a warning. */
+function countStashReferences(layer: any, stashName: string): number {
+    try {
+        return Array.from(getNewGenAnim().visitStashReferences(layer, stashName)).length;
+    } catch (error) {
+        console.warn(`[animation-graph] failed to count references of stash "${stashName}".`, error);
+        return 0;
+    }
+}
+
+function getPoseGraphLayerIndex(context: AnimationGraphPoseGraphContext): number {
+    if (context.kind === 'layer-stash') {
+        return context.layerIndex;
+    }
+    return getStateMachineLayerIndex(context.stateMachine);
+}
+
+function getStateMachineLayerIndex(context: AnimationGraphStateMachineContext): number {
+    switch (context.kind) {
+        case 'layer-state-machine':
+            return context.layerIndex;
+        case 'pose-node-state-machine':
+            return getPoseGraphLayerIndex(context.poseGraph);
+        case 'sub-state-machine':
+            return getStateMachineLayerIndex(context.stateMachine);
+    }
 }
 
 function getAssetUuid(value: any): string | null {
@@ -1984,6 +2211,34 @@ function isStateMachineLike(value: any): boolean {
     return !!value
         && typeof value.states === 'function'
         && typeof value.transitions === 'function';
+}
+
+interface PoseNodeEnterInfoLike {
+    type: 'state-machine' | 'animation-blend' | 'stash';
+    target?: unknown;
+    stashName?: string;
+}
+
+function getPoseNodeEnterInfo(node: any, api: any): PoseNodeEnterInfoLike | undefined {
+    if (typeof node.getEnterInfo === 'function') {
+        return node.getEnterInfo();
+    }
+    // CLI 运行时 EDITOR 为 false，引擎不会安装 if (EDITOR) 守卫内的 getEnterInfo 原型方法，
+    // 这里按引擎实现等价推导（pose-nodes/state-machine.ts、use-stashed-pose.ts、
+    // play-or-sample-motion-pose-node-shared.ts）。
+    const js = getCC().js;
+    const stateMachineNodeCtor = js.getClassByName('cc.animation.PoseNodeStateMachine');
+    if (stateMachineNodeCtor && node instanceof stateMachineNodeCtor) {
+        return { type: 'state-machine', target: node.stateMachine };
+    }
+    const useStashedPoseCtor = js.getClassByName('cc.animation.PoseNodeUseStashedPose');
+    if (useStashedPoseCtor && node instanceof useStashedPoseCtor) {
+        return { type: 'stash', stashName: node.stashName };
+    }
+    if (node.motion && node.motion instanceof api.AnimationBlend) {
+        return { type: 'animation-blend', target: node.motion };
+    }
+    return undefined;
 }
 
 function isVec2Like(value: unknown): value is { x: number; y: number } {
@@ -2235,6 +2490,22 @@ function createTransitionCondition(api: any, type: import('./@types/public').Ani
     }
 }
 
+const transitionConditionBindingClasses: readonly string[] = [
+    'cc.animation.TCVariableBinding',
+    'cc.animation.TCAuxiliaryCurveBinding',
+    'cc.animation.TCStateWeightBinding',
+    'cc.animation.TCStateMotionTimeBinding',
+];
+
+function requireTransitionConditionBindingClass(path: string, value: unknown): string {
+    const name = typeof value === 'string' ? value.trim() : '';
+    const normalized = name.startsWith('cc.animation.') ? name : `cc.animation.${name}`;
+    if (!transitionConditionBindingClasses.includes(normalized)) {
+        throw new Error(`Transition condition property ${path} expects one of: ${transitionConditionBindingClasses.join(', ')}.`);
+    }
+    return normalized;
+}
+
 function setTransitionConditionProperty(condition: any, path: string, value: unknown, api: any): void {
     if (condition instanceof api.BinaryCondition) {
         switch (path) {
@@ -2252,6 +2523,9 @@ function setTransitionConditionProperty(condition: any, path: string, value: unk
                 return;
             case 'lhsBinding.variableName':
                 condition.lhsBinding.variableName = requireString(path, value);
+                return;
+            case 'lhsBinding.curveName':
+                condition.lhsBinding.curveName = requireString(path, value);
                 return;
             default:
                 throw new Error(`Unsupported BinaryCondition property path: ${path}`);
