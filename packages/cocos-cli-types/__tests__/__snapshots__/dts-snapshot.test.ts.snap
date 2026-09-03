@@ -7,6 +7,8 @@ exports[`DTS API compatibility assets.d.ts should match snapshot 1`] = `
 export declare const animationGraph: {
     query(uuidOrUrlOrPath: string): Promise<AnimationGraphSnapshot>;
     queryInspector(uuidOrUrlOrPath: string, target: AnimationGraphTarget): Promise<AnimationGraphInspectorSnapshot>;
+    queryPoseGraphAssetDragHandlers(): Promise<AnimationGraphPoseGraphAssetDragHandlersEntry[]>;
+    queryStateMachineComponentTypes(): Promise<string[]>;
     setInspectorProperty(uuidOrUrlOrPath: string, request: SetAnimationGraphInspectorPropertyRequest): Promise<AnimationGraphInspectorSnapshot>;
     resetInspectorProperty(uuidOrUrlOrPath: string, request: AnimationGraphInspectorPropertyOperationRequest): Promise<AnimationGraphInspectorSnapshot>;
     createInspectorProperty(uuidOrUrlOrPath: string, request: AnimationGraphInspectorPropertyOperationRequest): Promise<AnimationGraphInspectorSnapshot>;
@@ -26,7 +28,7 @@ export declare type AnimationGraphCommand =
 | { type: 'add-layer'; name?: string }
 | { type: 'remove-layer'; layerIndex: number }
 | { type: 'move-layer'; layerIndex: number; newIndex: number }
-| ({ type: 'add-state'; stateType: AnimationGraphStateType; name?: string; editorData?: Record<string, unknown> } & AnimationGraphStateMachineAddress)
+| ({ type: 'add-state'; stateType: AnimationGraphStateType; name?: string; clipUuid?: string; editorData?: Record<string, unknown> } & AnimationGraphStateMachineAddress)
 | ({ type: 'remove-state' } & AnimationGraphStateAddress)
 | ({ type: 'duplicate-state'; includeTransitions?: boolean; editorData?: Record<string, unknown> } & AnimationGraphStateAddress)
 | ({ type: 'set-state-editor-data'; editorData: Record<string, unknown> } & AnimationGraphStateAddress)
@@ -36,6 +38,8 @@ export declare type AnimationGraphCommand =
 | { type: 'add-transition-condition'; target: Extract<AnimationGraphTarget, { kind: 'transition' }>; conditionType: AnimationGraphTransitionConditionType }
 | { type: 'remove-transition-condition'; target: Extract<AnimationGraphTarget, { kind: 'transition' }>; conditionIndex: number }
 | { type: 'set-transition-condition-property'; target: Extract<AnimationGraphTarget, { kind: 'transition' }>; conditionIndex: number; path: string; value: unknown }
+| { type: 'set-transition-condition-binding-class'; target: Extract<AnimationGraphTarget, { kind: 'transition' }>; conditionIndex: number; bindingClass: string }
+| ({ type: 'set-transition-event-binding'; transitionIndex: number; which: 'start' | 'end'; methodName: string } & AnimationGraphStateMachineAddress)
 | ({ type: 'set-motion'; motionType: AnimationGraphMotionType | 'none'; clipUuid?: string } & (AnimationGraphStateAddress | { poseGraph: AnimationGraphPoseGraphContext; nodeId: number }))
 | { type: 'add-motion-child'; target: Extract<AnimationGraphTarget, { kind: 'motion' }>; motionType: AnimationGraphMotionType; clipUuid?: string }
 | { type: 'remove-motion'; target: Extract<AnimationGraphTarget, { kind: 'motion' }> }
@@ -45,6 +49,7 @@ export declare type AnimationGraphCommand =
 | ({ type: 'add-state-component'; componentType: string } & AnimationGraphStateAddress)
 | ({ type: 'remove-state-component'; componentIndex: number } & AnimationGraphStateAddress)
 | ({ type: 'add-pose-node'; nodeType: string; createArg?: unknown; editorData?: Record<string, unknown> } & AnimationGraphPoseGraphAddress)
+| ({ type: 'create-pose-node-on-asset-drag'; assetUuid: string; handlerId: string; editorData?: Record<string, unknown> } & AnimationGraphPoseGraphAddress)
 | { type: 'remove-pose-node'; target: Extract<AnimationGraphTarget, { kind: 'pose-node' }> }
 | ({ type: 'duplicate-pose-nodes'; nodeIds: number[] } & AnimationGraphPoseGraphAddress)
 | { type: 'set-pose-node-editor-data'; target: Extract<AnimationGraphTarget, { kind: 'pose-node' }>; editorData: Record<string, unknown> }
@@ -131,6 +136,14 @@ export declare interface AnimationGraphMotionView {
 export declare type AnimationGraphPoseGraphAddress =
 | { layerIndex: number; stateMachinePath: number[]; stateIndex: number }
 | { poseGraph: AnimationGraphPoseGraphContext };
+export declare interface AnimationGraphPoseGraphAssetDragHandlerInfo {
+    id: string;
+    displayName: string;
+}
+export declare interface AnimationGraphPoseGraphAssetDragHandlersEntry {
+    assetType: string;
+    handlers: AnimationGraphPoseGraphAssetDragHandlerInfo[];
+}
 export declare type AnimationGraphPoseGraphContext =
 | { kind: 'state-pose-graph'; stateMachine: AnimationGraphStateMachineContext; stateIndex: number }
 | { kind: 'layer-stash'; layerIndex: number; stashName: string };
@@ -146,6 +159,10 @@ export declare interface AnimationGraphPoseInputView {
     value?: IProperty;
 }
 export declare type AnimationGraphPoseNodeAddress = AnimationGraphPoseGraphAddress & { nodeId: number };
+export declare interface AnimationGraphPoseNodeEnterInfo {
+    type: 'state-machine' | 'animation-blend' | 'stash';
+    stashName?: string;
+}
 export declare interface AnimationGraphPoseNodeView {
     id: number;
     type: string;
@@ -155,6 +172,7 @@ export declare interface AnimationGraphPoseNodeView {
     inputInsertInfos: Record<string, { displayName: string }>;
     stateMachine?: AnimationGraphStateMachineView;
     motion?: AnimationGraphMotionView | null;
+    enterInfo?: AnimationGraphPoseNodeEnterInfo;
     editorData?: Record<string, unknown>;
 }
 export declare interface AnimationGraphPoseView {
@@ -215,6 +233,7 @@ export declare type AnimationGraphTransitionConditionView =
     operator: number;
     lhs: number;
     lhsBinding: Record<string, unknown>;
+    bindingClass: string;
     rhs: number;
     isRhsInteger: boolean;
 }
@@ -247,6 +266,8 @@ export declare interface AnimationGraphTransitionView {
     exitCondition?: number;
     destinationStart?: number;
     relativeDestinationStart?: boolean;
+    startEvent?: string;
+    endEvent?: string;
     editorData?: Record<string, unknown>;
 }
 export declare interface AnimationGraphVariableView {
@@ -7949,6 +7970,8 @@ export declare interface AnimationClipAssetUserData {
 export declare const animationGraph: {
     query(uuidOrUrlOrPath: string): Promise<AnimationGraphSnapshot>;
     queryInspector(uuidOrUrlOrPath: string, target: AnimationGraphTarget): Promise<AnimationGraphInspectorSnapshot>;
+    queryPoseGraphAssetDragHandlers(): Promise<AnimationGraphPoseGraphAssetDragHandlersEntry[]>;
+    queryStateMachineComponentTypes(): Promise<string[]>;
     setInspectorProperty(uuidOrUrlOrPath: string, request: SetAnimationGraphInspectorPropertyRequest): Promise<AnimationGraphInspectorSnapshot>;
     resetInspectorProperty(uuidOrUrlOrPath: string, request: AnimationGraphInspectorPropertyOperationRequest): Promise<AnimationGraphInspectorSnapshot>;
     createInspectorProperty(uuidOrUrlOrPath: string, request: AnimationGraphInspectorPropertyOperationRequest): Promise<AnimationGraphInspectorSnapshot>;
@@ -7968,7 +7991,7 @@ export declare type AnimationGraphCommand =
 | { type: 'add-layer'; name?: string }
 | { type: 'remove-layer'; layerIndex: number }
 | { type: 'move-layer'; layerIndex: number; newIndex: number }
-| ({ type: 'add-state'; stateType: AnimationGraphStateType; name?: string; editorData?: Record<string, unknown> } & AnimationGraphStateMachineAddress)
+| ({ type: 'add-state'; stateType: AnimationGraphStateType; name?: string; clipUuid?: string; editorData?: Record<string, unknown> } & AnimationGraphStateMachineAddress)
 | ({ type: 'remove-state' } & AnimationGraphStateAddress)
 | ({ type: 'duplicate-state'; includeTransitions?: boolean; editorData?: Record<string, unknown> } & AnimationGraphStateAddress)
 | ({ type: 'set-state-editor-data'; editorData: Record<string, unknown> } & AnimationGraphStateAddress)
@@ -7978,6 +8001,8 @@ export declare type AnimationGraphCommand =
 | { type: 'add-transition-condition'; target: Extract<AnimationGraphTarget, { kind: 'transition' }>; conditionType: AnimationGraphTransitionConditionType }
 | { type: 'remove-transition-condition'; target: Extract<AnimationGraphTarget, { kind: 'transition' }>; conditionIndex: number }
 | { type: 'set-transition-condition-property'; target: Extract<AnimationGraphTarget, { kind: 'transition' }>; conditionIndex: number; path: string; value: unknown }
+| { type: 'set-transition-condition-binding-class'; target: Extract<AnimationGraphTarget, { kind: 'transition' }>; conditionIndex: number; bindingClass: string }
+| ({ type: 'set-transition-event-binding'; transitionIndex: number; which: 'start' | 'end'; methodName: string } & AnimationGraphStateMachineAddress)
 | ({ type: 'set-motion'; motionType: AnimationGraphMotionType | 'none'; clipUuid?: string } & (AnimationGraphStateAddress | { poseGraph: AnimationGraphPoseGraphContext; nodeId: number }))
 | { type: 'add-motion-child'; target: Extract<AnimationGraphTarget, { kind: 'motion' }>; motionType: AnimationGraphMotionType; clipUuid?: string }
 | { type: 'remove-motion'; target: Extract<AnimationGraphTarget, { kind: 'motion' }> }
@@ -7987,6 +8012,7 @@ export declare type AnimationGraphCommand =
 | ({ type: 'add-state-component'; componentType: string } & AnimationGraphStateAddress)
 | ({ type: 'remove-state-component'; componentIndex: number } & AnimationGraphStateAddress)
 | ({ type: 'add-pose-node'; nodeType: string; createArg?: unknown; editorData?: Record<string, unknown> } & AnimationGraphPoseGraphAddress)
+| ({ type: 'create-pose-node-on-asset-drag'; assetUuid: string; handlerId: string; editorData?: Record<string, unknown> } & AnimationGraphPoseGraphAddress)
 | { type: 'remove-pose-node'; target: Extract<AnimationGraphTarget, { kind: 'pose-node' }> }
 | ({ type: 'duplicate-pose-nodes'; nodeIds: number[] } & AnimationGraphPoseGraphAddress)
 | { type: 'set-pose-node-editor-data'; target: Extract<AnimationGraphTarget, { kind: 'pose-node' }>; editorData: Record<string, unknown> }
@@ -8073,6 +8099,14 @@ export declare interface AnimationGraphMotionView {
 export declare type AnimationGraphPoseGraphAddress =
 | { layerIndex: number; stateMachinePath: number[]; stateIndex: number }
 | { poseGraph: AnimationGraphPoseGraphContext };
+export declare interface AnimationGraphPoseGraphAssetDragHandlerInfo {
+    id: string;
+    displayName: string;
+}
+export declare interface AnimationGraphPoseGraphAssetDragHandlersEntry {
+    assetType: string;
+    handlers: AnimationGraphPoseGraphAssetDragHandlerInfo[];
+}
 export declare type AnimationGraphPoseGraphContext =
 | { kind: 'state-pose-graph'; stateMachine: AnimationGraphStateMachineContext; stateIndex: number }
 | { kind: 'layer-stash'; layerIndex: number; stashName: string };
@@ -8088,6 +8122,10 @@ export declare interface AnimationGraphPoseInputView {
     value?: IProperty;
 }
 export declare type AnimationGraphPoseNodeAddress = AnimationGraphPoseGraphAddress & { nodeId: number };
+export declare interface AnimationGraphPoseNodeEnterInfo {
+    type: 'state-machine' | 'animation-blend' | 'stash';
+    stashName?: string;
+}
 export declare interface AnimationGraphPoseNodeView {
     id: number;
     type: string;
@@ -8097,6 +8135,7 @@ export declare interface AnimationGraphPoseNodeView {
     inputInsertInfos: Record<string, { displayName: string }>;
     stateMachine?: AnimationGraphStateMachineView;
     motion?: AnimationGraphMotionView | null;
+    enterInfo?: AnimationGraphPoseNodeEnterInfo;
     editorData?: Record<string, unknown>;
 }
 export declare interface AnimationGraphPoseView {
@@ -8157,6 +8196,7 @@ export declare type AnimationGraphTransitionConditionView =
     operator: number;
     lhs: number;
     lhsBinding: Record<string, unknown>;
+    bindingClass: string;
     rhs: number;
     isRhsInteger: boolean;
 }
@@ -8189,6 +8229,8 @@ export declare interface AnimationGraphTransitionView {
     exitCondition?: number;
     destinationStart?: number;
     relativeDestinationStart?: boolean;
+    startEvent?: string;
+    endEvent?: string;
     editorData?: Record<string, unknown>;
 }
 export declare interface AnimationGraphVariableView {
@@ -8420,8 +8462,11 @@ export declare namespace Assets {
         AnimationGraphComponentView,
         AnimationGraphMotionView,
         AnimationGraphPoseInputView,
+        AnimationGraphPoseNodeEnterInfo,
         AnimationGraphPoseNodeView,
         AnimationGraphPoseView,
+        AnimationGraphPoseGraphAssetDragHandlerInfo,
+        AnimationGraphPoseGraphAssetDragHandlersEntry,
         AnimationGraphStateView,
         AnimationGraphTransitionView,
         AnimationGraphTransitionConditionView,

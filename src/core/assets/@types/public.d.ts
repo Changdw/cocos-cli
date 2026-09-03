@@ -118,6 +118,11 @@ export interface AnimationGraphPoseInputView {
     value?: IProperty;
 }
 
+export interface AnimationGraphPoseNodeEnterInfo {
+    type: 'state-machine' | 'animation-blend' | 'stash';
+    stashName?: string;
+}
+
 export interface AnimationGraphPoseNodeView {
     id: number;
     type: string;
@@ -127,13 +132,40 @@ export interface AnimationGraphPoseNodeView {
     inputInsertInfos: Record<string, { displayName: string }>;
     stateMachine?: AnimationGraphStateMachineView;
     motion?: AnimationGraphMotionView | null;
+    enterInfo?: AnimationGraphPoseNodeEnterInfo;
     editorData?: Record<string, unknown>;
+}
+
+export interface AnimationGraphPoseGraphAddNodeInfo {
+    typeId: string;
+    args: unknown;
+    menu: string;
+}
+
+export interface AnimationGraphPoseGraphAssetDragHandlerView {
+    displayName: string;
+}
+
+export interface AnimationGraphPoseGraphAssetDragHandlersView {
+    handlers: Record<string, AnimationGraphPoseGraphAssetDragHandlerView>;
 }
 
 export interface AnimationGraphPoseView {
     context: AnimationGraphPoseGraphContext;
     rootOutputNodeId: number;
     nodes: AnimationGraphPoseNodeView[];
+    addNodeInfos: AnimationGraphPoseGraphAddNodeInfo[];
+    assetDragHandlersMap: Record<string, AnimationGraphPoseGraphAssetDragHandlersView>;
+}
+
+export interface AnimationGraphPoseGraphAssetDragHandlerInfo {
+    id: string;
+    displayName: string;
+}
+
+export interface AnimationGraphPoseGraphAssetDragHandlersEntry {
+    assetType: string;
+    handlers: AnimationGraphPoseGraphAssetDragHandlerInfo[];
 }
 
 export interface AnimationGraphStateView {
@@ -165,6 +197,8 @@ export interface AnimationGraphTransitionView {
     exitCondition?: number;
     destinationStart?: number;
     relativeDestinationStart?: boolean;
+    startEvent?: string;
+    endEvent?: string;
     editorData?: Record<string, unknown>;
 }
 
@@ -175,6 +209,7 @@ export type AnimationGraphTransitionConditionView =
         operator: number;
         lhs: number;
         lhsBinding: Record<string, unknown>;
+        bindingClass: string;
         rhs: number;
         isRhsInteger: boolean;
     }
@@ -211,7 +246,7 @@ export interface AnimationGraphLayerView {
     additive: boolean;
     maskUuid: string | null;
     stashes: string[];
-    stashPoseGraphs: Array<{ name: string; poseGraph: AnimationGraphPoseView }>;
+    stashPoseGraphs: Array<{ name: string; poseGraph: AnimationGraphPoseView; referenceCount?: number }>;
     stateMachine: AnimationGraphStateMachineView;
 }
 
@@ -265,7 +300,7 @@ export type AnimationGraphCommand =
     | { type: 'add-layer'; name?: string }
     | { type: 'remove-layer'; layerIndex: number }
     | { type: 'move-layer'; layerIndex: number; newIndex: number }
-    | ({ type: 'add-state'; stateType: AnimationGraphStateType; name?: string; editorData?: Record<string, unknown> } & AnimationGraphStateMachineAddress)
+    | ({ type: 'add-state'; stateType: AnimationGraphStateType; name?: string; clipUuid?: string; editorData?: Record<string, unknown> } & AnimationGraphStateMachineAddress)
     | ({ type: 'remove-state' } & AnimationGraphStateAddress)
     | ({ type: 'duplicate-state'; includeTransitions?: boolean; editorData?: Record<string, unknown> } & AnimationGraphStateAddress)
     | ({ type: 'set-state-editor-data'; editorData: Record<string, unknown> } & AnimationGraphStateAddress)
@@ -275,6 +310,8 @@ export type AnimationGraphCommand =
     | { type: 'add-transition-condition'; target: Extract<AnimationGraphTarget, { kind: 'transition' }>; conditionType: AnimationGraphTransitionConditionType }
     | { type: 'remove-transition-condition'; target: Extract<AnimationGraphTarget, { kind: 'transition' }>; conditionIndex: number }
     | { type: 'set-transition-condition-property'; target: Extract<AnimationGraphTarget, { kind: 'transition' }>; conditionIndex: number; path: string; value: unknown }
+    | { type: 'set-transition-condition-binding-class'; target: Extract<AnimationGraphTarget, { kind: 'transition' }>; conditionIndex: number; bindingClass: string }
+    | ({ type: 'set-transition-event-binding'; transitionIndex: number; which: 'start' | 'end'; methodName: string } & AnimationGraphStateMachineAddress)
     | ({ type: 'set-motion'; motionType: AnimationGraphMotionType | 'none'; clipUuid?: string } & (AnimationGraphStateAddress | { poseGraph: AnimationGraphPoseGraphContext; nodeId: number }))
     | { type: 'add-motion-child'; target: Extract<AnimationGraphTarget, { kind: 'motion' }>; motionType: AnimationGraphMotionType; clipUuid?: string }
     | { type: 'remove-motion'; target: Extract<AnimationGraphTarget, { kind: 'motion' }> }
@@ -284,6 +321,7 @@ export type AnimationGraphCommand =
     | ({ type: 'add-state-component'; componentType: string } & AnimationGraphStateAddress)
     | ({ type: 'remove-state-component'; componentIndex: number } & AnimationGraphStateAddress)
     | ({ type: 'add-pose-node'; nodeType: string; createArg?: unknown; editorData?: Record<string, unknown> } & AnimationGraphPoseGraphAddress)
+    | ({ type: 'create-pose-node-on-asset-drag'; assetUuid: string; handlerId: string; editorData?: Record<string, unknown> } & AnimationGraphPoseGraphAddress)
     | { type: 'remove-pose-node'; target: Extract<AnimationGraphTarget, { kind: 'pose-node' }> }
     | ({ type: 'duplicate-pose-nodes'; nodeIds: number[] } & AnimationGraphPoseGraphAddress)
     | { type: 'set-pose-node-editor-data'; target: Extract<AnimationGraphTarget, { kind: 'pose-node' }>; editorData: Record<string, unknown> }
