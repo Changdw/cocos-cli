@@ -1272,13 +1272,13 @@ class AnimationGraphAssetService {
                 const stateMachine = this._getStateMachineForAddress(document, command);
                 const state = createState(stateMachine, command.stateType);
                 state.name = command.name || uniqueStateName(stateMachine, defaultStateName(command.stateType));
-                if (command.clipUuid !== undefined) {
-                    // clipUuid 仅对动画状态有效：创建后立即挂上 ClipMotion（等价 add-state + set-motion 一次完成）。
+                if (command.motionType !== undefined || command.clipUuid !== undefined) {
+                    // motionType/clipUuid 仅对动画状态有效：创建后立即挂上 Motion（等价 add-state + set-motion 一次完成）。
                     const api = getNewGenAnim();
                     if (!(state instanceof api.MotionState)) {
-                        throw new AnimationGraphEditError('INVALID_PROPERTY_PATCH', 'A clip can only be attached to a motion state.', this._version(document));
+                        throw new AnimationGraphEditError('INVALID_PROPERTY_PATCH', 'A motion can only be attached to a motion state.', this._version(document));
                     }
-                    state.motion = this._createMotion('clip', command.clipUuid);
+                    state.motion = this._createMotion(command.motionType || 'clip', command.clipUuid);
                 }
                 assignEditorData(state, command.editorData);
                 return;

@@ -300,7 +300,7 @@ export type AnimationGraphCommand =
     | { type: 'add-layer'; name?: string }
     | { type: 'remove-layer'; layerIndex: number }
     | { type: 'move-layer'; layerIndex: number; newIndex: number }
-    | ({ type: 'add-state'; stateType: AnimationGraphStateType; name?: string; clipUuid?: string; editorData?: Record<string, unknown> } & AnimationGraphStateMachineAddress)
+    | ({ type: 'add-state'; stateType: AnimationGraphStateType; name?: string; motionType?: AnimationGraphMotionType; clipUuid?: string; editorData?: Record<string, unknown> } & AnimationGraphStateMachineAddress)
     | ({ type: 'remove-state' } & AnimationGraphStateAddress)
     | ({ type: 'duplicate-state'; includeTransitions?: boolean; editorData?: Record<string, unknown> } & AnimationGraphStateAddress)
     | ({ type: 'set-state-editor-data'; editorData: Record<string, unknown> } & AnimationGraphStateAddress)
