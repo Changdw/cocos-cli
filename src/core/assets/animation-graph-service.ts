@@ -953,18 +953,31 @@ class AnimationGraphAssetService {
 
     private _createStateBinding(state: any): InspectorBinding {
         const api = getNewGenAnim();
+        const eventBindingAttrs = { type: 'String', default: '', group: { id: 'event-bindings', name: 'Event Bindings' } };
         const properties: Record<string, AdapterProperty> = {
-            name: directProperty(state, 'name', { type: 'String', default: '' }),
+            name: directProperty(state, 'name', { type: 'String', default: '', ui: { name: 'animationGraphRename' } }),
         };
         if (state instanceof api.MotionState) {
             properties.speed = directProperty(state, 'speed', { type: 'Number', default: 1, min: 0 });
-            properties.speedMultiplier = directProperty(state, 'speedMultiplier', { type: 'String', default: '' });
-            properties.speedMultiplierEnabled = directProperty(state, 'speedMultiplierEnabled', { type: 'Boolean', default: false });
-            properties.transitionInEvent = nestedProperty(state.transitionInEventBinding, 'methodName', { type: 'String', default: '' });
-            properties.transitionOutEvent = nestedProperty(state.transitionOutEventBinding, 'methodName', { type: 'String', default: '' });
+            // Speed Multiplier 与 Enabled 合并为一个字段：value 为 { enabled, multiplier }，
+            // 由 Inspector 侧 animationGraphSpeedMultiplier 渲染成 checkbox + 输入框。
+            properties.speedMultiplier = {
+                get: () => ({ enabled: !!state.speedMultiplierEnabled, multiplier: String(state.speedMultiplier ?? '') }),
+                set: (value: any) => {
+                    if (value && typeof value === 'object') {
+                        state.speedMultiplierEnabled = !!value.enabled;
+                        if (typeof value.multiplier === 'string') {
+                            state.speedMultiplier = value.multiplier;
+                        }
+                    }
+                },
+                attrs: { type: 'Object', default: null, displayName: 'Speed Multiplier', ui: { name: 'animationGraphSpeedMultiplier' } },
+            };
+            properties.transitionInEvent = nestedProperty(state.transitionInEventBinding, 'methodName', eventBindingAttrs);
+            properties.transitionOutEvent = nestedProperty(state.transitionOutEventBinding, 'methodName', eventBindingAttrs);
         } else if (state instanceof api.ProceduralPoseState) {
-            properties.transitionInEvent = nestedProperty(state.transitionInEventBinding, 'methodName', { type: 'String', default: '' });
-            properties.transitionOutEvent = nestedProperty(state.transitionOutEventBinding, 'methodName', { type: 'String', default: '' });
+            properties.transitionInEvent = nestedProperty(state.transitionInEventBinding, 'methodName', eventBindingAttrs);
+            properties.transitionOutEvent = nestedProperty(state.transitionOutEventBinding, 'methodName', eventBindingAttrs);
         }
         return createAdapterBinding(getClassName(state), properties);
     }
@@ -995,10 +1008,16 @@ class AnimationGraphAssetService {
         const api = getNewGenAnim();
         const properties: Record<string, AdapterProperty> = {};
         if (motion instanceof api.ClipMotion) {
-            properties.clip = directProperty(motion, 'clip', { type: 'Object', ctor: getCC().AnimationClip, default: null });
+            properties.clip = directProperty(motion, 'clip', {
+                type: 'Object',
+                ctor: getCC().AnimationClip,
+                default: null,
+                displayName: 'Clip',
+                group: { id: 'animation-clip-motion', name: 'Animation Clip Motion', displayOrder: 0, style: 'tab' },
+            });
         }
         if (motion instanceof api.AnimationBlend) {
-            properties.name = directProperty(motion, 'name', { type: 'String', default: '' });
+            properties.name = directProperty(motion, 'name', { type: 'String', default: '', ui: { name: 'animationGraphRename' } });
         }
         if (motion instanceof api.AnimationBlend1D) {
             properties.variable = nestedProperty(motion.param, 'variable', { type: 'String', default: '' });
@@ -1009,10 +1028,19 @@ class AnimationGraphAssetService {
                 default: 0,
                 enumList: enumList(api.AnimationBlend2D.Algorithm),
             });
-            properties.variableX = nestedProperty(motion.paramX, 'variable', { type: 'String', default: '' });
-            properties.valueX = nestedProperty(motion.paramX, 'value', { type: 'Number', default: 0 });
-            properties.variableY = nestedProperty(motion.paramY, 'variable', { type: 'String', default: '' });
-            properties.valueY = nestedProperty(motion.paramY, 'value', { type: 'Number', default: 0 });
+            // Blend 2D 的参数通过变量下拉选择（FLOAT 变量），常量值字段不在表单中展示。
+            properties.variableX = nestedProperty(motion.paramX, 'variable', {
+                type: 'String',
+                default: '',
+                ui: { name: 'animationGraphVariableSelect' },
+            });
+            properties.valueX = nestedProperty(motion.paramX, 'value', { type: 'Number', default: 0, visible: false });
+            properties.variableY = nestedProperty(motion.paramY, 'variable', {
+                type: 'String',
+                default: '',
+                ui: { name: 'animationGraphVariableSelect' },
+            });
+            properties.valueY = nestedProperty(motion.paramY, 'value', { type: 'Number', default: 0, visible: false });
         }
         return createAdapterBinding(getClassName(motion), properties);
     }
@@ -1279,6 +1307,8 @@ class AnimationGraphAssetService {
                         throw new AnimationGraphEditError('INVALID_PROPERTY_PATCH', 'A motion can only be attached to a motion state.', this._version(document));
                     }
                     state.motion = this._createMotion(command.motionType || 'clip', command.clipUuid);
+                    // 第一层的 motion 名称跟随 state 名称（对齐参考编辑器），避免引擎默认的 motion-0x 名。
+                    state.motion.name = state.name;
                 }
                 assignEditorData(state, command.editorData);
                 return;
@@ -1396,6 +1426,10 @@ class AnimationGraphAssetService {
                     if (!(state instanceof api.MotionState)) {
                         throw this._targetNotFound(document, command);
                     }
+                    if (motion) {
+                        // 第一层的 motion 名称跟随 state 名称（对齐参考编辑器），避免引擎默认的 motion-0x 名。
+                        motion.name = state.name;
+                    }
                     state.motion = motion;
                 }
                 return;
@@ -1495,6 +1529,15 @@ class AnimationGraphAssetService {
                     throw new AnimationGraphEditError('TARGET_NOT_FOUND', `Pose node type can not be found: ${command.nodeType}`, this._version(document));
                 }
                 const node = api.createPoseGraphNode(ctor, command.createArg);
+                // createPoseGraphNode 对无 factory 的具体类只做默认构造，这里把
+                // createArg 中的同名字段（如 variableName、stashName）补写到节点上。
+                if (command.createArg && typeof command.createArg === 'object') {
+                    for (const [key, value] of Object.entries(command.createArg)) {
+                        if (key in node) {
+                            node[key] = value;
+                        }
+                    }
+                }
                 poseGraph.addNode(node);
                 assignEditorData(node, command.editorData);
                 this._nodeId(document, node);
@@ -1717,7 +1760,7 @@ class AnimationGraphAssetService {
                 }
                 const poseGraph = this._getPoseGraphByContext(document, command.poseGraph);
                 const originalNodes = Array.from(poseGraph.nodes() as Iterable<any>);
-                const stashName = command.stashName ?? uniqueStashName(layer);
+                const stashName = command.stashName?.trim() || uniqueStashName(layer);
                 if (layer.getStash(stashName)) {
                     throw this._nameConflict(document, 'stash', stashName);
                 }
@@ -2248,6 +2291,11 @@ function isVec2Like(value: unknown): value is { x: number; y: number } {
 }
 
 function getNodeTitle(node: any): string {
+    // GetVariable 系列节点：标题固定为 `Variable {variableName}`，
+    // 引擎 getTitle 返回的是 i18n key 数组且 variableName 为空时为 undefined。
+    if (typeof node.variableName === 'string') {
+        return `Variable ${node.variableName}`.trim();
+    }
     const title = node.getTitle?.();
     if (typeof title === 'string') {
         return title;

@@ -874,8 +874,7 @@ describe('animation graph asset service', () => {
         let inspector = await assetManager.queryAnimationGraphInspector(asset.uuid, stateTarget);
         for (const [path, patch] of [
             ['speed', 1.75],
-            ['speedMultiplier', 'speed'],
-            ['speedMultiplierEnabled', true],
+            ['speedMultiplier', { enabled: true, multiplier: 'speed' }],
         ] as const) {
             inspector = await assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
                 target: stateTarget,
@@ -906,9 +905,7 @@ describe('animation graph asset service', () => {
         inspector = await assetManager.queryAnimationGraphInspector(asset.uuid, motionTarget);
         for (const [path, patch] of [
             ['variableX', 'speed'],
-            ['valueX', 0.25],
             ['variableY', 'direction'],
-            ['valueY', -0.5],
         ] as const) {
             inspector = await assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
                 target: motionTarget,
@@ -928,9 +925,7 @@ describe('animation graph asset service', () => {
         expect(snapshot.graph.layers[0].stateMachine.states[stateIndex].motion).toMatchObject({
             type: 'blend-2d',
             variableX: 'speed',
-            valueX: 0.25,
             variableY: 'direction',
-            valueY: -0.5,
             editorData: { centerX: 16, centerY: 32, autoThreshold: false },
         });
 
@@ -1000,9 +995,7 @@ describe('animation graph asset service', () => {
             editorData: { centerX: 120, centerY: 48, collapsed: true },
             motion: expect.objectContaining({
                 variableX: 'speed',
-                valueX: 0.25,
                 variableY: 'direction',
-                valueY: -0.5,
                 editorData: { centerX: 16, centerY: 32, autoThreshold: false },
             }),
         });
@@ -1170,6 +1163,74 @@ describe('animation graph asset service', () => {
                 expect.objectContaining({ editorData: { centerX: -80, centerY: 24 } }),
                 expect.objectContaining({ editorData: { centerX: 40, centerY: 24 } }),
             ]));
+    });
+
+    it('auto names stashes for empty and whitespace-only names and keeps references after reload', async () => {
+        const asset = await assetManager.createAsset({
+            target: join(TestGlobalEnv.testRoot, `${name}-empty-stash-name.animgraph`),
+            content: getDefaultGraphContent(),
+            overwrite: true,
+        });
+        let snapshot = await assetManager.queryAnimationGraph(asset.uuid);
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'add-stash', layerIndex: 0, name: 'Stash1' },
+            expected: snapshot,
+        });
+
+        for (const stateName of ['Empty Name', 'Whitespace Name']) {
+            snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+                command: {
+                    type: 'add-state',
+                    layerIndex: 0,
+                    stateMachinePath: [],
+                    stateType: 'procedural-pose',
+                    name: stateName,
+                },
+                expected: snapshot,
+            });
+        }
+
+        const emptyStateIndex = snapshot.graph.layers[0].stateMachine.states.find((state) => state.name === 'Empty Name')!.index;
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'stash-pose-graph',
+                poseGraph: snapshot.graph.layers[0].stateMachine.states[emptyStateIndex].poseGraph!.context,
+                layerIndex: 0,
+                stashName: '',
+            },
+            expected: snapshot,
+        });
+        const emptyState = snapshot.graph.layers[0].stateMachine.states[emptyStateIndex];
+        expect(snapshot.graph.layers[0].stashes).toEqual(expect.arrayContaining(['Stash1', 'Stash2']));
+        expect(emptyState.poseGraph!.nodes.find((node) => node.type.includes('PoseNodeUseStashedPose'))!.enterInfo)
+            .toEqual({ type: 'stash', stashName: 'Stash2' });
+
+        const whitespaceStateIndex = snapshot.graph.layers[0].stateMachine.states.find((state) => state.name === 'Whitespace Name')!.index;
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'stash-pose-graph',
+                poseGraph: snapshot.graph.layers[0].stateMachine.states[whitespaceStateIndex].poseGraph!.context,
+                layerIndex: 0,
+                stashName: '   ',
+            },
+            expected: snapshot,
+        });
+        const whitespaceState = snapshot.graph.layers[0].stateMachine.states[whitespaceStateIndex];
+        expect(snapshot.graph.layers[0].stashes).toEqual(expect.arrayContaining(['Stash1', 'Stash2', 'Stash3']));
+        expect(whitespaceState.poseGraph!.nodes.find((node) => node.type.includes('PoseNodeUseStashedPose'))!.enterInfo)
+            .toEqual({ type: 'stash', stashName: 'Stash3' });
+
+        const saved = await assetManager.saveAnimationGraph(asset.uuid, snapshot);
+        const reloaded = await assetManager.reloadAnimationGraph(asset.uuid, { expected: saved });
+        expect(reloaded.graph.layers[0].stashes).toEqual(expect.arrayContaining(['Stash1', 'Stash2', 'Stash3']));
+        expect(reloaded.graph.layers[0].stashPoseGraphs.find((stash) => stash.name === 'Stash2')).toBeDefined();
+        expect(reloaded.graph.layers[0].stashPoseGraphs.find((stash) => stash.name === 'Stash3')).toBeDefined();
+        expect(reloaded.graph.layers[0].stateMachine.states[emptyStateIndex].poseGraph!.nodes
+            .find((node) => node.type.includes('PoseNodeUseStashedPose'))!.enterInfo)
+            .toEqual({ type: 'stash', stashName: 'Stash2' });
+        expect(reloaded.graph.layers[0].stateMachine.states[whitespaceStateIndex].poseGraph!.nodes
+            .find((node) => node.type.includes('PoseNodeUseStashedPose'))!.enterInfo)
+            .toEqual({ type: 'stash', stashName: 'Stash3' });
     });
 
     it('restores temporary editor extras class state when registration fails', async () => {
