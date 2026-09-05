@@ -11,6 +11,11 @@ import animationGraphVariant from '../animation-graph-variant';
 import animationGraph from '../animation-graph-service';
 import * as serializedData from '../serialized-data';
 import * as materialService from '../material-service';
+import {
+    extractImagePixelsFromFile,
+    type IExtractedImagePixels,
+    type IImagePixelExtractionOptions,
+} from '../image-processing';
 
 /**
  * 对外暴露一系列的资源查询、操作接口等
@@ -62,6 +67,7 @@ class AssetManager extends EventEmitter {
     // ---------- animation graph ----------
     queryAnimationGraph = animationGraph.query.bind(animationGraph);
     queryAnimationGraphInspector = animationGraph.queryInspector.bind(animationGraph);
+    queryAnimationGraphMotionPreviewData = animationGraph.queryMotionPreviewData.bind(animationGraph);
     queryAnimationGraphPoseGraphAssetDragHandlers = animationGraph.queryPoseGraphAssetDragHandlers.bind(animationGraph);
     queryAnimationGraphStateMachineComponentTypes = animationGraph.queryStateMachineComponentTypes.bind(animationGraph);
     setAnimationGraphInspectorProperty = animationGraph.setInspectorProperty.bind(animationGraph);
@@ -90,6 +96,18 @@ class AssetManager extends EventEmitter {
         if (!asset) { return null; }
         return assetHandlerManager.generateThumbnail(asset, size);
     }
+
+    async extractImagePixels(
+        urlOrUUIDOrPath: string,
+        options: IImagePixelExtractionOptions,
+    ): Promise<IExtractedImagePixels | null> {
+        const assetInfo = this.queryAssetInfo(urlOrUUIDOrPath);
+        if (!assetInfo?.file) {
+            return null;
+        }
+        return extractImagePixelsFromFile(assetInfo.file, options);
+    }
+
     getEffectBinPath() {
         return assetHandlerManager.getEffectBinPath();
     };
@@ -394,6 +412,7 @@ export interface TypedAssetManager extends EventEmitter {
 
     queryAnimationGraph: typeof animationGraph.query;
     queryAnimationGraphInspector: typeof animationGraph.queryInspector;
+    queryAnimationGraphMotionPreviewData: typeof animationGraph.queryMotionPreviewData;
     queryAnimationGraphPoseGraphAssetDragHandlers: typeof animationGraph.queryPoseGraphAssetDragHandlers;
     queryAnimationGraphStateMachineComponentTypes: typeof animationGraph.queryStateMachineComponentTypes;
     setAnimationGraphInspectorProperty: typeof animationGraph.setInspectorProperty;
@@ -417,6 +436,10 @@ export interface TypedAssetManager extends EventEmitter {
     getEffectBinPath: typeof assetHandlerManager.getEffectBinPath;
 
     generateThumbnail(urlOrUUIDOrPath: string, size?: ThumbnailSize): Promise<ThumbnailInfo | null>;
+    extractImagePixels(
+        urlOrUUIDOrPath: string,
+        options: IImagePixelExtractionOptions,
+    ): Promise<IExtractedImagePixels | null>;
 
     onReady: typeof assetManager.onReady;
     onDBReady: typeof assetManager.onDBReady;

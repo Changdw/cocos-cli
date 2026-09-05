@@ -7,7 +7,9 @@ import { MeshPreview } from './mesh-preview';
 import { SkeletonPreview } from './skeleton-preview';
 import { PrefabPreview } from './prefab-preview';
 import { SpinePreview } from './spine-preview';
+import { AnimationGraphMotionPreview } from './animation-graph-motion-preview';
 import { Camera, gfx } from 'cc';
+import type { AnimationGraphTarget } from '../../../../assets/@types/public';
 import { BaseService, register, Service } from '../core';
 import { Rpc } from '../../rpc';
 import type { InteractivePreview } from './interactive-preview';
@@ -35,6 +37,7 @@ export class PreviewService extends BaseService<IPreviewEvents> implements IPrev
     skeletonPreview = new SkeletonPreview();
     prefabPreview = new PrefabPreview();
     spinePreview = new SpinePreview();
+    animationGraphMotionPreview = new AnimationGraphMotionPreview();
 
     get activePreview(): IPreviewInstance | null {
         return this._activePreview;
@@ -51,6 +54,7 @@ export class PreviewService extends BaseService<IPreviewEvents> implements IPrev
         this.initPreview('scene:skeleton-preview', 'query-skeleton-preview-data', this.skeletonPreview);
         this.initPreview('scene:prefab-preview', 'query-prefab-preview-data', this.prefabPreview);
         this.initPreview('scene:spine-preview', 'query-spine-preview-data', this.spinePreview);
+        this.initPreview('scene:animation-graph-preview', 'query-animation-graph-preview-data', this.animationGraphMotionPreview);
         this.initTypeMap();
         console.log('[Preview] PreviewService initialized');
     }
@@ -108,6 +112,48 @@ export class PreviewService extends BaseService<IPreviewEvents> implements IPrev
             }
         }
         return false;
+    }
+
+    // --- Animation Graph Motion 预览（透传到 animationGraphMotionPreview 实例） ---
+
+    public async showAnimationGraphMotion(uuidOrUrlOrPath: string, target: AnimationGraphTarget): Promise<boolean> {
+        return this.animationGraphMotionPreview.showMotionPreview(uuidOrUrlOrPath, target);
+    }
+
+    public hideAnimationGraphMotion(): void {
+        this.animationGraphMotionPreview.hideMotionPreview();
+    }
+
+    public async setAnimationGraphMotionModel(uuid: string): Promise<void> {
+        await this.animationGraphMotionPreview.setModel(uuid);
+    }
+
+    public setAnimationGraphMotionTime(time: number): void {
+        this.animationGraphMotionPreview.setTimeMotionPreview(time);
+    }
+
+    public playAnimationGraphMotion(): void {
+        this.animationGraphMotionPreview.playMotionPreview();
+    }
+
+    public pauseAnimationGraphMotion(): void {
+        this.animationGraphMotionPreview.pauseMotionPreview();
+    }
+
+    public stopAnimationGraphMotion(): void {
+        this.animationGraphMotionPreview.stopMotionPreview();
+    }
+
+    public setAnimationGraphMotionVariable(name: string, value: number): void {
+        this.animationGraphMotionPreview.setMotionPreviewVariable(name, value);
+    }
+
+    public async isAnimationGraphMotionActive(): Promise<boolean> {
+        return this.animationGraphMotionPreview.isActive;
+    }
+
+    public async queryAnimationGraphMotionImage(info: { width: number; height: number }): Promise<unknown> {
+        return this.animationGraphMotionPreview.queryPreviewData(info);
     }
 
     // --- 上屏预览 ---
