@@ -1594,6 +1594,57 @@ class AnimationGraphAssetService {
                 this._nodeId(document, node);
                 return;
             }
+            case 'create-pose-node-on-asset-drag': {
+                const poseGraph = this._resolvePoseGraph(document, command);
+                const js = getCC().js;
+                const asset = assetQuery.queryAsset(command.assetUuid);
+                if (!asset) {
+                    throw new AnimationGraphEditError('TARGET_NOT_FOUND', `Asset can not be found: ${command.assetUuid}`, this._version(document));
+                }
+                const assetType = assetQuery.queryAssetProperty(asset, 'type') as string;
+                const assetCtor = typeof assetType === 'string' ? js.getClassByName(assetType) : undefined;
+                if (!assetCtor || !js.isChildClassOf(assetCtor, getCC().Asset)) {
+                    throw new AnimationGraphEditError('TARGET_NOT_FOUND', `Asset type can not be found: ${assetType}`, this._version(document));
+                }
+                // 引擎按资产构造器精确匹配注册表（registry.get(asset.constructor)），
+                // 这里先自行校验，把引擎的 console.warn + undefined 转换为明确的错误。
+                let registered: { handlers: Record<string, { displayName: string }> } | undefined;
+                for (const [ctor, info] of api.getPoseGraphAssetDragHandlersMap()) {
+                    if (ctor === assetCtor) {
+                        registered = info;
+                        break;
+                    }
+                }
+                if (!registered) {
+                    throw new AnimationGraphEditError(
+                        'TARGET_NOT_FOUND',
+                        `No pose graph asset drag handlers for asset type: ${assetType}`,
+                        this._version(document),
+                    );
+                }
+                if (!(command.handlerId in registered.handlers)) {
+                    throw new AnimationGraphEditError(
+                        'TARGET_NOT_FOUND',
+                        `Pose graph asset drag handler can not be found: ${command.handlerId}, existing handlers are ${Object.keys(registered.handlers).join(',')}`,
+                        this._version(document),
+                    );
+                }
+                // serialize.asAsset 生成的 stub 是资产构造器的真实实例（仅设置 _uuid），
+                // 内置 handler 只是把它赋给 motion.clip 字段，因此 stub 即可满足。
+                const reference = this._createAssetReference(command.assetUuid, assetCtor);
+                const node = api.createPoseNodeOnAssetDrag(reference, command.handlerId);
+                if (!node) {
+                    throw new AnimationGraphEditError(
+                        'INVALID_PROPERTY_PATCH',
+                        `Pose graph asset drag handler ${command.handlerId} did not create a pose node for asset: ${command.assetUuid}`,
+                        this._version(document),
+                    );
+                }
+                poseGraph.addNode(node);
+                assignEditorData(node, command.editorData);
+                this._nodeId(document, node);
+                return;
+            }
             case 'remove-pose-node': {
                 const { poseGraph, node } = this._resolvePoseNode(document, command.target);
                 if (node === poseGraph.outputNode) {
