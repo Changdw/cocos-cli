@@ -10,6 +10,7 @@ import type {
     AnimationGraphInspectorPropertyOperationRequest,
     AnimationGraphInspectorSnapshot,
     AnimationGraphLayerView,
+    AnimationGraphMotionPreviewData,
     AnimationGraphMotionType,
     AnimationGraphMotionView,
     AnimationGraphPoseGraphAssetDragHandlersEntry,
@@ -24,6 +25,7 @@ import type {
     AnimationGraphTarget,
     AnimationGraphTransitionConditionView,
     AnimationGraphTransitionView,
+    AnimationGraphVariableView,
     AnimationGraphVersion,
     AnimationGraphViewDump,
     ExecuteAnimationGraphCommandRequest,
@@ -123,6 +125,38 @@ class AnimationGraphAssetService {
             const document = await this._getOrLoad(asset);
             await this._refreshExternalState(document);
             return this._inspectorSnapshot(document, target);
+        });
+    }
+
+    /**
+     * 查询 Motion 预览数据：目标 Motion 的结构化描述（供 Scene 进程预览服务重建引擎
+     * Motion）以及图内全部变量（含当前值）。
+     *
+     * @param uuidOrUrlOrPath - 动画图资源（uuid / url / 路径）。
+     * @param target - 目标 Motion 的地址，与 Inspector 使用的 `AnimationGraphTarget` 一致。
+     * @returns Motion 预览数据；目标不存在时 `motion` 为 null。
+     *
+     * ```mermaid
+     * flowchart LR
+     *     Document[AnimationGraphDocument] --> Resolve[resolve target Motion]
+     *     Resolve --> MotionView[_queryMotion 结构化 Motion 视图]
+     *     Document --> Variables[图内变量 + 当前值]
+     *     MotionView --> Payload[AnimationGraphMotionPreviewData]
+     *     Variables --> Payload
+     * ```
+     */
+    async queryMotionPreviewData(
+        uuidOrUrlOrPath: string,
+        target: Extract<AnimationGraphTarget, { kind: 'motion' }>,
+    ): Promise<AnimationGraphMotionPreviewData> {
+        const asset = this._queryAnimationGraphAsset(uuidOrUrlOrPath);
+        return this._enqueue(asset.uuid, async () => {
+            const document = await this._getOrLoad(asset);
+            await this._refreshExternalState(document);
+            return {
+                motion: this._queryMotion(this._resolveMotion(document, target), target),
+                variables: this._queryGraphVariables(document),
+            };
         });
     }
 
@@ -611,6 +645,21 @@ class AnimationGraphAssetService {
         };
     }
 
+    private _queryGraphVariables(document: AnimationGraphDocument): AnimationGraphVariableView[] {
+        const graph = document.graph;
+        const api = getNewGenAnim();
+        return Array.from(graph.variables as Iterable<[string, any]>).map(([name, variable]) => {
+            const value = encodeSerializedObject(variable.value, api.getVariableValueAttributes(variable), variable, 'value');
+            value.path = 'value';
+            return {
+                name,
+                type: variable.type,
+                value,
+                resetMode: variable.type === api.VariableType.TRIGGER ? variable.resetMode : undefined,
+            };
+        });
+    }
+
     private _queryLayer(document: AnimationGraphDocument, layer: any, index: number): AnimationGraphLayerView {
         const stateMachineContext: AnimationGraphStateMachineContext = {
             kind: 'layer-state-machine',
@@ -805,6 +854,7 @@ class AnimationGraphAssetService {
             view.valueX = motion.paramX.value;
             view.variableY = motion.paramY.variable;
             view.valueY = motion.paramY.value;
+            view.algorithm = motion.algorithm;
         }
         if (threshold !== undefined) {
             view.threshold = isVec2Like(threshold)
@@ -971,7 +1021,14 @@ class AnimationGraphAssetService {
                         }
                     }
                 },
-                attrs: { type: 'Object', default: null, displayName: 'Speed Multiplier', ui: { name: 'animationGraphSpeedMultiplier' } },
+                // default 必须是完整对象工厂：Reset 时 setter 才能同时恢复 enabled 与 multiplier；
+                // 若为 null，Reset 写入 null 会被 setter 忽略，导致 Reset 静默失效。
+                attrs: {
+                    type: 'Object',
+                    default: () => ({ enabled: false, multiplier: '' }),
+                    displayName: 'Speed Multiplier',
+                    ui: { name: 'animationGraphSpeedMultiplier' },
+                },
             };
             properties.transitionInEvent = nestedProperty(state.transitionInEventBinding, 'methodName', eventBindingAttrs);
             properties.transitionOutEvent = nestedProperty(state.transitionOutEventBinding, 'methodName', eventBindingAttrs);

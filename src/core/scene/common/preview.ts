@@ -23,13 +23,35 @@ export interface ISpinePreviewInstance extends IPreviewInstance {
     close(): void;
 }
 
-export interface IPreviewService {
+export interface IPreviewService extends IAnimationGraphMotionPreviewService {
     open(uuid: string): Promise<IPreviewInstance | null>;
     generateThumbnail(uuid: string, assetType: string, width?: number, height?: number): Promise<any>;
 }
 
+/**
+ * Animation Graph Motion 预览子能力（scene-process Preview 服务按同名方法透传）。
+ * `target` 与 Inspector 使用的 `AnimationGraphTarget` 一致。
+ */
+export interface IAnimationGraphMotionPreviewService {
+    showAnimationGraphMotion(uuidOrUrlOrPath: string, target: import('../../assets/@types/public').AnimationGraphTarget): Promise<boolean>;
+    hideAnimationGraphMotion(): void;
+    setAnimationGraphMotionModel(uuid: string): Promise<void>;
+    setAnimationGraphMotionTime(time: number): void;
+    playAnimationGraphMotion(): void;
+    pauseAnimationGraphMotion(): void;
+    stopAnimationGraphMotion(): void;
+    setAnimationGraphMotionVariable(name: string, value: number): void;
+    isAnimationGraphMotionActive(): Promise<boolean>;
+    queryAnimationGraphMotionImage(info: { width: number; height: number }): Promise<unknown>;
+}
+
 export type IPublicPreviewService = Pick<IPreviewService,
     'open' | 'generateThumbnail'
+    | 'showAnimationGraphMotion' | 'hideAnimationGraphMotion'
+    | 'setAnimationGraphMotionModel' | 'setAnimationGraphMotionTime'
+    | 'playAnimationGraphMotion' | 'pauseAnimationGraphMotion' | 'stopAnimationGraphMotion'
+    | 'setAnimationGraphMotionVariable' | 'isAnimationGraphMotionActive'
+    | 'queryAnimationGraphMotionImage'
 >;
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type

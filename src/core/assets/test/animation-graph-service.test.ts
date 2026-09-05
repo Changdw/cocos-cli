@@ -1604,4 +1604,112 @@ describe('animation graph asset service', () => {
             expected: withBlend2DState,
         })).rejects.toMatchObject({ message: expect.stringContaining('missing-asset-uuid') });
     });
+
+    it('queries serializable Motion preview data for clip and blend motions', async () => {
+        const asset = await assetManager.createAsset({
+            target: join(TestGlobalEnv.testRoot, `${name}-motion-preview.animgraph`),
+            content: getDefaultGraphContent(),
+            overwrite: true,
+        });
+        const clip = await assetManager.createAsset({
+            target: join(TestGlobalEnv.testRoot, `${name}-motion-preview-clip.anim`),
+            content: readFileSync(join(
+                TestGlobalEnv.engineRoot,
+                'editor/assets/default_file_content/animation-clip/default.anim',
+            ), 'utf8'),
+            overwrite: true,
+        });
+
+        let snapshot = await assetManager.queryAnimationGraph(asset.uuid);
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'add-variable', name: 'speed', variableType: 0, initialValue: 2.5 },
+            expected: snapshot,
+        });
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'add-state',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateType: 'motion',
+                name: 'Clip Motion',
+            },
+            expected: snapshot,
+        });
+        const stateIndex = snapshot.graph.layers[0].stateMachine.states.find((state) => state.name === 'Clip Motion')!.index;
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'set-motion',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateIndex,
+                motionType: 'clip',
+                clipUuid: clip.uuid,
+            },
+            expected: snapshot,
+        });
+        const clipTarget = snapshot.graph.layers[0].stateMachine.states[stateIndex].motion!.target;
+
+        const clipPreview = await assetManager.queryAnimationGraphMotionPreviewData(asset.uuid, clipTarget);
+        expect(clipPreview.motion).toMatchObject({ type: 'clip', clipUuid: clip.uuid });
+        expect(Array.isArray(clipPreview.motion!.level)).toBe(true);
+        expect(clipPreview.variables).toEqual(expect.arrayContaining([
+            expect.objectContaining({ name: 'speed', type: 0 }),
+        ]));
+
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: {
+                type: 'set-motion',
+                layerIndex: 0,
+                stateMachinePath: [],
+                stateIndex,
+                motionType: 'blend-2d',
+            },
+            expected: snapshot,
+        });
+        const blendTarget = snapshot.graph.layers[0].stateMachine.states[stateIndex].motion!.target;
+        let inspector = await assetManager.queryAnimationGraphInspector(asset.uuid, blendTarget);
+        for (const [path, patch] of [
+            ['variableX', 'speed'],
+            ['variableY', 'speed'],
+        ] as const) {
+            inspector = await assetManager.setAnimationGraphInspectorProperty(asset.uuid, {
+                target: blendTarget,
+                path,
+                patch,
+                expected: inspector,
+            });
+        }
+        snapshot = await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'add-motion-child', target: blendTarget, motionType: 'clip', clipUuid: clip.uuid },
+            expected: inspector,
+        });
+        const blendWithChild = await assetManager.queryAnimationGraph(asset.uuid);
+        const blendTargetAfterChild = blendWithChild.graph.layers[0].stateMachine.states[stateIndex].motion!.target;
+        await assetManager.executeAnimationGraphCommand(asset.uuid, {
+            command: { type: 'set-motion-threshold', target: blendTargetAfterChild, childIndex: 0, threshold: { x: 0.3, y: 0.6 } },
+            expected: blendWithChild,
+        });
+
+        const blendPreview = await assetManager.queryAnimationGraphMotionPreviewData(asset.uuid, blendTargetAfterChild);
+        expect(blendPreview.motion).toMatchObject({
+            type: 'blend-2d',
+            variableX: 'speed',
+            variableY: 'speed',
+        });
+        expect(typeof blendPreview.motion!.algorithm).toBe('number');
+        expect(blendPreview.motion!.children).toEqual([
+            expect.objectContaining({ type: 'clip', clipUuid: clip.uuid, threshold: { x: 0.3, y: 0.6 } }),
+        ]);
+
+        const finalSnapshot = await assetManager.queryAnimationGraph(asset.uuid);
+        await assetManager.saveAnimationGraph(asset.uuid, finalSnapshot);
+
+        await expect(assetManager.queryAnimationGraphMotionPreviewData(asset.uuid, {
+            kind: 'motion',
+            layerIndex: 0,
+            stateMachinePath: [],
+            stateIndex: 9999,
+            level: [],
+        })).rejects.toMatchObject({ code: 'TARGET_NOT_FOUND' });
+    });
 });
